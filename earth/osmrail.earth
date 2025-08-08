@@ -1,0 +1,185 @@
+<!--
+osgEarth Sample - OpeSstreetMap.
+-->
+<map name="Worldwide OSM feature data">
+
+    <XYZFeatures name="data:osm">
+        <url>https://readymap.org/readymap/mbtiles/osm/{z}/{x}/{-y}.pbf</url>
+        <min_level>14</min_level>
+        <max_level>14</max_level>
+        <profile>spherical-mercator</profile>
+        <format>pbf</format>
+        <fid_attribute>@id</fid_attribute>
+    </XYZFeatures>
+
+    <TiledFeatureModel name="OSM Features" pickable="true" open="true">
+        <min_level>14</min_level>
+        <max_level>14</max_level>
+        <features>data:osm</features>
+        <additive>false</additive>
+        <styles>
+            <style type="text/css"><![CDATA[
+                poi {
+                     icon-align: center-center;
+                     icon-declutter: true;
+                     text-content: feature.properties.name;
+                     text-halo: #d0d0d0;
+		     text-color: #253824;
+                     altitude-clamping: terrain;
+                }
+                
+                staion : poi {
+                    select: feature.properties.railway === 'station';
+                    icon: "data/railway-station-dark32.png";
+                }
+
+                forest {
+                    select: feature.properties.natural === 'wood' || feature.properties.landuse === 'forest';
+                    model: "data/tree.osg";
+                    model-placement: random;
+                    model-density: 4000;
+                    altitude-clamping: terrain;
+                    render-transparent: true;
+                    render-min-alpha: 0.15;
+                }
+
+                building {
+                    select: 'building' in feature.properties;
+                    extrusion-height: getBuildingHeight();
+                    extrusion-flatten: true;
+                    extrusion-wall-gradient: 0.35;
+                    altitude-clamping: terrain;
+                    fill: #ffffff;
+                }
+                
+                rail {
+                    select: feature.properties.railway === 'rail';
+                    stroke: #253824;
+                    stroke-width: 2px;
+                    altitude-clamping: terrain;
+                    altitude-offset: 0.6m;
+                }
+
+                ]]>
+            </style>
+
+            <script><![CDATA[
+                function getBuildingHeight() {
+                    var h = 4.0 + (feature.id % 10);
+                    if ("height" in feature.properties)
+                        h = parseFloat(feature.properties['height'].replace('m',''));
+                    else if ("building:height" in feature.properties)
+                        h = parseFloat(feature.properties["building:height"].replace('m',''));
+                    else if ("building:levels" in feature.properties)
+                        h = parseFloat(feature.properties["building:levels"] * 4.0);
+                    return Math.max(h, 4.0);
+                }
+                ]]>
+            </script>
+        </styles>
+    </TiledFeatureModel>
+    
+    <TiledFeatureModel name="buildings alone" pickable="true" open="false">
+        <min_level>14</min_level>
+        <max_level>14</max_level>
+        <features>data:osm</features>
+        <additive>false</additive>
+        <styles>
+            <style type="text/css"><![CDATA[
+                building {
+                    select: 'building' in feature.properties;
+                    extrusion-height: getBuildingHeight();
+                    extrusion-flatten: true;
+                    extrusion-wall-gradient: 0.35;
+                    altitude-clamping: terrain;
+                    fill: #ffffff;
+                }
+                ]]>
+            </style>
+
+            <script><![CDATA[
+                function getBuildingHeight() {
+                    var h = 4.0 + (feature.id % 10);
+                    if ("height" in feature.properties)
+                        h = parseFloat(feature.properties['height'].replace('m',''));
+                    else if ("building:height" in feature.properties)
+                        h = parseFloat(feature.properties["building:height"].replace('m',''));
+                    else if ("building:levels" in feature.properties)
+                        h = parseFloat(feature.properties["building:levels"] * 4.0);
+                    return Math.max(h, 4.0);
+                }
+                ]]>
+            </script>
+        </styles>
+    </TiledFeatureModel>
+
+    <XYZImage name="OSM Imagery">
+        <url>https://[abc].tile.openstreetmap.org/{z}/{x}/{y}.png</url>
+        <profile>spherical-mercator</profile>
+        <cache_policy usage="none"/>
+        <attribution>&#169;OpenStreetMap contributors</attribution>
+    </XYZImage>
+    
+    <xi:include href="readymap_elevation.xml"/>
+
+    <!--   <xi:include href="osm_roads_rasterized.xml"/> -->
+
+    <gdaldem name="hillshade" multidirectional="true" opacity="0.2" max_range="100000" attenuation_range="100000"/>
+    
+    <options>
+        <screen_space_error>125</screen_space_error>
+        <terrain lod_method="screen_space"/>
+    </options>
+<!--
+    <viewpoints>
+        <viewpoint name="Helsinki">
+            <heading>0.65737</heading>
+            <pitch>-53.1523</pitch>
+            <range>9051.49m</range>
+            <long>24.91930793902788</long>
+            <lat>60.1715638541335</lat>
+            <height>41.44817265681922</height>
+            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
+        </viewpoint>
+        <viewpoint name="Aspen">
+            <heading>7.8199</heading>
+            <pitch>-33.116</pitch>
+            <range>2673.82m</range>
+            <long>-106.823582971212</long>
+            <lat>39.18649886424574</lat>
+            <height>2430.634360928088</height>
+            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
+        </viewpoint>
+
+        <viewpoint name="Sion">
+            <heading>21.1319</heading>
+            <pitch>-23.509</pitch>
+            <range>6578.61m</range>
+            <long>7.354949481050042</long>
+            <lat>46.22827489726767</lat>
+            <height>539.2706910725683</height>
+            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
+        </viewpoint>
+
+        <viewpoint name="Honolulu">
+            <heading>-2.31581</heading>
+            <pitch>-40.1407</pitch>
+            <range>8770.44m</range>
+            <long>-157.8326534096892</long>
+            <lat>21.2935286069409</lat>
+            <height>20.39641692582518</height>
+            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
+        </viewpoint>
+
+        <viewpoint name="Sao Paulo">
+            <heading>2.77072</heading>
+            <pitch>-41.6163</pitch>
+            <range>9290.35m</range>
+            <long>-46.63414310624054</long>
+            <lat>-23.55347220210104</lat>
+            <height>781.040805241093</height>
+            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
+        </viewpoint>
+    </viewpoints>
+-->
+</map>

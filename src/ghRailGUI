@@ -1,0 +1,100 @@
+/*
+* osgEarthImGui/EnvironmentGUI
+*
+*
+*  osgearth_rail viewer
+*
+*     required OpenSceneGraph ( https://github.com/openscenegraph )
+*              osgearth       ( https://github.com/gwaldron/osgearth )
+*              curlpp         ( https://www.curlpp.org )
+*              nlohmann       ( https://github.com/nlohmann/json )
+*
+*   Copyright (C) 2025 Yuki Osada
+*  This software is released under the BSD License, see LICENSE.
+*
+*
+*/
+
+# include <cstdlib>
+# include <cstring>
+# include <time.h>
+#include <algorithm>
+
+#include <osgEarthImGui/ImGuiPanel>
+
+using namespace osgEarth::Util;
+
+class ghRailGUI : public ImGuiPanel
+    {
+    private:
+	osg::observer_ptr<SkyNode> _skyNode;                     // Important
+	ImGuiWindowFlags _window_flags = 0;
+	double _timezone_hour;
+
+	std::string _getDateTimeString(DateTime dt) {
+	    auto days = dt.day();
+	    double hours = dt.hours(); // double  0 ~ 24.0
+	    hours = hours - _timezone_hour;   // append timezone
+	    if ( hours > 23.0 ) {
+	       days = days + 1;
+	       hours = hours - 24.0;
+            } else if ( hours < 0.0 ) {
+	       days = days - 1;
+	       hours = hours + 24.0;
+            } else {
+	       // NOP
+	    }
+	    int c_hour = (int)hours;
+	    float d_min = (float)((hours-c_hour)*60.0);
+	    int c_min = (int)d_min;
+	    int c_sec = (int)((d_min-c_min)*60.0);
+
+	    std::string s_hour = std::to_string(c_hour);
+    	    std::string s_min = std::to_string(c_min);
+      	    std::string s_sec = std::to_string(c_sec);
+	    if ( c_hour < 10 ) s_hour = "0" + s_hour;
+	    if ( c_min < 10 ) s_min = "0" + s_min;
+    	    if ( c_sec < 10 ) s_sec = "0" + s_sec;
+	    
+	    return s_hour + ":" + s_min + ":" + s_sec;
+        }
+	
+    public:
+        ghRailGUI() : ImGuiPanel("Clock")
+        {
+            //DateTime now;
+            //_hour = now.hours(), _day = now.day(), _month = now.month(), _year = now.year();
+	    //_timezone_hour = (double)( timezoneminutes / 60.0 ); // 0 ~ 24
+	    _timezone_hour = (double)( -540  / 60.0 ); // 0 ~ 24 
+	    // Window Options
+	    //_window_flags |= ImGuiWindowFlags_NoResize;
+	    _window_flags |= ImGuiWindowFlags_NoCollapse;
+        }
+	void setTimeZone(int timezoneminutes)
+        {
+	    _timezone_hour = (double)( timezoneminutes / 60.0 ); // 0 ~ 24 
+	    //printf("%.10lf ", _timezone_hour );
+	    
+        }
+        void draw(osg::RenderInfo& ri) override
+        {
+
+	    //if ( _skyNode == nullptr ) findNode(_skyNode, ri);
+	    findNode(_skyNode, ri);
+
+	    //////////////////////////////
+	    DateTime current_datetime = _skyNode->getDateTime();
+	    std::string s_timestr = _getDateTimeString(current_datetime); 
+	    //  std::string s_elapsed = std::to_string(_elapsed);
+	    //////////////////////////////
+	    //std::string titlebar = "Clock  " + s_timestr;
+
+	    //ImGui::SetNextWindowSizeConstraints(_winsize,_winsize);
+	    // ImGui::Begin(name(), visible(), _window_flags);
+	    ImGui::Begin(name(), NULL, _window_flags);
+	    //ImGui::GetIO().FontGlobalScale = 4.0f;
+	    ImGui::Button(s_timestr.c_str());
+            ImGui::End();
+	    //ImGui::GetIO().FontGlobalScale = 1.0f;
+	}
+};	

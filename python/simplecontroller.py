@@ -1,0 +1,450 @@
+#!/usr/bin/python3
+#
+#  simple osgearth_rail controller
+#
+#   Copyright (C) 2025 Yuki Osada
+#  This software is released under the BSD License, see LICENSE.
+#
+#
+#
+#
+#  Required tkintermapview packages
+#    https://github.com/TomSchimansky/TkinterMapView
+#
+#
+# apt-get install python3-tk python3-pip python3-pil python3-pil.imagetk
+# pip3 install tkintermapview -t packages
+#
+#
+#
+import os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'packages'))
+
+import socket
+import time
+from datetime import datetime
+import re
+import threading
+import tkinter
+import tkintermapview
+
+from tkinter import Menu,ttk,messagebox
+
+#################################################################
+remote_polling_second = 20
+remote_host = "localhost"
+remote_port = 57139
+socket_buffer_size = 4096
+field_isloaded = False
+
+class SocketClient():
+
+    def __init__(self,datasize,flag):
+        self.host = None
+        self.port = None
+        self.datasize = datasize
+        self.showtimestamp = flag
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
+        
+    def connect(self,host,port):
+        self.host = host
+        self.port = port
+        try:
+            self.socket.connect((host, port))
+            print('[{0}] server connect -> address : {1}:{2}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self.host, self.port) )
+            return True
+        except socket.error:
+            print('[{0}] server connect ERROR -> address : {1}:{2}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self.host, self.port) )
+            return False
+ 
+    def send(self,message):
+        if self.socket != None:
+            self.socket.send( message.encode('utf-8') )
+            if self.showtimestamp:
+                print('[{0}] Send:=>{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), message.rstrip()) )
+            rcv_data = self.socket.recv(self.datasize)
+            rcv_data = rcv_data.decode('utf-8').rstrip()
+            if self.showtimestamp:
+                print('[{0}] Recv:<={1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rcv_data) )
+            return rcv_data        
+    
+    def close(self):
+        if self.socket != None:        
+            self.socket.close()
+            self.socket = None
+             
+remote_socket = SocketClient(socket_buffer_size,False)
+
+##################################################################
+
+
+def about():
+    message = "simple osgearth_rail controller 0.1"
+    messagebox.showinfo("about",message)
+
+def marker_update(data):
+    markerlist = data.split(",")
+    for updatemarker in markerlist:
+        markerdata = updatemarker.split(" ")
+        trainname = markerdata[0]
+        existflag = False
+        for item in trainid:
+            if trainname == item:
+                lng = float(markerdata[1])
+                lat = float(markerdata[2])
+                if trainname in markers:
+                    markers[trainname].set_position(lat,lng)
+                else:
+                    markers[trainname] = map_widget.set_marker( lat, lng, text=item )
+                existflag = True
+                break
+        if existflag == False:
+            if trainname in markers:
+                markers[trainname].delete()
+                del markers[trainname]
+
+def viewport_update(data):
+    map_widget.delete_all_polygon()
+    positionlist = []
+    pointlist = data.split(",")
+    for point in pointlist:
+        pointdata = point.split(" ")
+        if pointdata[0] != "Geoglyph:":
+            lng = float(pointdata[0])
+            lat = float(pointdata[1])
+            positionlist.append((lat,lng))
+    viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+
+        
+def timerproc():
+    global field_isloaded
+    global polling_timer
+
+    if field_isloaded:
+        response = remote_socket.send("clock get time\n");
+        timestr = re.split(r"\s+", response)
+        if len(timestr) > 2 and timestr[1] == "clock":
+            timelabel_var.set(timestr[2])
+        response = remote_socket.send("train position all\n");
+        marker_update(response)
+        response = remote_socket.send("camera get viewport\n");
+        viewport_update(response)
+        polling_timer=threading.Timer(remote_polling_second,timerproc)
+        polling_timer.start()
+        
+def server_connect_dialog():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("400x300")
+    dialog.title("Connect setting")
+
+    lbl = tkinter.Label(dialog,text='osgearth_rail IP address')
+    lbl.place(x=30, y=10)
+
+    txt = tkinter.Entry(dialog,width=20)
+    txt.place(x=200, y=10)
+    txt.insert(0,"localhost")
+    
+    selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
+
+    option1_radio = ttk.Radiobutton(dialog, text="Eurostar and Thalys (UK,France,Belguim,Netherland)", value="G175448050EUROTHALYS", variable=selected_option)
+    option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
+    option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
+    option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
+
+    option1_radio.place(x=30,y=40)
+    option2_radio.place(x=30,y=60)
+    option3_radio.place(x=30,y=80)
+    option4_radio.place(x=30,y=100)
+
+    def on_server_ok():
+        global trainid
+        global field_isloaded
+        remote_host = txt.get();
+        response = remote_socket.connect(remote_host, remote_port)
+        if response == False:
+            dialog.destroy()
+            messagebox.showinfo("Warning", "3D viewer Error")
+            return
+
+        time.sleep(5) # wait time for Setup 3D Viewer
+        message = "field set " + selected_option.get() + "\n"
+        response = remote_socket.send(message);
+        messagebox.showinfo("receive",response)
+        menu0.entryconfig("3D view open", state=tkinter.DISABLED)
+        menu0.entryconfig("3D view close", state=tkinter.NORMAL)
+        menu1.entryconfig("clock", state=tkinter.NORMAL)
+        menu1.entryconfig("speed", state=tkinter.NORMAL)
+        menu1.entryconfig("camera", state=tkinter.NORMAL)
+        menu_button_2.config(state=tkinter.NORMAL)
+        menu_button_3.config(state=tkinter.DISABLED)
+        response = remote_socket.send("clock set time 12:00\n");
+        response = remote_socket.send("field get train\n");
+        trainid = re.split(r"\s+", response)
+        del trainid[0]  # Geoglyph header
+        del trainid[0]  # field str
+        #print (len(trainid))
+        field_isloaded = True
+        dialog.destroy()
+
+    ok_button = ttk.Button(dialog, text="OK", command=on_server_ok)
+    ok_button.place(x=30,y=250)
+
+    dialog.grab_set() # modal dialog
+    root_tk.wait_window(dialog) # wait for close dialog
+
+def server_exit_dialog():
+    global field_isloaded
+    global polling_timer
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("400x200")
+    dialog.title("3D view close")
+
+    def on_exit_ok():
+        global field_isloaded
+        global polling_timer
+        response = remote_socket.send("exit\n");
+        if polling_timer.is_alive():
+            polling_timer.cancel()
+        messagebox.showinfo("3D view", " closing process..")
+        menu0.entryconfig("3D view open", state=tkinter.NORMAL)
+        menu0.entryconfig("3D view close", state=tkinter.DISABLED)
+        menu1.entryconfig("clock", state=tkinter.DISABLED)
+        menu1.entryconfig("speed", state=tkinter.DISABLED)
+        menu1.entryconfig("camera", state=tkinter.DISABLED)
+        menu_button_2.config(state=tkinter.DISABLED)
+        menu_button_3.config(state=tkinter.DISABLED)
+        remote_socket.close()
+        field_isloaded = False
+        dialog.destroy()
+        
+    def on_exit_no():
+        messagebox.showinfo("3D view", " cancel close ")
+        dialog.destroy()
+
+    msg_label = ttk.Label(dialog, text="Comfirmation 3D view close")
+    msg_label.place(x=100,y=40)
+
+    ok_button = ttk.Button(dialog, text="OK", command=on_exit_ok)
+    no_button = ttk.Button(dialog, text="NO", command=on_exit_no)    
+    ok_button.place(x=50,y=80)
+    no_button.place(x=250,y=80)
+
+    dialog.grab_set()
+    root_tk.wait_window(dialog)
+
+def clock_dialog():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("300x100")
+    dialog.title("Clock")
+
+    response = remote_socket.send("clock get time\n");
+    timestr = re.split(r"\s+", response)
+    if len(timestr) > 2 and timestr[1] == "clock":
+        timestr2 = timestr[2].split(":")
+    else:
+        dialog.destroy()
+        return
+    
+    def set_selected_time():
+        hour = hour_spinbox.get()
+        minute = minute_spinbox.get()
+        message = "clock set time " + hour + ":" + minute + "\n"
+        response = remote_socket.send(message);
+        messagebox.showinfo("receive",response)
+        dialog.destroy()
+
+    # Hour Spinbox
+    hour_label = ttk.Label(dialog, text="Hour:")
+    hour_label.grid(row=0, column=0, padx=5, pady=5)
+    hour_spinbox = ttk.Spinbox(dialog, from_=0, to=23, wrap=True, width=8)
+    hour_spinbox.set(timestr2[0]) # Initial value
+    hour_spinbox.grid(row=0, column=1, padx=5, pady=5)
+
+    # Minute Spinbox
+    minute_label = ttk.Label(dialog, text="Minute:")
+    minute_label.grid(row=0, column=2, padx=5, pady=5)
+    minute_spinbox = ttk.Spinbox(dialog, from_=0, to=59, wrap=True, width=5)
+    minute_spinbox.set(timestr2[1]) # Initial value    
+    minute_spinbox.grid(row=0, column=3, padx=5, pady=5)
+
+    # Get Time Button
+    get_time_button = ttk.Button(dialog, text="Set Time", command=set_selected_time)
+    get_time_button.grid(row=1, column=0, columnspan=4, pady=10)
+    dialog.grab_set()
+    root_tk.wait_window(dialog)
+
+def speed_dialog():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("300x200")
+    dialog.title("Clock")
+
+    response = remote_socket.send("clock get speed\n");
+    speedstr = re.split(r"\s+", response)
+    if len(speedstr) > 2 and speedstr[1] == "speed":
+        speed = float(speedstr[2])
+    else:
+        dialog.destroy()
+        return
+    
+    def set_selected_speed():
+        message = "clock set speed "
+        labeltxt = "x "
+        if selected_value.get() == "fast":
+            message += str(scaleF.get()) + "\n"
+            labeltxt += str(scaleF.get())
+        else:
+            message += str(scaleS.get()) + "\n"
+            labeltxt += str(scaleS.get())
+        response = remote_socket.send(message);            
+        messagebox.showinfo("receive",response)
+        speedlabel_var.set(labeltxt)
+        dialog.destroy()
+
+    selected_value = tkinter.StringVar()
+    if speed < 1.0:
+        selected_value.set("slow")
+    else:
+        selected_value.set("fast")
+    radioF = tkinter.Radiobutton(dialog, text="Fast", variable=selected_value, value="fast")
+    radioS = tkinter.Radiobutton(dialog, text="Slow", variable=selected_value, value="slow")    
+    radioF.grid(row=0, column=0, padx=5, pady=5)
+    radioS.grid(row=1, column=0, padx=5, pady=5)    
+
+    scale_varF = tkinter.DoubleVar()
+    scale_varS = tkinter.DoubleVar()
+    if speed > 0.99:
+        scale_varF.set(speed)
+        scale_varS.set(0.1)
+    else:
+        scale_varF.set(1.0)
+        scale_varS.set(speed)
+
+    scaleF = tkinter.Scale(dialog, from_=1.0, to_=12.0, length=200, resolution=1, orient=tkinter.HORIZONTAL, variable=scale_varF , showvalue=True)
+    scaleF.grid(row=0, column=1, padx=5, pady=5)
+    scaleS = tkinter.Scale(dialog, from_=0.1, to_=1.0, length=200, resolution=0.1, orient=tkinter.HORIZONTAL, variable=scale_varS , showvalue=True)
+    scaleS.grid(row=1, column=1, padx=5, pady=5)
+
+    button = ttk.Button(dialog, text="Set speed", command=set_selected_speed)
+    button.grid(row=2, column=0, columnspan=2, pady=10)
+    dialog.grab_set()
+    root_tk.wait_window(dialog)
+
+
+def camera_dialog():
+    global markers
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("400x100")
+    dialog.title("Camera Tracking")
+
+    def set_camera_tracking():
+        message = "camera set tracking " + combo.get() + "\n"
+        response = remote_socket.send(message);
+        messagebox.showinfo("receive",response)
+        dialog.destroy()        
+
+    name_label = ttk.Label(dialog, text="train ID:")
+    name_label.grid(row=0, column=0, padx=5, pady=5)
+
+    options = []
+    for item in markers:
+        if item != "sample":
+            options.append( item )
+        else:
+            options.append("NONE")
+    name_variable = tkinter.StringVar()
+    combo = ttk.Combobox ( dialog , values = options , textvariable = name_variable , height = 3)
+    combo.grid(row=0, column=1, padx=5, pady=5)
+
+    ok_button = ttk.Button(dialog, text="Camera Tracking ", command=set_camera_tracking)
+    ok_button.grid(row=1, column=0, columnspan=2, pady=10)
+    dialog.grab_set()
+    root_tk.wait_window(dialog)
+
+
+def run_command():
+    response = remote_socket.send("run\n");
+    menu_button_2.config(state=tkinter.DISABLED)
+    menu_button_3.config(state=tkinter.NORMAL)
+    messagebox.showinfo("receive",response)
+    t=threading.Thread(target=timerproc)
+    t.start()
+
+def pause_command():
+    global polling_timer
+    response = remote_socket.send("pause\n");
+    menu_button_2.config(state=tkinter.NORMAL)
+    menu_button_3.config(state=tkinter.DISABLED)
+    messagebox.showinfo("receive",response)
+    if polling_timer.is_alive():
+        polling_timer.cancel()
+
+################################################################################    
+# create tkinter window
+root_tk = tkinter.Tk()
+root_tk.geometry(f"{1000}x{700}")
+root_tk.title("simple osgearth_rail controller")
+
+# Custom Menubar
+menu_frame = tkinter.Frame(root_tk, bg="lightgray", height=30)
+menu_frame.pack(side="top", fill="x")
+
+# add menu item
+menu_button_0 = tkinter.Menubutton(menu_frame, text="File", bg="lightgray")
+menu_button_0.pack(side="left", padx=10)
+
+# setting menu dropdown
+menu0 = tkinter.Menu(menu_button_0, tearoff=0)
+menu0.add_command(label="3D view open", command=server_connect_dialog)
+menu0.add_command(label="3D view close", command=server_exit_dialog)
+menu0.add_separator()
+menu0.add_command(label="About", command=about)
+menu0.add_command(label="Exit", command=root_tk.quit)
+menu_button_0.config(menu=menu0)
+menu0.entryconfig("3D view close", state=tkinter.DISABLED)
+
+# add menu item
+menu_button_1 = tkinter.Menubutton(menu_frame, text="Command", bg="lightgray")
+menu_button_1.pack(side="left", padx=10)
+
+# setting menu dropdown
+menu1 = tkinter.Menu(menu_button_1, tearoff=0)
+menu1.add_command(label="clock", command=clock_dialog)
+menu1.add_command(label="speed", command=speed_dialog)
+menu1.add_command(label="camera", command=camera_dialog)
+menu_button_1.config(menu=menu1)
+menu1.entryconfig("clock", state=tkinter.DISABLED)
+menu1.entryconfig("speed", state=tkinter.DISABLED)
+menu1.entryconfig("camera", state=tkinter.DISABLED)
+
+# add menu item
+menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", command=run_command)
+menu_button_2.pack(side="left", padx=20)
+menu_button_2.config(state=tkinter.DISABLED)
+
+menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", command=pause_command)
+menu_button_3.pack(side="left", padx=20)
+menu_button_3.config(state=tkinter.DISABLED)
+
+# add menu item
+timelabel_var = tkinter.StringVar()
+timelabel_var.set("00:00")
+timelabel = tkinter.Label(menu_frame,textvariable=timelabel_var, bg="lightgray")
+timelabel.pack(side="left", padx=10)
+
+# add menu item
+speedlabel_var = tkinter.StringVar()
+speedlabel_var.set("x 1.0")
+speedlabel = tkinter.Label(menu_frame,textvariable=speedlabel_var, bg="lightgray")
+speedlabel.pack(side="left", padx=10)
+
+#
+# create map widget
+#
+map_widget = tkintermapview.TkinterMapView(root_tk, width=1000, height=700, corner_radius=0)
+map_widget.pack(fill="both", expand=True)
+
+map_widget.set_zoom(2)
+
+markers = { "sample" : map_widget.set_marker( 0, 0, text="sample") }
+
+root_tk.mainloop()
