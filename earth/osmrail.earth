@@ -1,5 +1,9 @@
 <!--
-osgEarth Sample - OpeSstreetMap.
+
+
+osgEarth Sample - OpenStreetMap
+
+
 -->
 <map name="Worldwide OSM feature data">
 
@@ -112,14 +116,20 @@ osgEarth Sample - OpeSstreetMap.
             </script>
         </styles>
     </TiledFeatureModel>
-
+<!--  
     <XYZImage name="OSM Imagery">
         <url>https://[abc].tile.openstreetmap.org/{z}/{x}/{y}.png</url>
         <profile>spherical-mercator</profile>
         <cache_policy usage="none"/>
         <attribution>&#169;OpenStreetMap contributors</attribution>
     </XYZImage>
-    
+-->
+    <ArcGISServerImage name="demo">
+        <url>http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/</url>
+    </ArcGISServerImage>
+
+
+
     <xi:include href="readymap_elevation.xml"/>
 
     <!--   <xi:include href="osm_roads_rasterized.xml"/> -->
@@ -130,56 +140,4 @@ osgEarth Sample - OpeSstreetMap.
         <screen_space_error>125</screen_space_error>
         <terrain lod_method="screen_space"/>
     </options>
-<!--
-    <viewpoints>
-        <viewpoint name="Helsinki">
-            <heading>0.65737</heading>
-            <pitch>-53.1523</pitch>
-            <range>9051.49m</range>
-            <long>24.91930793902788</long>
-            <lat>60.1715638541335</lat>
-            <height>41.44817265681922</height>
-            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
-        </viewpoint>
-        <viewpoint name="Aspen">
-            <heading>7.8199</heading>
-            <pitch>-33.116</pitch>
-            <range>2673.82m</range>
-            <long>-106.823582971212</long>
-            <lat>39.18649886424574</lat>
-            <height>2430.634360928088</height>
-            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
-        </viewpoint>
-
-        <viewpoint name="Sion">
-            <heading>21.1319</heading>
-            <pitch>-23.509</pitch>
-            <range>6578.61m</range>
-            <long>7.354949481050042</long>
-            <lat>46.22827489726767</lat>
-            <height>539.2706910725683</height>
-            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
-        </viewpoint>
-
-        <viewpoint name="Honolulu">
-            <heading>-2.31581</heading>
-            <pitch>-40.1407</pitch>
-            <range>8770.44m</range>
-            <long>-157.8326534096892</long>
-            <lat>21.2935286069409</lat>
-            <height>20.39641692582518</height>
-            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
-        </viewpoint>
-
-        <viewpoint name="Sao Paulo">
-            <heading>2.77072</heading>
-            <pitch>-41.6163</pitch>
-            <range>9290.35m</range>
-            <long>-46.63414310624054</long>
-            <lat>-23.55347220210104</lat>
-            <height>781.040805241093</height>
-            <srs>+proj=longlat +datum=WGS84 +no_defs</srs>
-        </viewpoint>
-    </viewpoints>
--->
 </map>
