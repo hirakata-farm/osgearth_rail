@@ -34,6 +34,16 @@ Require installing some python packages, see python/simplecontoller.py file.
 see demo video
 https://www.youtube.com/watch?v=YVDdq4JZ19Y
 
+# simulation data
+
+https://earth.geoglyph.info/
+
+simple demo simulation,
+Thalys simulation from Paris to Brussels.
+
+https://www.youtube.com/watch?v=qBoS3elHFFE
+
+
 # License
  
 "osgearth_rail" is under [MIT license](https://en.wikipedia.org/wiki/MIT_License).

@@ -89,6 +89,7 @@ class ghRail
       //vector<int> p_locomotives{-96,-72,-48,-24,0,24,48,72,96};  // 9 coaches Odd obsolete
       string p_configure;
       string p_tracking;
+      double p_previous_simulationTime;
       osg::Vec3d p_prev_position_tracking;
       bool p_running;
       double p_speed;

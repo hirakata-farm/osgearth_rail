@@ -359,7 +359,8 @@ ghRail::Setup(string conf)
   p_running = false;
   p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
   p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
-
+  p_previous_simulationTime = 0.0;
+      
   return GH_SETUP_RESULT_OK;
 }
 
@@ -369,8 +370,7 @@ ghRail::Setup(string conf)
 void
 ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Viewer* _view )
 {
-  //double _seconds = elapsed;  // UTC seconds from 00:00:00
-  //dt.hours() * 3600.0 + elapsed; // UTC seconds from 00:00:00
+
   osg::AnimationPath::ControlPoint point;
   osg::Vec3d position_centric;
   osg::Vec3d position_lnglat;
@@ -378,10 +378,21 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
   osgEarth::Ellipsoid WGS84;
   osgEarth::GeoPoint geopoint;
 
+  double timediff = simulationTime - p_previous_simulationTime; // [sec]
+  if ( -0.2 < timediff && timediff < 0 ) {
+    // 60fps = 0.016666 [sec / frame]
+    // 30fps = 0.033333 [sec / frame]
+    // 15fps = 0.066666 [sec / frame]
+    //  5fps = 0.2      [sec / frame]        
+    // NOP
+    // Time is going back just a little
+    //std::cout << "warning simulation time " << to_string(timediff) << std::endl;
+    return;
+  }
+  
   osg::Vec3d eye, up, center;
   _view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
   double distance = 0.0;
-
 
   //
   //
@@ -498,6 +509,7 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
     if ( p_prev_position_tracking.x() == 0 && p_prev_position_tracking.y() == 0 ) {
       // NOP first frame
     } else {
+
       osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking ^ eye);
       osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking - eye);
       osg::Vec3d upvec = osg::Vec3d(rightvec ^ dirvec);
@@ -508,7 +520,7 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
     p_prev_position_tracking = position_tracking;
   }
 
-  
+  p_previous_simulationTime = simulationTime;
 }
 
 int
