@@ -116,18 +116,18 @@ osgEarth Sample - OpenStreetMap
             </script>
         </styles>
     </TiledFeatureModel>
-<!--  
+
     <XYZImage name="OSM Imagery">
         <url>https://[abc].tile.openstreetmap.org/{z}/{x}/{y}.png</url>
         <profile>spherical-mercator</profile>
         <cache_policy usage="none"/>
         <attribution>&#169;OpenStreetMap contributors</attribution>
     </XYZImage>
--->
-    <ArcGISServerImage name="demo">
+<!--  
+    <ArcGISServerImage name="ArcGIS Demo">
         <url>http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/</url>
     </ArcGISServerImage>
-
+-->
 
 
     <xi:include href="readymap_elevation.xml"/>
