@@ -203,6 +203,10 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
   ghViewer.setCameraManipulator( ghManipulator );
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
+  osgViewer::Viewer::Windows windows;
+  ghViewer.getWindows(windows);
+  windows[0]->setWindowName(GH_WELCOME_MESSAGE);
+
   //
   // Load the earth file.
   //
