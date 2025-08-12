@@ -844,8 +844,8 @@ ghRailCommandCameraViewport(ghCommandQueue *cmd, osgViewer::Viewer* _view) {
     ret += std::to_string(points[i].x());
     ret += " ";
     ret += std::to_string(points[i].y());
-    ret += " ";
-    ret += std::to_string(points[i].z());
+    //ret += " ";
+    //ret += std::to_string(points[i].z());
   }
   ret += "\n";
   return ret;
