@@ -39,7 +39,7 @@ ghRail::IsLoaded()
 }
 
 string
-ghRail::GetConf()
+ghRail::GetConfigure()
 {
   return p_configure;
 }
@@ -57,23 +57,60 @@ ghRail::SetPlayPause(bool flag)
 }
 
 void
-ghRail::SetSpeed(double sp)
+ghRail::SetClockSpeed(double sp)
 {
   // Speed range
-  if ( sp < GH_MIN_CLOCK_SPEED ) {
-    // NOP
-  } else if ( sp > GH_MAX_CLOCK_SPEED ) {
-    // NOP
+  if ( sp < p_min_clockspeed ) {
+    p_clockspeed = p_min_clockspeed;
+  } else if ( sp > p_max_clockspeed ) {
+    p_clockspeed = p_max_clockspeed;
   } else {
-    p_speed = sp;
+    p_clockspeed = sp;
   } 
+}
+double
+ghRail::GetClockSpeed()
+{
+  return p_clockspeed;
+}
+
+
+void
+ghRail::SetClockMaxSpeed(double sp)
+{
+  p_max_clockspeed = sp;
 }
 
 double
-ghRail::GetSpeed()
+ghRail::GetClockMaxSpeed()
 {
-  return p_speed;
+  return p_max_clockspeed;
 }
+
+void
+ghRail::SetAltmode(int mode)
+{
+  p_altmode = mode;
+}
+
+int
+ghRail::GetAltmode()
+{
+  return p_altmode;
+}
+
+void
+ghRail::SetDisplayDistance(double distance)
+{
+  p_displaydistance = distance;
+}
+
+double
+ghRail::GetDisplayDistance()
+{
+  return p_displaydistance;
+}
+
 
 string
 ghRail::GetUnits()
@@ -106,7 +143,7 @@ ghRail::SetTrainLabel(string trainid, bool flag)
   
   std::string ret = "trainid:";
 
-  if ( trainid == "ALL" || trainid == "all" ) {
+  if ( trainid.empty() ) {
     for (const auto& [key, value] : p_units) {
       p_units[key].SetModelLabel(flag);
     }
@@ -144,7 +181,7 @@ ghRail::GetTrainPosition(string trainid, double simtime)
   osgEarth::Ellipsoid WGS84;
   int coach = 0;
 
-  if ( trainid == "ALL" || trainid == "all" ) {
+  if ( trainid.empty() ) {
     for (const auto& [key, value] : p_units) {
       point = p_units[key].GetControlPoint(simtime,coach);
       position_centric = point.getPosition();
@@ -224,24 +261,24 @@ ghRail::SetTrackingTrain(string trainid) {
 
 
 int
-ghRail::Setup(string conf)
+ghRail::Setup(string configname)
 {
 
   //
   //  Configure Data
   //
   //ghRailJSON p_config;
-  p_config.SetConfigUri(GEOGLYPH_ROOT_URI,conf);
+  p_config.SetConfigUri(GEOGLYPH_ROOT_URI,configname);
   if(! p_config.GetContent())
     {
       return GH_SETUP_RESULT_NOT_GET_CONFIG;
     }
-  std::string field = p_config.GetJsonString("field","base");
+  std::string fieldname = p_config.GetJsonString("field","base");
 
   //
   //   Field Data
   //
-  p_field.SetFieldUri(GEOGLYPH_ROOT_URI,field);
+  p_field.SetFieldUri(GEOGLYPH_ROOT_URI,fieldname);
   if( ! p_field.GetContent() )
     {
       return GH_SETUP_RESULT_NOT_GET_FIELD;
@@ -355,12 +392,22 @@ ghRail::Setup(string conf)
     p_units[trainid2].SimulatePath( &p_time );
     
   }
-  p_configure = conf;
+
+  //
+  //  Params
+  //
+  p_configure = configname;
   p_running = false;
+  p_clockspeed = 1.0;
   p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
   p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
   p_previous_simulationTime = 0.0;
-      
+  p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
+  p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
+  p_altmode = GH_DEFAULT_ALTMODE;
+  p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
+
+
   return GH_SETUP_RESULT_OK;
 }
 
@@ -373,18 +420,13 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 
   osg::AnimationPath::ControlPoint point;
   osg::Vec3d position_centric;
-  osg::Vec3d position_lnglat;
+  //osg::Vec3d position_lnglat;
   osg::Vec3d position_tracking = osg::Vec3d(0.0,0.0,0.0);
-  osgEarth::Ellipsoid WGS84;
-  osgEarth::GeoPoint geopoint;
+  //osgEarth::Ellipsoid WGS84;
+  //osgEarth::GeoPoint geopoint;
 
   double timediff = simulationTime - p_previous_simulationTime; // [sec]
-  if ( -0.2 < timediff && timediff < 0 ) {
-    // 60fps = 0.016666 [sec / frame]
-    // 30fps = 0.033333 [sec / frame]
-    // 15fps = 0.066666 [sec / frame]
-    //  5fps = 0.2      [sec / frame]        
-    // NOP
+  if ( GH_THRESHOLD_TIME_BACK_SEC < timediff && timediff < 0 ) {
     // Time is going back just a little
     //std::cout << "warning simulation time " << to_string(timediff) << std::endl;
     return;
@@ -433,16 +475,9 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 	    p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	  } else {
 	    osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);	    
-	    position_lnglat = WGS84.geocentricToGeodetic(position_centric);
-	    if ( distance > GH_DISPLAY_DISTANCE ) {
-	      geopoint = osgEarth::GeoPoint(_map->getMapSRS()->getGeographicSRS(), position_lnglat.x(), position_lnglat.y(), position_lnglat.z(), osgEarth::ALTMODE_ABSOLUTE );
-	      trans->setPosition(geopoint);
-	    } else {
-	      geopoint = osgEarth::GeoPoint(_map->getMapSRS()->getGeographicSRS(), position_lnglat.x(), position_lnglat.y(), 0, osgEarth::ALTMODE_RELATIVE );
-	      osg::PositionAttitudeTransform *attitude = p_units[key].GetModelAttitude(i);
-	      attitude->setAttitude( point.getRotation() );
-	      trans->setPosition(geopoint);
-	    }
+	    trans->setPosition( _calcGeoPoint( _map->getMapSRS()->getGeographicSRS() , position_centric , key, simulationTime , i ) );
+	    osg::PositionAttitudeTransform *attitude = p_units[key].GetModelAttitude(i);
+	    attitude->setAttitude( point.getRotation() );
 	    if (  p_units[key].GetModelStatus(i) == GH_MODEL_STATUS_REMOVED ) {
 	      osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
 	      modelswitch->setChildValue(trans,true);
@@ -458,7 +493,7 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 	  //
 	  // coach   i != 0
 	  //
-	  if ( distance > GH_DISPLAY_DISTANCE ) {
+	  if ( distance > p_displaydistance ) {
 	    if ( p_units[key].GetModelStatus(i) < GH_MODEL_STATUS_LOADED ) {
 	      // NOP
 	    } else {
@@ -477,11 +512,9 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 	      p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	    } else {
 	      osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);
-	      position_lnglat = WGS84.geocentricToGeodetic(position_centric);
-	      geopoint = osgEarth::GeoPoint(_map->getMapSRS()->getGeographicSRS(), position_lnglat.x(), position_lnglat.y(), 0, osgEarth::ALTMODE_RELATIVE );
+	      trans->setPosition( _calcGeoPoint( _map->getMapSRS()->getGeographicSRS() , position_centric , key, simulationTime , i ) );
 	      osg::PositionAttitudeTransform *attitude = p_units[key].GetModelAttitude(i);
 	      attitude->setAttitude( point.getRotation() );
-	      trans->setPosition(geopoint);
 	      if (  p_units[key].GetModelStatus(i) == GH_MODEL_STATUS_REMOVED ) {
 		osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
 		modelswitch->setChildValue(trans,true);
@@ -534,3 +567,27 @@ ghRail::GetBaseDatetime() {
   return p_time.GetBaseDatetime();
 }
 
+
+
+osgEarth::GeoPoint
+ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach) {
+  osgEarth::Ellipsoid WGS84;
+  osg::Vec3d position_lnglat;
+  osgEarth::GeoPoint geopoint;
+  double layerunit = GH_ALTMODE_LAYER_UNIT;
+
+  position_lnglat = WGS84.geocentricToGeodetic(position);
+
+  if ( p_altmode == GH_ALTMODE_RELATIVE ) {
+    osg::Vec3d pos = p_units[key].GetControlPointLayer(simtime,coach);
+    if ( pos.z() > 0 ) pos.z() = 0.0;
+    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), pos.z()*layerunit , osgEarth::ALTMODE_RELATIVE );
+  } else if ( p_altmode == GH_ALTMODE_ABSOLUTE ) {
+    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), position_lnglat.z(), osgEarth::ALTMODE_ABSOLUTE );
+  } else {
+    // GH_ALTMODE_CLAMP or Unknown
+    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), 0, osgEarth::ALTMODE_RELATIVE );
+  }
+
+  return geopoint;
+}

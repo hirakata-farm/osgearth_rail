@@ -89,6 +89,8 @@
 #define GH_MODEL_STATUS_REMOVED 8
 
 
+#define GH_LAYER_DISTANCE_THRESHOLD 1.8
+
 ////////////////////////////////////////////////////////
 
 
@@ -110,6 +112,7 @@ class ghRailUnit
       //bool SimulatePath(int coaches, ghRailTime *railtime );
       bool SimulatePath( ghRailTime *railtime );
       osg::AnimationPath::ControlPoint GetControlPoint(double seconds,int coach);
+      osg::Vec3d GetControlPointLayer(double seconds,int coach);
       string GetModelUri(int coach);
       string SetModelLabel(bool flag);
       string GetTimetable();
@@ -135,6 +138,7 @@ class ghRailUnit
       vector<osg::PositionAttitudeTransform *> p_attitude;
 
       vector<vector<double>> p_geompath;   // row geometry from CSV
+      vector<vector<double>> p_geomlayer;   // row geometry property layer from CSV      
       vector<string> p_geompathstation;
       vector<int> p_geompathstationtype;
       
@@ -144,6 +148,7 @@ class ghRailUnit
       vector<int> p_geometrystationtype;
 
       vector<osg::AnimationPath*> p_sim; // each coachs
+      vector<osg::AnimationPath*> p_simlayer; // each coachs for OSM layer property
 
       void _geompath2geometry(vector<int> ranges);
       void _appendGeometryData(double lat,double lon,double alt,string name,int type,int type1, int type2);
@@ -170,6 +175,9 @@ class ghRailUnit
       void _initLocomotiveArray( vector<int>  lsize );
       void _initLocomotiveModel(vector<string>  locomotive );
       osgEarth::LabelNode *_createLabelNode(string text);
+
+      osg::AnimationPath::ControlPoint _calcControlPointGeomLayers(double lat, double lng, osg::Quat quat);
+      
 };
 
 

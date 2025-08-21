@@ -39,6 +39,7 @@ ghRailUnit::Setup( string id,
   geomline = _split(geom,"\n");
 
   std::vector<std::string> tmpline;
+  std::vector<std::string> propline;
   geompathrows = 0;
   
   for (const auto& token : geomline) {
@@ -52,15 +53,33 @@ ghRailUnit::Setup( string id,
   }
   
   p_geompath.resize(geompathrows, vector<double>(4));
+  //p_geomlayer.resize(geompathrows, vector<double>(3));
   p_geompathstation.resize(geompathrows);
   p_geompathstationtype.resize(geompathrows);
 
   int idx = 0;
+  int idxlayer = 0;
   double distance = 0.0;
   for (const auto& token : geomline) {
     tmpline = _split(token,",");
     if ( tmpline[0].compare(0, 1, "#") == 0 ) {
-      // Skip Comment
+      // Comment Property
+      if ( idx > 0 ) {
+	propline = _split(tmpline[1],":");
+	for (const auto& token2 : propline) {
+	  //  Check layer Property
+	  if ( token2.compare(0, 3, "ly=") == 0 ) {
+	    p_geomlayer.resize(p_geomlayer.size()+1, vector<double>(3));
+	    p_geomlayer[idxlayer][0] = p_geompath[idx-1][0];        // Latitude
+	    p_geomlayer[idxlayer][1] = p_geompath[idx-1][1];        // Longitude
+	    p_geomlayer[idxlayer][2] = stod( token2.substr(3) );
+	    //std::cout << token2 << " " << std::to_string( p_geomlayer[idxlayer][2] ) << std::endl;
+	    idxlayer++;
+	  }
+	}
+      } else {
+	// NOP
+      }
     } else {
       p_geompath[idx][0] = stod(tmpline[0]);        // Latitude
       p_geompath[idx][1] = stod(tmpline[1]);        // Longitude
@@ -136,16 +155,42 @@ ghRailUnit::GetControlPoint( double seconds, int coach )
   return result;
 }
 
+osg::Vec3d
+ghRailUnit::GetControlPointLayer(double seconds, int coach )
+{
+  osg::AnimationPath::ControlPoint result =
+    osg::AnimationPath::ControlPoint( osg::Vec3(0,0,0),
+				      osg::Quat(0,0,0,0) );
+  double firsttime = p_sim[coach]->getFirstTime();
+  double lasttime = p_sim[coach]->getLastTime();
+  bool res;
+  if ( seconds > firsttime && seconds < lasttime ) {
+    res = p_simlayer[coach]->getInterpolatedControlPoint( seconds,
+							  (osg::AnimationPath::ControlPoint &)result );
+  }
+
+  if ( res ) {
+    return result.getPosition();
+  } else {
+    return osg::Vec3(0,0,0);
+  }
+
+}
+
+
 //ghRailUnit::simulatepath( int coaches, string timezonestr )
 bool
 ghRailUnit::SimulatePath( ghRailTime *railtime )
 {
   int coaches = p_locomotives.size();
   p_sim.resize(coaches);
+  p_simlayer.resize(coaches);
 
   for (int i = 0; i < coaches; i++) {
     p_sim[i] = new osg::AnimationPath;
     p_sim[i]->setLoopMode(osg::AnimationPath::NO_LOOPING);
+    p_simlayer[i] = new osg::AnimationPath;
+    p_simlayer[i]->setLoopMode(osg::AnimationPath::NO_LOOPING);
     _simulateCoach( i , railtime );
 
   }
@@ -198,9 +243,14 @@ string
 ghRailUnit::GetTimetable() {
   std::string ret = " ";
   nlohmann::json timetable = p_jsondata["timetable"];
+  // timetable[i].get<std::string>()     time string    "0T14:54:00"
+  // timetable[i+1].get<std::string>()   station string
+  // timetable[i+2].get<std::string>()   station type
+
   int timetable_size = timetable.size();
   for (int i = 0; i < timetable_size; i=i+3) {
-    ret += timetable[i].get<std::string>();
+    std::string timestr = timetable[i].get<std::string>();
+    ret += timestr.substr(2);
     ret += ",";
     ret += timetable[i+1].get<std::string>();
     ret += ",";
@@ -346,6 +396,8 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 
       p_sim[coachid]->insert( diff_time+start_time,
 			      osg::AnimationPath::ControlPoint(position,rotation));
+      p_simlayer[coachid]->insert( diff_time+start_time,
+				   _calcControlPointGeomLayers(p_geometry[current_idx][0],p_geometry[current_idx][1],rotation) );
 
     } else {
       if ( prev_type == GH_TYPE_DEPATURE && current_type == GH_TYPE_ARRIVAL ) {
@@ -371,6 +423,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 		  rotation = _calcQuatanion( prev_idx+simidx );
 		  p_sim[coachid]->insert( simulationarray[simidx]+start_time,
 					  osg::AnimationPath::ControlPoint(position,rotation));
+		  p_simlayer[coachid]->insert( simulationarray[simidx]+start_time,
+					       _calcControlPointGeomLayers(p_geometry[prev_idx+simidx][0],p_geometry[prev_idx+simidx][1],rotation) );
+		  
 	}
 	
 
@@ -390,6 +445,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 		  rotation = _calcQuatanion( prev_idx+simidx );
 		  p_sim[coachid]->insert( simulationarray[simidx]+start_time,
 					  osg::AnimationPath::ControlPoint(position,rotation));
+		  p_simlayer[coachid]->insert( simulationarray[simidx]+start_time,
+					       _calcControlPointGeomLayers(p_geometry[prev_idx+simidx][0],p_geometry[prev_idx+simidx][1],rotation) );
+
 	}
 	
       } else if ( prev_type == GH_TYPE_THROUGH && current_type == GH_TYPE_ARRIVAL ) {
@@ -408,6 +466,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 		  rotation = _calcQuatanion( prev_idx+simidx );
 		  p_sim[coachid]->insert( simulationarray[simidx]+start_time,
 					  osg::AnimationPath::ControlPoint(position,rotation));
+		  p_simlayer[coachid]->insert( simulationarray[simidx]+start_time,
+					       _calcControlPointGeomLayers(p_geometry[prev_idx+simidx][0],p_geometry[prev_idx+simidx][1],rotation) );
+
 	}
 	
       } else if ( prev_type == GH_TYPE_THROUGH && current_type == GH_TYPE_THROUGH ) {
@@ -426,6 +487,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 		  rotation = _calcQuatanion( prev_idx+simidx );
 		  p_sim[coachid]->insert( simulationarray[simidx]+start_time,
 					  osg::AnimationPath::ControlPoint(position,rotation));
+		  p_simlayer[coachid]->insert( simulationarray[simidx]+start_time,
+					       _calcControlPointGeomLayers(p_geometry[prev_idx+simidx][0],p_geometry[prev_idx+simidx][1],rotation) );
+
 	}
 
       } else {
@@ -1291,3 +1355,34 @@ ghRailUnit::_createLabelNode(string text) {
   return label;
   
 }
+
+osg::AnimationPath::ControlPoint 
+ghRailUnit::_calcControlPointGeomLayers(double lat, double lng, osg::Quat quat)
+{
+  int glength = p_geomlayer.size();
+  int idx = 0;
+  int altidx = -1;
+  double distance = 0.0;
+  double distance_check_range = GH_LAYER_DISTANCE_THRESHOLD;
+  
+  for (idx = 0; idx < glength; idx++) {
+    distance = osgEarth::GeoMath::distance(deg2rad(lat),deg2rad(lng),
+					   deg2rad(p_geomlayer[idx][0]),deg2rad(p_geomlayer[idx][1]));
+    if ( distance < distance_check_range ) {
+      altidx = idx;
+      break;
+    }
+  }
+  osg::Vec3d ret;
+  if ( altidx > -1 ) {
+    ret = osg::Vec3d(deg2rad(lng), deg2rad(lat), p_geomlayer[altidx][2]);
+  } else {
+    ret = osg::Vec3d(deg2rad(lng), deg2rad(lat), 0.0);
+  }
+  //std::cout << std::to_string( lat ) << " " << std::to_string( lng ) << " " << std::to_string( p_geomlayer[altidx][2] ) << " " << std::to_string( distance ) << std::endl;
+
+  osg::AnimationPath::ControlPoint result = osg::AnimationPath::ControlPoint( ret, quat ) ;
+  
+  return result;
+}
+

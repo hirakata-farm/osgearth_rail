@@ -31,7 +31,7 @@ import tkintermapview
 from tkinter import Menu,ttk,messagebox
 
 #################################################################
-remote_polling_second = 20
+remote_polling_second = 30
 remote_host = "localhost"
 remote_port = 57139
 socket_buffer_size = 4096
@@ -61,11 +61,11 @@ class SocketClient():
         if self.socket != None:
             self.socket.send( message.encode('utf-8') )
             if self.showtimestamp:
-                print('[{0}] Send:=>{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), message.rstrip()) )
+                print('[{0}] Send:{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), message.rstrip()) )
             rcv_data = self.socket.recv(self.datasize)
             rcv_data = rcv_data.decode('utf-8').rstrip()
             if self.showtimestamp:
-                print('[{0}] Recv:<={1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rcv_data) )
+                print('[{0}] Recv:{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rcv_data) )
             return rcv_data        
     
     def close(self):
@@ -82,6 +82,46 @@ def about():
     message = "simple osgearth_rail controller 0.1"
     messagebox.showinfo("about",message)
 
+def timetable_dialog(id, data):
+
+    tablelist = data.split(",")
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("300x400")
+    dialog.title("Timetable  " + id)
+
+    tree = ttk.Treeview(dialog)
+    tree["columns"] = ("station", "time")
+    tree.column("#0", width=0, stretch=tkinter.NO)
+    tree.column("station", anchor=tkinter.CENTER, width=100)
+    tree.column("time", anchor=tkinter.CENTER, width=80)
+
+    tree.heading("#0", text="", anchor=tkinter.CENTER)
+    tree.heading("station", text="Station", anchor=tkinter.CENTER)
+    tree.heading("time", text="Time", anchor=tkinter.CENTER)
+
+    for i in range(0,len(tablelist),2):
+        tree.insert('',tkinter.END, values=(tablelist[i+1],tablelist[i]))
+    
+    scrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+
+    def on_close_ok():
+        dialog.destroy()
+
+    tree.pack(expand=True, fill="both")
+
+    ok_button = ttk.Button(dialog, text="close", command=on_close_ok)
+    ok_button.pack()
+    
+def click_train_marker(marker):
+    message = "train timetable " + marker.text + "\n"
+    response = remote_socket.send(message)
+    idpos = response.find(marker.text)
+    idpos = idpos + len(marker.text) + 3
+    strlen = len(response) - 1
+    timetable_dialog( marker.text, response[idpos:strlen] )
+        
 def marker_update(data):
     markerlist = data.split(",")
     for updatemarker in markerlist:
@@ -95,7 +135,7 @@ def marker_update(data):
                 if trainname in markers:
                     markers[trainname].set_position(lat,lng)
                 else:
-                    markers[trainname] = map_widget.set_marker( lat, lng, text=item )
+                    markers[trainname] = map_widget.set_marker( lat, lng, text=item, command=click_train_marker )
                 existflag = True
                 break
         if existflag == False:
@@ -109,7 +149,7 @@ def viewport_update(data):
     pointlist = data.split(",")
     for point in pointlist:
         pointdata = point.split(" ")
-        if pointdata[0] != "Geoglyph:":
+        if pointdata[0] != "Geoglyph:camera":
             lng = float(pointdata[0])
             lat = float(pointdata[1])
             positionlist.append((lat,lng))
@@ -123,8 +163,8 @@ def timerproc():
     if field_isloaded:
         response = remote_socket.send("clock get time\n");
         timestr = re.split(r"\s+", response)
-        if len(timestr) > 2 and timestr[1] == "clock":
-            timelabel_var.set(timestr[2])
+        if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
+            timelabel_var.set(timestr[3])
         response = remote_socket.send("train position all\n");
         marker_update(response)
         response = remote_socket.send("camera get viewport\n");
@@ -150,11 +190,13 @@ def server_connect_dialog():
     option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
+    option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)    
 
     option1_radio.place(x=30,y=40)
     option2_radio.place(x=30,y=60)
     option3_radio.place(x=30,y=80)
     option4_radio.place(x=30,y=100)
+    option5_radio.place(x=30,y=120)
 
     def on_server_ok():
         global trainid
@@ -177,11 +219,12 @@ def server_connect_dialog():
         menu1.entryconfig("camera", state=tkinter.NORMAL)
         menu_button_2.config(state=tkinter.NORMAL)
         menu_button_3.config(state=tkinter.DISABLED)
-        response = remote_socket.send("clock set time 12:00\n");
-        response = remote_socket.send("field get train\n");
+        response = remote_socket.send("clock set time 12:00\n")
+        response = remote_socket.send("config set altmode relative\n")
+        response = remote_socket.send("field get train\n")
         trainid = re.split(r"\s+", response)
         del trainid[0]  # Geoglyph header
-        del trainid[0]  # field str
+        del trainid[0]  # train string
         #print (len(trainid))
         field_isloaded = True
         dialog.destroy()
@@ -200,12 +243,12 @@ def server_exit_dialog():
     dialog.title("3D view close")
 
     def on_exit_ok():
+
         global field_isloaded
         global polling_timer
         response = remote_socket.send("exit\n");
-        if polling_timer.is_alive():
-            polling_timer.cancel()
-        messagebox.showinfo("3D view", " closing process..")
+        dialog.destroy()
+        #messagebox.showinfo("3D view", " closing process..")
         menu0.entryconfig("3D view open", state=tkinter.NORMAL)
         menu0.entryconfig("3D view close", state=tkinter.DISABLED)
         menu1.entryconfig("clock", state=tkinter.DISABLED)
@@ -215,10 +258,11 @@ def server_exit_dialog():
         menu_button_3.config(state=tkinter.DISABLED)
         remote_socket.close()
         field_isloaded = False
-        dialog.destroy()
+        if polling_timer.is_alive():
+            polling_timer.cancel()
         
     def on_exit_no():
-        messagebox.showinfo("3D view", " cancel close ")
+        #messagebox.showinfo("3D view", " cancel close ")
         dialog.destroy()
 
     msg_label = ttk.Label(dialog, text="Comfirmation 3D view close")
@@ -239,8 +283,8 @@ def clock_dialog():
 
     response = remote_socket.send("clock get time\n");
     timestr = re.split(r"\s+", response)
-    if len(timestr) > 2 and timestr[1] == "clock":
-        timestr2 = timestr[2].split(":")
+    if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
+        timestr2 = timestr[3].split(":")
     else:
         dialog.destroy()
         return
@@ -280,8 +324,8 @@ def speed_dialog():
 
     response = remote_socket.send("clock get speed\n");
     speedstr = re.split(r"\s+", response)
-    if len(speedstr) > 2 and speedstr[1] == "speed":
-        speed = float(speedstr[2])
+    if len(speedstr) > 3 and speedstr[0] == "Geoglyph:clock":
+        speed = float(speedstr[3])
     else:
         dialog.destroy()
         return

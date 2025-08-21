@@ -59,6 +59,12 @@ train label {on|off} (train id)
 train position (train id) 
 train timetable (train id) 
 
+config set maxclockspeed 30.0 ( default 12.0 )
+config set altmode clamp ( clamp(default), absolute, relative )
+config set displaydistance 100000 ( default 3000[m] )
+config get maxclockspeed
+config get altmode
+config get displaydistance
 
 show [status|version]
 
@@ -86,47 +92,113 @@ show version
 #include <osgEarth/Sky>
 #include <osgViewer/Viewer>
 
-
+////////////////////////////////////////////////////////////////
 #define GH_COMMAND_UNKNOWN  -1
 #define GH_COMMAND_EXIT   0
 #define GH_COMMAND_CLOSE  1
 #define GH_COMMAND_START  2
-#define GH_COMMAND_STOP   4
+#define GH_COMMAND_STOP   3
+#define GH_COMMAND_SHOW_STATUS  4
+#define GH_COMMAND_SHOW_VERSION 5
 
-#define GH_COMMAND_FIELD_SET  8
-#define GH_COMMAND_FIELD_GET  9
-#define GH_COMMAND_FIELD_GET_TRAIN  10
-#define GH_COMMAND_FIELD_GET_TIMEZONE  11
-#define GH_COMMAND_FIELD_GET_DESC  12
+#define GH_COMMAND_FIELD_SET  6
+#define GH_COMMAND_FIELD_GET  7
+#define GH_COMMAND_FIELD_GET_TRAIN  8
+#define GH_COMMAND_FIELD_GET_TIMEZONE  9
+#define GH_COMMAND_FIELD_GET_DESC  10
 
-#define GH_COMMAND_SHOW_STATUS  16
-#define GH_COMMAND_SHOW_VERSION 17
+#define GH_COMMAND_CLOCK_SET_TIME  11
+#define GH_COMMAND_CLOCK_GET_TIME  12
+#define GH_COMMAND_CLOCK_SET_SPEED 13
+#define GH_COMMAND_CLOCK_GET_SPEED 14
 
-#define GH_COMMAND_CLOCK_SET_TIME  32
-#define GH_COMMAND_CLOCK_SET_SPEED 33
-#define GH_COMMAND_CLOCK_GET_TIME  42
-#define GH_COMMAND_CLOCK_GET_SPEED 43
+#define GH_COMMAND_CAMERA_SET_POS   15
+#define GH_COMMAND_CAMERA_GET_POS   16
+#define GH_COMMAND_CAMERA_SET_LOOK  17
+#define GH_COMMAND_CAMERA_GET_LOOK  18
+#define GH_COMMAND_CAMERA_SET_UP    19
+#define GH_COMMAND_CAMERA_GET_UP    20
+#define GH_COMMAND_CAMERA_SET_TRACK 21
+#define GH_COMMAND_CAMERA_GET_TRACK 22
+#define GH_COMMAND_CAMERA_GET_VIEWPORT 23
 
-#define GH_COMMAND_CAMERA_SET_POS   64
-#define GH_COMMAND_CAMERA_SET_LOOK  65
-#define GH_COMMAND_CAMERA_SET_UP    66
-#define GH_COMMAND_CAMERA_SET_TRACK 67
-#define GH_COMMAND_CAMERA_GET_POS   74
-#define GH_COMMAND_CAMERA_GET_LOOK  75
-#define GH_COMMAND_CAMERA_GET_UP    76
-#define GH_COMMAND_CAMERA_GET_TRACK 77
-#define GH_COMMAND_CAMERA_GET_VIEWPORT 78
+#define GH_COMMAND_TRAIN_LABEL_ON  24
+#define GH_COMMAND_TRAIN_LABEL_OFF 25
+#define GH_COMMAND_TRAIN_POSITION  26
+#define GH_COMMAND_TRAIN_TIMETABLE 27
 
-#define GH_COMMAND_TRAIN_LABEL_ON  128
-#define GH_COMMAND_TRAIN_LABEL_OFF 129
-#define GH_COMMAND_TRAIN_POSITION  138
-#define GH_COMMAND_TRAIN_TIMETABLE 148
+#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    28
+#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    29
+#define GH_COMMAND_CONFIG_SET_ALTMODE          30
+#define GH_COMMAND_CONFIG_GET_ALTMODE          31
+#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  32
+#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  33
 
+////////////////////////////////////////////////////
+//
+//   Command Keywords
+//
+//
+
+#define GH_STRING_SET "set"
+#define GH_STRING_GET "get"
+#define GH_STRING_NOP "nop"
+
+#define GH_STRING_EXIT   "exit"
+#define GH_STRING_CLOSE  "close"
+#define GH_STRING_START  "start"
+#define GH_STRING_RUN    "run"
+#define GH_STRING_STOP   "stop"
+#define GH_STRING_PAUSE  "pause"
+
+#define GH_STRING_CLOCK  "clock"
+#define GH_STRING_TIME   "time"
+#define GH_STRING_SPEED  "speed"
+
+#define GH_STRING_CAMERA    "camera"
+#define GH_STRING_POSITION  "position"
+#define GH_STRING_LOOKAT    "lookat"
+#define GH_STRING_UPVEC     "upvec"
+#define GH_STRING_TRACKING  "tracking"
+#define GH_STRING_VIEWPORT  "viewport"
+#define GH_STRING_NONE      "none"
+#define GH_STRING_ALL       "all"
+
+#define GH_STRING_FIELD       "field"
+#define GH_STRING_TRAIN       "train"
+#define GH_STRING_TIMEZONE    "timezone"
+#define GH_STRING_DESCRIPTION "description"
+
+
+#define GH_STRING_LABEL      "label"
+#define GH_STRING_ON         "on"
+#define GH_STRING_OFF        "off"
+#define GH_STRING_TIMETABLE  "timetable"
+
+#define GH_STRING_CONFIG          "config"
+#define GH_STRING_MAXCLOCKSPEED   "maxclockspeed"
+#define GH_STRING_ALTMODE         "altmode"
+#define GH_STRING_CLAMP           "clamp"
+#define GH_STRING_RELATIVE        "relative"
+#define GH_STRING_ABSOLUTE        "absolute"
+#define GH_STRING_DISPLAYDISTANCE "displaydistance"
+
+#define GH_STRING_SHOW    "show"
+#define GH_STRING_STATUS  "status"
+#define GH_STRING_VERSION "version"
+
+
+
+
+//////////////////////////////////////////////////
 #define GH_POST_EXECUTE_NONE 0
 #define GH_POST_EXECUTE_EXIT 2
 #define GH_POST_EXECUTE_CLOSE 4
 #define GH_POST_EXECUTE_TIMEZONE 8
 #define GH_POST_EXECUTE_SETCLOCK 9
+
+
+////////////////////////////////////////////////
 
 using namespace std;
 
@@ -154,22 +226,42 @@ int ghRailExecuteCommand(ghCommandQueue *cmd,
 std::string ghRailCommandStart(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandStop(ghCommandQueue *cmd, ghRail *rail);
 
-std::string ghRailCommandField(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky,bool isset);
-std::string ghRailCommandFieldDetail(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
+std::string ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail);
 
-std::string ghRailCommandClock(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky,bool isset);
-std::string ghRailCommandSpeed(ghCommandQueue *cmd, ghRail *rail, bool isset);
-std::string ghRailCommandShow(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail);
 
-std::string ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail, bool isset);
+std::string ghRailCommandClockSetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
+std::string ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
+std::string ghRailCommandClockSetSpeed(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail);
+
+std::string ghRailCommandTrainLabelOn(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandTrainLabelOff(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime);
 std::string ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail);
 
-std::string ghRailCommandCameraPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view,bool isset);
-std::string ghRailCommandCameraLookat(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view,bool isset);
-std::string ghRailCommandCameraUpvec(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view,bool isset);
-std::string ghRailCommandCameraTracking(ghCommandQueue *cmd, ghRail *rail,bool isset);
+std::string ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
+std::string ghRailCommandCameraSetTracking(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandCameraViewport(ghCommandQueue *cmd, osgViewer::Viewer* _view);
+
+std::string ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandConfigSetAltmode(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandConfigSetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
+
+std::string ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandShowVersion();
 
 
 #endif

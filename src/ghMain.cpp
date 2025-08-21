@@ -121,17 +121,21 @@ socketthread() {
       // Wait for client receive message
       read(client_fd, buffer, 1024);
       std::string command(buffer);
-      cmdtmp = cmdqueue;
-      cmdqueue = ghRailParseCommand(command);
-      if ( cmdqueue != NULL ) {
-	cmdqueue->prev = cmdtmp;
+      if ( command.size() > 3 ) {
+	cmdtmp = cmdqueue;
+	cmdqueue = ghRailParseCommand(command);
+	if ( cmdqueue != NULL ) {
+	  cmdqueue->prev = cmdtmp;
 	  
-	memset(buffer, 0, sizeof(buffer));
+	  memset(buffer, 0, sizeof(buffer));
 	    
-	if ( cmdqueue->type == GH_COMMAND_CLOSE ||
-	     cmdqueue->type == GH_COMMAND_EXIT ) {
-	  break;
+	  if ( cmdqueue->type == GH_COMMAND_CLOSE ||
+	       cmdqueue->type == GH_COMMAND_EXIT ) {
+	    break;
+	  }
 	}
+      } else {
+	// Too short buffer
       }
     }
   //  End of client socket read loop
@@ -230,6 +234,11 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
       osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(ghNode3D);
       //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
       
+      int available_threads = (int)std::thread::hardware_concurrency();
+      available_threads = available_threads / 2.0;
+      if ( available_threads < 1 ) available_threads = 1;
+      jobs::get_pool("oe.rex.loadtile")->set_concurrency(available_threads);
+  
       /***   Sky and date time **/
       ghSky = SkyNode::create();
       ghSky->setDateTime(DateTime());
@@ -256,7 +265,7 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
       ghRailGUI *ghGui = new ghRailGUI();
       ui->add("Clock", ghGui );
       ghRail ghrail; //    Rail Class 
-      ghrail.SetSpeed(1.0);
+      ghrail.SetClockSpeed(1.0);
       ghrail.SetPlayPause(false);
       std::thread ghSock(socketthread);
       /////////////////////////////////////////////  Socket LOOP
@@ -269,7 +278,7 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
         {
 	  _elapsed_current = ghViewer.elapsedTime() ; // double [sec]
 	  if ( ghrail.IsPlaying() ) {
-	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghrail.GetSpeed(); // duration seconds
+	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghrail.GetClockSpeed(); // duration seconds
 	    DateTime dt = ghSky->getDateTime();
 	    ghSimulationTime = _calcSimulationTime(dt,ghrail.GetBaseDatetime(), _elapsed_sec);
 
