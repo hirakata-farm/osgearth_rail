@@ -325,7 +325,8 @@ def server_connect_dialog():
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
     option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)
-    option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)    
+    option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)
+    option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)    
 
     option1_radio.place(x=30,y=40)
     option2_radio.place(x=30,y=60)
@@ -333,6 +334,7 @@ def server_connect_dialog():
     option4_radio.place(x=30,y=100)
     option5_radio.place(x=30,y=120)
     option6_radio.place(x=30,y=140)
+    option7_radio.place(x=30,y=160)
 
     def on_server_ok():
         global trainid
@@ -438,32 +440,35 @@ def clock_dialog():
         message = "clock set time " + hour + ":" + minute + "\n"
         response = remote_socket.send(message);
         messagebox.showinfo("receive",response)
+    def close_selected_time():
         dialog.destroy()
 
     # Hour Spinbox
-    hour_label = ttk.Label(dialog, text="Hour:")
-    hour_label.grid(row=0, column=0, padx=5, pady=5)
     hour_spinbox = ttk.Spinbox(dialog, from_=0, to=23, wrap=True, width=8)
     hour_spinbox.set(timestr2[0]) # Initial value
-    hour_spinbox.grid(row=0, column=1, padx=5, pady=5)
+    hour_spinbox.grid(row=0, column=0, padx=5, pady=5)
+    hour_label = ttk.Label(dialog, text="hour")
+    hour_label.grid(row=0, column=1, padx=5, pady=5)
 
     # Minute Spinbox
-    minute_label = ttk.Label(dialog, text="Minute:")
-    minute_label.grid(row=0, column=2, padx=5, pady=5)
     minute_spinbox = ttk.Spinbox(dialog, from_=0, to=59, wrap=True, width=5)
     minute_spinbox.set(timestr2[1]) # Initial value    
-    minute_spinbox.grid(row=0, column=3, padx=5, pady=5)
+    minute_spinbox.grid(row=0, column=2, padx=5, pady=5)
+    minute_label = ttk.Label(dialog, text="min")
+    minute_label.grid(row=0, column=3, padx=5, pady=5)
 
     # Get Time Button
-    get_time_button = ttk.Button(dialog, text="Set Time", command=set_selected_time)
-    get_time_button.grid(row=1, column=0, columnspan=4, pady=10)
-    dialog.grab_set()
-    root_tk.wait_window(dialog)
+    ok_button = ttk.Button(dialog, text="Set Time", command=set_selected_time)
+    ok_button.grid(row=1, column=0, columnspan=2, pady=10)
+    close_button = ttk.Button(dialog, text="Close", command=close_selected_time)
+    close_button.grid(row=1, column=2, columnspan=2, pady=10)
+    #dialog.grab_set()
+    #root_tk.wait_window(dialog)
 
 def speed_dialog():
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("300x200")
-    dialog.title("Clock")
+    dialog.title("Speed")
 
     response = remote_socket.send("clock get speed\n");
     speedstr = re.split(r"\s+", response)
@@ -485,6 +490,7 @@ def speed_dialog():
         response = remote_socket.send(message);            
         messagebox.showinfo("receive",response)
         speedlabel_var.set(labeltxt)
+    def close_selected_speed():
         dialog.destroy()
 
     selected_value = tkinter.StringVar()
@@ -507,14 +513,16 @@ def speed_dialog():
         scale_varS.set(speed)
 
     scaleF = tkinter.Scale(dialog, from_=1.0, to_=12.0, length=200, resolution=1, orient=tkinter.HORIZONTAL, variable=scale_varF , showvalue=True)
-    scaleF.grid(row=0, column=1, padx=5, pady=5)
+    scaleF.grid(row=0, column=1, columnspan=2, padx=5, pady=5)
     scaleS = tkinter.Scale(dialog, from_=0.1, to_=1.0, length=200, resolution=0.1, orient=tkinter.HORIZONTAL, variable=scale_varS , showvalue=True)
-    scaleS.grid(row=1, column=1, padx=5, pady=5)
+    scaleS.grid(row=1, column=1, columnspan=2, padx=5, pady=5)
 
-    button = ttk.Button(dialog, text="Set speed", command=set_selected_speed)
-    button.grid(row=2, column=0, columnspan=2, pady=10)
-    dialog.grab_set()
-    root_tk.wait_window(dialog)
+    ok_button = ttk.Button(dialog, text="Set speed", command=set_selected_speed)
+    ok_button.grid(row=2, column=0, columnspan=2, pady=10)
+    close_button = ttk.Button(dialog, text="Close", command=close_selected_speed)
+    close_button.grid(row=2, column=2, columnspan=2, pady=10)
+    #dialog.grab_set()
+    #root_tk.wait_window(dialog)
 
 def check_centermap():
     global tracking_id
@@ -526,7 +534,6 @@ def check_centermap():
 
 def camera_dialog():
     global tracking_ver
-    
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x100")
     dialog.title("Camera Tracking")
@@ -535,7 +542,9 @@ def camera_dialog():
         global tracking_id
         message = "camera set tracking " + combo.get() + "\n"
         response = remote_socket.send(message);
+        tracking_id = combo.get()
         messagebox.showinfo("receive",response)
+    def close_camera_tracking():
         dialog.destroy()        
 
     name_label = ttk.Label(dialog, text="train ID:")
@@ -549,12 +558,14 @@ def camera_dialog():
             options.append("NONE")
     tracking_ver = tkinter.StringVar()
     combo = ttk.Combobox ( dialog , values = options , textvariable = tracking_ver , height = 5)
-    combo.grid(row=0, column=1, padx=5, pady=5)
+    combo.grid(row=0, column=1, columnspan=2, pady=5)
 
     ok_button = ttk.Button(dialog, text="Camera Tracking ", command=set_camera_tracking)
-    ok_button.grid(row=3, column=0, columnspan=2, pady=10)
-    dialog.grab_set()
-    root_tk.wait_window(dialog)
+    ok_button.grid(row=3, column=0, pady=10)
+    close_button = ttk.Button(dialog, text="Close ", command=close_camera_tracking)
+    close_button.grid(row=3, column=2, pady=10)
+    #dialog.grab_set()
+    #root_tk.wait_window(dialog)
 
 
 def run_command():
