@@ -24,7 +24,8 @@
 #define GH_COMMAND_MESSAGE_ALREADY_LOADED "simulation data already loaded";
 #define GH_COMMAND_MESSAGE_UNKOWN         "Unknown command";
 
-std::string GH_COMMAND_MESSAGE[34] = {
+std::string
+GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "application exit ",
   "close window ",
   "simulation running ",
@@ -53,14 +54,21 @@ std::string GH_COMMAND_MESSAGE[34] = {
   "train label off ",  
   "train position ",
   "train timetable ",
+  "train icon ",
   "config set max clock speed ",
   "config get max clock speed ",  
   "config set altmode ",
   "config get altmode ",      
   "config set displaydistance ",
-  "config get displaydistance "
+  "config get displaydistance ",
+  "shm clock time ",
+  "shm train position ",
+  "shm camera viewport ",
+  "shm remove "    
 };
-std::string GH_COMMAND_ALTMODE_STRING[3] = {
+
+std::string
+GH_COMMAND_ALTMODE_STRING[3] = {
   GH_STRING_CLAMP,
   GH_STRING_RELATIVE,
   GH_STRING_ABSOLUTE
@@ -249,6 +257,9 @@ ghRailParseCommand(string str) {
       } else if ( command[1] == GH_STRING_TIMETABLE  && command_size == 3 ) {
 	cmd->type = GH_COMMAND_TRAIN_TIMETABLE;
 	cmd->argstr = command[2];
+      } else if ( command[1] == GH_STRING_ICON  && command_size == 3 ) {
+	cmd->type = GH_COMMAND_TRAIN_ICON;
+	cmd->argstr = command[2];
       } else {
 	// NOP
       }
@@ -288,6 +299,23 @@ ghRailParseCommand(string str) {
 	}
       }  else {
 	  // NOP
+      }
+    } else if ( command[0] == GH_STRING_SHM ) {
+      if ( command[1] == GH_STRING_SET && command_size == 4 ) {
+	if ( command[2] == GH_STRING_CLOCK && command[3] == GH_STRING_TIME ) {
+	  cmd->type = GH_COMMAND_SHM_CLOCK_TIME;
+	} else if ( command[2] == GH_STRING_TRAIN && command[3] == GH_STRING_POSITION ) {
+	  cmd->type = GH_COMMAND_SHM_TRAIN_POS;
+	} else if ( command[2] == GH_STRING_CAMERA &&  command[3] == GH_STRING_VIEWPORT ) {
+	  cmd->type = GH_COMMAND_SHM_CAMERA_VIEW;
+	} else {
+	  // NOP
+	}
+      }	else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
+	cmd->type = GH_COMMAND_SHM_REMOVE;
+	cmd->argnum[0] = std::stod(command[2]);
+      }  else {
+	// NOP
       }
     } else {
       // NOP
@@ -376,6 +404,9 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
   case GH_COMMAND_TRAIN_TIMETABLE:
     result += ghRailCommandTrainTimetable(cmd,rail);
     break;
+  case GH_COMMAND_TRAIN_ICON:
+    result += ghRailCommandTrainIcon(cmd,rail);
+    break;
   case GH_COMMAND_CAMERA_SET_POS:
     result += ghRailCommandCameraSetPosition(cmd,rail,_view);
     break;
@@ -420,6 +451,18 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
     break;
   case GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE:
     result += ghRailCommandConfigGetDisplaydistance(cmd,rail);
+    break;
+  case GH_COMMAND_SHM_CLOCK_TIME:
+    result += ghRailCommandShmSet(GH_SHM_TYPE_CLOCK_TIME,cmd,rail);
+    break;
+  case GH_COMMAND_SHM_TRAIN_POS:
+    result += ghRailCommandShmSet(GH_SHM_TYPE_TRAIN_POSITION,cmd,rail);
+    break;
+  case GH_COMMAND_SHM_CAMERA_VIEW:
+    result += ghRailCommandShmSet(GH_SHM_TYPE_CAMERA_VIEWPORT,cmd,rail);
+    break;
+  case GH_COMMAND_SHM_REMOVE:
+    result += ghRailCommandShmRemove(cmd,rail);
     break;
   case GH_COMMAND_SHOW_STATUS:
     result += ghRailCommandShowStatus(cmd,rail);
@@ -820,74 +863,9 @@ ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail) {
 std::string
 ghRailCommandCameraViewport(ghCommandQueue *cmd, osgViewer::Viewer* _view) {
 
-  // Get the corners of all points on the view frustum.  Mostly modified from osgthirdpersonview
-  osg::Matrixd proj = _view->getCamera()->getProjectionMatrix();
-  osg::Matrixd mv = _view->getCamera()->getViewMatrix();
-  osg::Matrixd invmv = osg::Matrixd::inverse( mv );
-
-  double nearPlane = proj(3,2) / (proj(2,2)-1.0);
-  double farPlane = proj(3,2) / (1.0+proj(2,2));
-
-  // Get the sides of the near plane.
-  double nLeft = nearPlane * (proj(2,0)-1.0) / proj(0,0);
-  double nRight = nearPlane * (1.0+proj(2,0)) / proj(0,0);
-  double nTop = nearPlane * (1.0+proj(2,1)) / proj(1,1);
-  double nBottom = nearPlane * (proj(2,1)-1.0) / proj(1,1);
-
-  // Get the sides of the far plane.
-  double fLeft = farPlane * (proj(2,0)-1.0) / proj(0,0);
-  double fRight = farPlane * (1.0+proj(2,0)) / proj(0,0);
-  double fTop = farPlane * (1.0+proj(2,1)) / proj(1,1);
-  double fBottom = farPlane * (proj(2,1)-1.0) / proj(1,1);
-
-  double dist = farPlane - nearPlane;
-
-  int samples = 24;
-  std::vector<osg::Vec3d> verts;
-  verts.reserve(samples * 4 - 4);
-  for (int i = 0; i < samples - 1; ++i) {
-    double j = (double)i / (double)(samples - 1);
-    verts.push_back(osg::Vec3d(nLeft + (nRight - nLeft) * j, nBottom, nearPlane));
-    verts.push_back(osg::Vec3d(fLeft + (fRight - fLeft) * j, fBottom, farPlane));
-  }
-  for (int i = 0; i < samples - 1; ++i) {
-    double j = (double)i / (double)(samples - 1);
-    verts.push_back(osg::Vec3d(nRight, nBottom + (nTop - nBottom) * j, nearPlane));
-    verts.push_back(osg::Vec3d(fRight, fBottom + (fTop - fBottom) * j, farPlane));
-  }
-  for (int i = 0; i < samples - 1; ++i) {
-    double j = (double)i / (double)(samples - 1);
-    verts.push_back(osg::Vec3d(nRight - (nRight - nLeft) * j, nTop, nearPlane));
-    verts.push_back(osg::Vec3d(fRight - (fRight - fLeft) * j, fTop, farPlane));
-  }
-  for (int i = 0; i < samples - 1; ++i) {
-    double j = (double)i / (double)(samples - 1);
-    verts.push_back(osg::Vec3d(nLeft, nTop - (nTop - nBottom) * j, nearPlane));
-    verts.push_back(osg::Vec3d(fLeft, fTop - (fTop - fBottom) * j, farPlane));
-  }
-
-  const auto* wgs84 = osgEarth::SpatialReference::create("epsg:4326");
-  auto& ellip = wgs84->getEllipsoid();
-
-  std::vector<osg::Vec3d> points;
-  points.reserve(verts.size() / 2);
-
-  auto ecef = wgs84->getGeocentricSRS();
-
-  for (int i = 0; i < verts.size() / 2; ++i)
-  {
-    osg::Vec3d p1 = verts[i * 2] * invmv;
-    osg::Vec3d p2 = verts[i * 2 + 1] * invmv;
-    osg::Vec3d out;
-
-    if (ellip.intersectGeocentricLine(p1, p2, out))
-    {
-      ecef->transform(out, wgs84, out);
-      points.push_back(out);
-    }
-  }
-
+  std::vector<osg::Vec3d> points = _calcCameraViewpoints(_view);
   std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_VIEWPORT];
+  // points max 12
   for (int i = 0; i < points.size(); i++) {
     ret += ",";
     ret += std::to_string(points[i].x());
@@ -974,6 +952,22 @@ ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail) {
 
 }
 
+std::string
+ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail) {
+
+  if ( ! rail->IsLoaded() ) {
+    return GH_COMMAND_MESSAGE_NOT_LOADED;
+  }
+
+  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_ICON];
+  ret += cmd->argstr;
+  ret += " ";
+  ret += rail->GetTrainIcon(cmd->argstr);
+  ret += "\n";
+  return ret;
+
+}
+
 
 
 
@@ -1034,6 +1028,32 @@ ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail) {
 
 }
 
+std::string
+ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail) {
+  std::string ret = GH_COMMAND_MESSAGE[cmd->type];
+  int shmkey = ftok(GH_SHM_PATH,shmtype);
+  if (shmkey < 0) {
+    ret += " cannot get shm key";
+  } else {
+    std::string skey = std::to_string(shmkey);
+    ret += skey + " ";
+    int ssize = rail->InitShm(shmkey,shmtype);
+    if ( ssize < 0 ) {
+      ret += " cannot allocate shm size ";
+    } else {
+      ret += std::to_string(ssize);
+    }
+  }
+
+  return ret;
+}
+std::string
+ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail) {
+  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_SHM_REMOVE];
+  int shmkey = (int)cmd->argnum[0];
+  int ssize = rail->RemoveShm(shmkey);
+  
+}
 
 std::string
 ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail) {

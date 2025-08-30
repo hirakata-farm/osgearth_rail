@@ -108,7 +108,7 @@ class ghRailUnit
     {
     public:
       //void Setup(string id, vector<int> locomotivesize,vector<string> locomotivemodel,nlohmann::json data,string geom);
-      void Setup(string id, ghRailJSON locomotive, nlohmann::json data,string geom);      
+      void Setup(string id, string marker, ghRailJSON locomotive, nlohmann::json data,string geom);      
       //bool SimulatePath(int coaches, ghRailTime *railtime );
       bool SimulatePath( ghRailTime *railtime );
       osg::AnimationPath::ControlPoint GetControlPoint(double seconds,int coach);
@@ -123,12 +123,14 @@ class ghRailUnit
       osg::PositionAttitudeTransform *GetModelAttitude(int coach);      
       int GetModelStatus(int coach);
       void SetModelStatus(int coach,int status);
+      string GetMarkerUri();
     private:
       string p_trainid;
       string p_lineid;
       string p_routeid;
       bool p_islabel;
       ghRailJSON p_locomotive;
+      string p_marker;
       vector<int> p_locomotives;
       osgEarth::LabelNode *p_modellabel;
       nlohmann::json p_jsondata;

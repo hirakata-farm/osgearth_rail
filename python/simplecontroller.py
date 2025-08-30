@@ -27,8 +27,13 @@ import re
 import threading
 import tkinter
 import tkintermapview
-
+from urllib.request import urlopen
+from PIL import ImageTk
 from tkinter import Menu,ttk,messagebox
+
+import math
+import struct
+import sysv_ipc
 
 #################################################################
 remote_polling_second = 30
@@ -36,6 +41,11 @@ remote_host = "localhost"
 remote_port = 57139
 socket_buffer_size = 4096
 field_isloaded = False
+shm_time = None
+shm_train = None
+shm_train_size_byte = 0
+shm_camera = None
+tracking_id = None
 
 class SocketClient():
 
@@ -82,6 +92,26 @@ def about():
     message = "simple osgearth_rail controller 0.1"
     messagebox.showinfo("about",message)
 
+
+def setup_shm():
+    global shm_time
+    global shm_train
+    global shm_train_size_byte
+    global shm_camera
+    global remote_polling_second
+    response = remote_socket.send("shm set clock time\n")
+    shmmsg = re.split(r"\s+", response)
+    shm_time = sysv_ipc.SharedMemory(int(shmmsg[3]))
+    response = remote_socket.send("shm set train position\n")
+    shmmsg = re.split(r"\s+", response)
+    shm_train = sysv_ipc.SharedMemory(int(shmmsg[3]))
+    shm_train_size_byte = int(shmmsg[4])
+    response = remote_socket.send("shm set camera viewport\n")
+    shmmsg = re.split(r"\s+", response)
+    shm_camera = sysv_ipc.SharedMemory(int(shmmsg[3]))
+    remote_polling_second = 1
+    
+
 def timetable_dialog(id, data):
 
     tablelist = data.split(",")
@@ -122,28 +152,37 @@ def click_train_marker(marker):
     strlen = len(response) - 1
     timetable_dialog( marker.text, response[idpos:strlen] )
         
-def marker_update(data):
+def update_socket_marker(data):
+    global tracking_id
     markerlist = data.split(",")
-    for updatemarker in markerlist:
-        markerdata = updatemarker.split(" ")
-        trainname = markerdata[0]
+    for item in trainid:
         existflag = False
-        for item in trainid:
+        for updatemarker in markerlist:
+            markerdata = updatemarker.split(" ")
+            trainname = markerdata[0]
             if trainname == item:
                 lng = float(markerdata[1])
                 lat = float(markerdata[2])
                 if trainname in markers:
                     markers[trainname].set_position(lat,lng)
+                    if tracking_id == trainname:
+                        update_map_center(lat,lng)
                 else:
-                    markers[trainname] = map_widget.set_marker( lat, lng, text=item, command=click_train_marker )
+                    message = "train icon " + trainname + "\n"
+                    response = remote_socket.send(message)
+                    msgstr = re.split(r"\s+", response)
+                    if msgstr[2] != "Not":
+                        imagedata = urlopen(msgstr[3])
+                        image = ImageTk.PhotoImage(data=imagedata.read())
+                        markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
                 existflag = True
                 break
         if existflag == False:
-            if trainname in markers:
-                markers[trainname].delete()
-                del markers[trainname]
+            if item in markers:
+                markers[item].delete()
+                del markers[item]
 
-def viewport_update(data):
+def update_socket_viewport(data):
     map_widget.delete_all_polygon()
     positionlist = []
     pointlist = data.split(",")
@@ -153,10 +192,92 @@ def viewport_update(data):
             lng = float(pointdata[0])
             lat = float(pointdata[1])
             positionlist.append((lat,lng))
+    if len(positionlist) > 4:
+        viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+
+def update_shm_clock():
+    global shm_time
+    global timelabel_var
+    bytedata = shm_time.read()
+    datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
+    dhour = math.floor(datasec / 3600) ;
+    dmin = math.floor( ( datasec - dhour * 3600 ) / 60) ;
+    dsec = datasec % 60 ;
+    shour = str(dhour)
+    smin = str(dmin)
+    ssec = str(dsec)
+    if dhour < 10:
+        shour = "0" + shour
+    if dmin < 10:
+        smin = "0" + smin
+    if dsec < 10:
+        ssec = "0" + ssec
+    timelabel_var.set(shour + ":" + smin + ":" + ssec)
+    
+def update_shm_train():
+    global shm_train
+    global shm_train_size_byte
+    global tracking_id
+    bytedata = shm_train.read()
+    offset = 0
+    for icnt in range(0,shm_train_size_byte,48):
+        if (offset+48) < shm_train_size_byte+1:
+            byteslice = bytedata[offset:offset+48]
+            traindata = struct.unpack('<32s2d', byteslice)
+            trainstr = traindata[0].decode('ascii')
+            nullpos = trainstr.find('\0')
+            trainname = trainstr[0:nullpos]
+            lng = float(traindata[1])
+            lat = float(traindata[2])
+            if lat < 0 and lng < 0:
+                if trainname in markers:
+                    markers[trainname].delete()
+                    del markers[trainname]
+            else:
+                if trainname in markers:
+                    markers[trainname].set_position(lat,lng)
+                    if tracking_id == trainname:
+                        update_map_center(lat,lng)
+                else:
+                    message = "train icon " + trainname + "\n"
+                    response = remote_socket.send(message)
+                    msgstr = re.split(r"\s+", response)
+                    if msgstr[2] != "Not":
+                        imagedata = urlopen(msgstr[3])
+                        image = ImageTk.PhotoImage(data=imagedata.read())
+                        markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
+                    else:
+                        print(" Not found " + trainname)
+
+            offset = offset+48
+        else:
+            print(offset)
+            byteslice = bytedata[offset:]
+            traindata = struct.unpack('<32s2d', byteslice)
+            print(traindata)
+
+def update_shm_camera():
+    global shm_camera
+    bytedata = shm_camera.read()
+    double_number = struct.unpack('<24d', bytedata)
+    map_widget.delete_all_polygon()
+    positionlist = []
+    for i in range(0,24,2):
+        positionlist.append((double_number[i+1],double_number[i]))
     viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
 
+def update_map_center(lat,lng):
+    center = map_widget.get_position()
+    # center[2] = lat lng
+    mapredraw = False
+    if abs(lat - center[0]) > 0.001:
+        mapredraw = True
+    if abs(lng - center[1]) > 0.001:
+        mapredraw = True
+    if mapredraw:
+        map_widget.set_position(lat,lng)        
         
-def timerproc():
+def timerproc_socket():
     global field_isloaded
     global polling_timer
 
@@ -166,11 +287,24 @@ def timerproc():
         if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
             timelabel_var.set(timestr[3])
         response = remote_socket.send("train position all\n");
-        marker_update(response)
+        update_socket_marker(response)
         response = remote_socket.send("camera get viewport\n");
-        viewport_update(response)
-        polling_timer=threading.Timer(remote_polling_second,timerproc)
+        update_socket_viewport(response)
+        polling_timer=threading.Timer(remote_polling_second,timerproc_socket)
         polling_timer.start()
+
+
+def timerproc_shm():
+    global field_isloaded
+    global polling_timer
+    if field_isloaded:
+        update_shm_clock()
+        update_shm_train()
+        update_shm_camera()
+
+        polling_timer=threading.Timer(remote_polling_second,timerproc_shm)
+        polling_timer.start()
+
         
 def server_connect_dialog():
     dialog = tkinter.Toplevel(root_tk)
@@ -190,17 +324,20 @@ def server_connect_dialog():
     option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
-    option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)    
+    option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)
+    option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)    
 
     option1_radio.place(x=30,y=40)
     option2_radio.place(x=30,y=60)
     option3_radio.place(x=30,y=80)
     option4_radio.place(x=30,y=100)
     option5_radio.place(x=30,y=120)
+    option6_radio.place(x=30,y=140)
 
     def on_server_ok():
         global trainid
         global field_isloaded
+        global remote_host
         remote_host = txt.get();
         response = remote_socket.connect(remote_host, remote_port)
         if response == False:
@@ -223,9 +360,15 @@ def server_connect_dialog():
         response = remote_socket.send("config set altmode relative\n")
         response = remote_socket.send("field get train\n")
         trainid = re.split(r"\s+", response)
-        del trainid[0]  # Geoglyph header
+        del trainid[0]  # Geoglyph header string
         del trainid[0]  # train string
-        #print (len(trainid))
+        #print (str(len(trainid)) + " trains")
+        if remote_host == "localhost":
+            setup_shm()
+            print (" shared memory mode")
+        else:
+            print (" socket mode")
+            
         field_isloaded = True
         dialog.destroy()
 
@@ -373,14 +516,23 @@ def speed_dialog():
     dialog.grab_set()
     root_tk.wait_window(dialog)
 
+def check_centermap():
+    global tracking_id
+    global tracking_ver
+    if centermap_var.get() == 1:
+        tracking_id = tracking_ver.get()
+    else:
+        tracking_id = None
 
 def camera_dialog():
-    global markers
+    global tracking_ver
+    
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x100")
     dialog.title("Camera Tracking")
 
     def set_camera_tracking():
+        global tracking_id
         message = "camera set tracking " + combo.get() + "\n"
         response = remote_socket.send(message);
         messagebox.showinfo("receive",response)
@@ -395,22 +547,26 @@ def camera_dialog():
             options.append( item )
         else:
             options.append("NONE")
-    name_variable = tkinter.StringVar()
-    combo = ttk.Combobox ( dialog , values = options , textvariable = name_variable , height = 3)
+    tracking_ver = tkinter.StringVar()
+    combo = ttk.Combobox ( dialog , values = options , textvariable = tracking_ver , height = 5)
     combo.grid(row=0, column=1, padx=5, pady=5)
 
     ok_button = ttk.Button(dialog, text="Camera Tracking ", command=set_camera_tracking)
-    ok_button.grid(row=1, column=0, columnspan=2, pady=10)
+    ok_button.grid(row=3, column=0, columnspan=2, pady=10)
     dialog.grab_set()
     root_tk.wait_window(dialog)
 
 
 def run_command():
+    global remote_host
     response = remote_socket.send("run\n");
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
     messagebox.showinfo("receive",response)
-    t=threading.Thread(target=timerproc)
+    if remote_host == "localhost":
+        t=threading.Thread(target=timerproc_shm)
+    else:
+        t=threading.Thread(target=timerproc_socket)
     t.start()
 
 def pause_command():
@@ -480,6 +636,10 @@ speedlabel_var = tkinter.StringVar()
 speedlabel_var.set("x 1.0")
 speedlabel = tkinter.Label(menu_frame,textvariable=speedlabel_var, bg="lightgray")
 speedlabel.pack(side="left", padx=10)
+
+centermap_var = tkinter.IntVar()
+centermap_button = tkinter.Checkbutton(menu_frame, text="Center map", variable=centermap_var, command=check_centermap)
+centermap_button.pack(side="left", padx=20)
 
 #
 # create map widget

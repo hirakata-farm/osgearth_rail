@@ -305,10 +305,12 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 	  switch (result) {
 	  case GH_POST_EXECUTE_EXIT:
 	    close(client_fd);
+	    ghrail.RemoveShm(0);
 	    exit(0);
 	    break;
 	  case GH_POST_EXECUTE_CLOSE:
-	    //close(client_fd);
+	    close(client_fd);
+	    ghrail.RemoveShm(0);
 	    return -1;
 	    break;
 	  case GH_POST_EXECUTE_SETCLOCK:
@@ -339,8 +341,7 @@ main(int argc, char** argv)
     osg::ArgumentParser arguments(&argc, argv);
     if (arguments.read("--help"))
         return usage(argv[0]);
-
-    fprintf( stderr,"--------------------------------------------\n" ) ;
+    fprintf( stderr,"\n--------------------------------------------\n" ) ;
     fprintf( stderr,"    %s\n", GH_WELCOME_MESSAGE ) ;
     fprintf( stderr,"    Revision %s\n", GH_REVISION ) ;
     fprintf( stderr,"--------------------------------------------\n" ) ;

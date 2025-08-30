@@ -57,7 +57,8 @@ field get description
 
 train label {on|off} (train id)  
 train position (train id) 
-train timetable (train id) 
+train timetable (train id)
+train icon (train id) 
 
 config set maxclockspeed 30.0 ( default 12.0 )
 config set altmode clamp ( clamp(default), absolute, relative )
@@ -65,6 +66,11 @@ config set displaydistance 100000 ( default 3000[m] )
 config get maxclockspeed
 config get altmode
 config get displaydistance
+
+shm set clock time
+shm set train position
+shm set camera viewport
+shm remove ( shm key )
 
 show [status|version]
 
@@ -88,6 +94,8 @@ show version
 # include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
 #include <osgEarth/DateTime>
 #include <osgEarth/Sky>
 #include <osgViewer/Viewer>
@@ -126,17 +134,25 @@ show version
 #define GH_COMMAND_TRAIN_LABEL_OFF 25
 #define GH_COMMAND_TRAIN_POSITION  26
 #define GH_COMMAND_TRAIN_TIMETABLE 27
+#define GH_COMMAND_TRAIN_ICON      28
 
-#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    28
-#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    29
-#define GH_COMMAND_CONFIG_SET_ALTMODE          30
-#define GH_COMMAND_CONFIG_GET_ALTMODE          31
-#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  32
-#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  33
+#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    29
+#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    30
+#define GH_COMMAND_CONFIG_SET_ALTMODE          31
+#define GH_COMMAND_CONFIG_GET_ALTMODE          32
+#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  33
+#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  34
+
+#define GH_COMMAND_SHM_CLOCK_TIME  35
+#define GH_COMMAND_SHM_TRAIN_POS   36
+#define GH_COMMAND_SHM_CAMERA_VIEW 37
+#define GH_COMMAND_SHM_REMOVE      38
+
+#define GH_NUMBER_OF_COMMANDS                  39  //  count for above commands
 
 ////////////////////////////////////////////////////
 //
-//   Command Keywords
+//   Command Reserved Keywords
 //
 //
 
@@ -174,6 +190,7 @@ show version
 #define GH_STRING_ON         "on"
 #define GH_STRING_OFF        "off"
 #define GH_STRING_TIMETABLE  "timetable"
+#define GH_STRING_ICON       "icon"
 
 #define GH_STRING_CONFIG          "config"
 #define GH_STRING_MAXCLOCKSPEED   "maxclockspeed"
@@ -187,7 +204,8 @@ show version
 #define GH_STRING_STATUS  "status"
 #define GH_STRING_VERSION "version"
 
-
+#define GH_STRING_SHM    "shm"
+#define GH_STRING_REMOVE "remove"
 
 
 //////////////////////////////////////////////////
@@ -242,6 +260,7 @@ std::string ghRailCommandTrainLabelOn(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandTrainLabelOff(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime);
 std::string ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail);
+std::string ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail);
 
 std::string ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
 std::string ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view);
@@ -259,6 +278,9 @@ std::string ghRailCommandConfigSetAltmode(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandConfigSetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
+
+std::string ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail);
+std::string ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail);
 
 std::string ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail);
 std::string ghRailCommandShowVersion();

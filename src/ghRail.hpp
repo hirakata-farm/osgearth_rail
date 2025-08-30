@@ -21,6 +21,9 @@
 # include <map>
 # include <cstdlib>
 # include <cstring>
+# include <sys/types.h>
+# include <sys/ipc.h>
+# include <sys/shm.h>
 
 #include <osgDB/ReadFile>
 #include <osgEarth/MapNode>
@@ -56,18 +59,43 @@ using namespace std;
 #define GH_DEFAULT_MIN_CLOCK_SPEED 0.1
 
 #define GH_DEFAULT_DISPLAY_DISTANCE 5000.0 // [m]
+#define GH_MIN_DISPLAY_DISTANCE      100.0 // [m]
 
 #define GH_ALTMODE_CLAMP 0
 #define GH_ALTMODE_RELATIVE 1
 #define GH_ALTMODE_ABSOLUTE 2
 #define GH_DEFAULT_ALTMODE 0
-#define GH_ALTMODE_LAYER_UNIT 7.0
+#define GH_ALTMODE_LAYER_UNIT 9.0
 
 #define GH_THRESHOLD_TIME_BACK_SEC -1.0 // [sec]
 // 60fps = 0.016666 [sec / frame]
 // 30fps = 0.033333 [sec / frame]
 // 15fps = 0.066666 [sec / frame]
 //  5fps = 0.2      [sec / frame]        
+
+//////////////////////////////////////////////////////////
+#define GH_SHM_PATH  "/tmp/geoglyph3d"
+#define GH_SHM_TYPE_CLOCK_TIME      0 // int 4 byte :  [sec]
+#define GH_SHM_TYPE_TRAIN_POSITION  1 // (char[32],double[2])x(numoftrains)  48xn byte : [id,lat,lng]
+#define GH_SHM_TYPE_CAMERA_VIEWPORT 2 // (double[2])x12  192 byte : [lat,lng]
+#define GH_SHM_COUNT 3
+// sizeof double 8
+// sizeof int    4
+// sizeof char   1
+typedef struct
+{
+  int	key ;
+  int	type ;
+  int	size;
+  int	shmid ;
+  char	*addr ;
+} GH_SharedMemory ;
+
+typedef struct
+{
+  char train[32];
+  double position[2];
+} GH_SHM_TrainPosition;
 
 
 //
@@ -80,7 +108,6 @@ class ghRail
     public:
       int Setup(string fieldname);
       void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::Viewer* _view );
-
 
       string GetConfigure();
 
@@ -99,10 +126,13 @@ class ghRail
       string SetTrainLabel(string trainid, bool flag);
       string GetTrainPosition(string trainid, double simtime);
       string GetTrainTimetable(string trainid);
+      string GetTrainIcon(string trainid);
       bool IsLoaded();
       bool IsPlaying();
       void SetPlayPause(bool flag);
-
+      int InitShm(int shmkey,int shmtype);
+      int RemoveShm(int shmkey);      
+      
       string GetTrackingTrain();
       bool SetTrackingTrain(string trainid);
 
@@ -129,16 +159,23 @@ class ghRail
       ghRailJSON p_config;
       ghRailJSON p_field;
       ghRailJSON p_default_locomotive;
+      string p_default_icon;
       std::map<std::string, ghRailJSON> p_line;
       std::map<std::string, std::string> p_route;
       std::map<std::string, nlohmann::json> p_station;
       int p_numlines;
       std::map<std::string, ghRailUnit> p_units;
-
+      GH_SharedMemory p_shm[GH_SHM_COUNT];
+      
       osgEarth::GeoPoint _calcGeoPoint(const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach);
-
+      void _updateShmClockTime(double stime);
+      void _updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position);
+      void _updateShmCameraViewport(osgViewer::Viewer* _view);
       
     };
+
+
+std::vector<osg::Vec3d> _calcCameraViewpoints(osgViewer::Viewer* _view);
 
 #endif
 

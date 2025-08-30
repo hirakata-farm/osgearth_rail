@@ -19,6 +19,7 @@
 
 void
 ghRailUnit::Setup( string id,
+		   string marker,
 		   ghRailJSON locomotive, 
 		   nlohmann::json data,
 		   string geom ) 
@@ -103,6 +104,13 @@ ghRailUnit::Setup( string id,
       }
       idx++;
     }
+  }
+
+  string unit_marker = data["marker"];
+  if ( unit_marker == "default" ) {
+    p_marker = marker;
+  } else {
+    p_marker = unit_marker;
   }
 
   string unit_locomotive = data["locomotive"];
@@ -1386,3 +1394,9 @@ ghRailUnit::_calcControlPointGeomLayers(double lat, double lng, osg::Quat quat)
   return result;
 }
 
+std::string
+ghRailUnit::GetMarkerUri() {
+  string uri = GEOGLYPH_ROOT_URI;
+  string path = GEOGLYPH_RSC_ICON_PATH;
+  return uri + path + p_marker;
+}

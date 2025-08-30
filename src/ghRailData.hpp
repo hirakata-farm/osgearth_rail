@@ -27,6 +27,7 @@ using namespace std;
 #define GEOGLYPH_ROOT_URI "https://earth.geoglyph.info/rail/"
 #define GEOGLYPH_RSC_FIELD_PATH "RSC/fields/"
 #define GEOGLYPH_RSC_PATH "RSC/"
+#define GEOGLYPH_RSC_ICON_PATH "RSC/marker/"
 #define GEOGLYPH_3DMODEL_PATH "RSC/models/"
 #define GEOGLYPH_CONF_PATH "conf/"
 #define GEOGLYPH_CONF_EXT ".json"
