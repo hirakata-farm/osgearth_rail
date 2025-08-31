@@ -741,6 +741,7 @@ ghRail::_updateShmCameraViewport(osgViewer::Viewer* _view) {
   // points max 12
   double data[2];
   double *ptr = (double *)p_shm[GH_SHM_TYPE_CAMERA_VIEWPORT].addr;
+  memset(ptr, 0, sizeof(double)*2*12);
   for (int i = 0; i < points.size(); i++) {
     data[0] = points[i].x();
     data[1] = points[i].y();

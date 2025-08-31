@@ -263,7 +263,10 @@ def update_shm_camera():
     map_widget.delete_all_polygon()
     positionlist = []
     for i in range(0,24,2):
-        positionlist.append((double_number[i+1],double_number[i]))
+        if double_number[i+1] == 0.0 and double_number[i] == 0.0:
+            print(double_number[i])
+        else:
+            positionlist.append((double_number[i+1],double_number[i]))
     viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
 
 def update_map_center(lat,lng):
@@ -540,9 +543,13 @@ def camera_dialog():
 
     def set_camera_tracking():
         global tracking_id
-        message = "camera set tracking " + combo.get() + "\n"
-        response = remote_socket.send(message);
         tracking_id = combo.get()
+        message = "camera set tracking " + tracking_id + "\n"
+        response = remote_socket.send(message);
+        if tracking_id == "NONE":
+            centermap_button.config(state=tkinter.DISABLED)
+        else:
+            centermap_button.config(state=tkinter.NORMAL)
         messagebox.showinfo("receive",response)
     def close_camera_tracking():
         dialog.destroy()        
@@ -651,6 +658,7 @@ speedlabel.pack(side="left", padx=10)
 centermap_var = tkinter.IntVar()
 centermap_button = tkinter.Checkbutton(menu_frame, text="Center map", variable=centermap_var, command=check_centermap)
 centermap_button.pack(side="left", padx=20)
+centermap_button.config(state=tkinter.DISABLED)
 
 #
 # create map widget
