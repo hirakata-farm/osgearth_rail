@@ -37,6 +37,7 @@
 #include "ghRail.hpp"
 #include "ghRailCommand.hpp"
 
+#include <signal.h>
 #include <thread>
 #include <mutex>
 #include <netinet/in.h>
@@ -141,13 +142,12 @@ socketthread() {
   //  End of client socket read loop
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////////////////////
 /*
  *   Child Process quit.
  *    cleanup defunct process
  */
 void
-signalChild( int sig )
+ghSignalChild( int sig )
 {
   int child_pid = 0;
   do {
@@ -156,7 +156,33 @@ signalChild( int sig )
   } while(child_pid>0);
 
 } 
+/*
+ * interrupt handling routine
+ */
+void
+ghSignalQuit( int sig )
+{
+    signal( SIGINT, SIG_IGN ) ;
+    signal( SIGBUS, SIG_IGN ) ;
+    signal( SIGSEGV, SIG_IGN ) ;
+    signal( SIGQUIT, SIG_IGN ) ;
+    signal( SIGHUP, SIG_IGN ) ;
+    signal( SIGTERM, SIG_IGN ) ;
+}
 
+/*
+ * Child process quit routine
+ */
+void
+ghChildQuit( int sig )
+{
+
+    fprintf( stderr, "%s's child ID %d exitted\n", GH_APP_NAME , getpid()) ;
+    
+    exit( 0 ) ;
+
+}
+/**                  **/
 int
 socketInit(int port)
 {
@@ -302,29 +328,24 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 
 	  // Execute Socket Command
 	  int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghrail,&ghViewer,ghSky,ghSimulationTime);
-	  switch (result) {
-	  case GH_POST_EXECUTE_EXIT:
-	    close(client_fd);
+	  if ( result == GH_POST_EXECUTE_EXIT ) {
 	    ghrail.RemoveShm(0);
-	    exit(0);
 	    break;
-	  case GH_POST_EXECUTE_CLOSE:
-	    close(client_fd);
+	  } else if ( result == GH_POST_EXECUTE_CLOSE ) {
 	    ghrail.RemoveShm(0);
-	    return -1;
 	    break;
-	  case GH_POST_EXECUTE_SETCLOCK:
+	  } else if ( result == GH_POST_EXECUTE_SETCLOCK ) {
 	    _elapsed_sec = 0.0f;
-	    break;
-	  case GH_POST_EXECUTE_TIMEZONE:
-	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );
-	    break;
+	  } else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
+	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );	    
+	  } else {
+	    // NOP
 	  }
-
         } // End of while loop ( rendering loop )
 	//
-	//    
+	//
 	ghSock.join();
+	return 1;
     }
     else
     {
@@ -343,7 +364,7 @@ main(int argc, char** argv)
         return usage(argv[0]);
     fprintf( stderr,"\n--------------------------------------------\n" ) ;
     fprintf( stderr,"    %s\n", GH_WELCOME_MESSAGE ) ;
-    fprintf( stderr,"    Revision %s\n", GH_REVISION ) ;
+    fprintf( stderr,"    %s rev %s\n", GH_APP_NAME, GH_APP_REVISION ) ;
     fprintf( stderr,"--------------------------------------------\n" ) ;
 
     osgEarth::initialize(arguments);
@@ -362,10 +383,11 @@ main(int argc, char** argv)
     if ( MapHeight > 2160 ) MapHeight = 2160;
     
 
-    signal( SIGCHLD, signalChild ) ;
+    signal( SIGCHLD, ghSignalChild ) ;
     int	server_fd ;
     if ((server_fd = socketInit(listen_port)) < 0)
     {
+      fprintf( stderr,"Cannot Initialize Socket, exited\n" ) ;
       exit( -1 ) ;
     }
     
@@ -377,31 +399,43 @@ main(int argc, char** argv)
     {
 	if ((client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len )) < 0)
 	{
-	  //sprintf( "daemonloop: cannot accept new socket" ) ;
+	  fprintf( stderr,"Cannot accept new socket\n" ) ;
 	  break ;
 	}
 
 	proc_id = fork();
 	if (proc_id < 0)
 	{
-	  //sprintf( "process : cannot fork child process" ) ;
+	  fprintf( stderr,"Cannot fork child process, exited\n" ) ;
 	  exit(1);
 	}
 
 	if (proc_id == 0)
 	{
 
-	  /*
-	   *  fork Child
-	   */
+	  /* fork Child */
+	  if (signal( SIGINT, SIG_IGN ) != SIG_IGN)
+	    signal( SIGINT, ghSignalQuit ) ;
+	  if (signal( SIGBUS, SIG_IGN ) != SIG_IGN)
+	    signal( SIGBUS, ghSignalQuit ) ;
+	  if (signal( SIGSEGV, SIG_IGN ) != SIG_IGN)
+	    signal( SIGSEGV, ghSignalQuit ) ;
+	  if (signal( SIGQUIT, SIG_IGN ) != SIG_IGN)
+	    signal( SIGQUIT, ghSignalQuit ) ;
+	  if (signal( SIGHUP, SIG_IGN ) != SIG_IGN)
+	    signal( SIGHUP, ghSignalQuit ) ;
+	  if (signal( SIGTERM, SIG_IGN ) != SIG_IGN)
+	    signal( SIGTERM, ghSignalQuit ) ;
+	  if (signal( SIGPIPE, SIG_IGN ) != SIG_IGN)
+	    signal( SIGPIPE, ghSignalQuit ) ;
 	  close( server_fd ) ;
 
-	  //sprintf( line, "%s's child started\n", rend_progName ) ;
 	  //////////////////
 	  mainloop(arguments,MapWidth,MapHeight);
 	  //////////////////
 	  close( client_fd ) ;
-	  exit(1);
+
+	  ghChildQuit( SIGQUIT ) ;
 	  
 	} else {
 	  

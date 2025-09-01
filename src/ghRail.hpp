@@ -38,7 +38,8 @@ using namespace std;
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_REVISION "0.1"
+#define GH_APP_REVISION "0.2"
+#define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
 #define GH_DEFAULT_SOCKET_PORT 57139

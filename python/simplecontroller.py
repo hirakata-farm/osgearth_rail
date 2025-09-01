@@ -89,9 +89,8 @@ remote_socket = SocketClient(socket_buffer_size,False)
 
 
 def about():
-    message = "simple osgearth_rail controller 0.1"
+    message = "simple osgearth_rail controller 0.2"
     messagebox.showinfo("about",message)
-
 
 def setup_shm():
     global shm_time
@@ -116,6 +115,7 @@ def timetable_dialog(id, data):
 
     tablelist = data.split(",")
     dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
     dialog.geometry("300x400")
     dialog.title("Timetable  " + id)
 
@@ -246,9 +246,6 @@ def update_shm_train():
                         imagedata = urlopen(msgstr[3])
                         image = ImageTk.PhotoImage(data=imagedata.read())
                         markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
-                    else:
-                        print(" Not found " + trainname)
-
             offset = offset+48
         else:
             print(offset)
@@ -263,11 +260,10 @@ def update_shm_camera():
     map_widget.delete_all_polygon()
     positionlist = []
     for i in range(0,24,2):
-        if double_number[i+1] == 0.0 and double_number[i] == 0.0:
-            print(double_number[i])
-        else:
+        if double_number[i+1] != 0.0 or double_number[i] != 0.0:
             positionlist.append((double_number[i+1],double_number[i]))
-    viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+    if len(positionlist) > 4:            
+        viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
 
 def update_map_center(lat,lng):
     center = map_widget.get_position()
@@ -426,6 +422,7 @@ def server_exit_dialog():
 
 def clock_dialog():
     dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
     dialog.geometry("300x100")
     dialog.title("Clock")
 
@@ -470,6 +467,7 @@ def clock_dialog():
 
 def speed_dialog():
     dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
     dialog.geometry("300x200")
     dialog.title("Speed")
 
@@ -538,6 +536,7 @@ def check_centermap():
 def camera_dialog():
     global tracking_ver
     dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
     dialog.geometry("400x100")
     dialog.title("Camera Tracking")
 
@@ -635,11 +634,11 @@ menu1.entryconfig("speed", state=tkinter.DISABLED)
 menu1.entryconfig("camera", state=tkinter.DISABLED)
 
 # add menu item
-menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", command=run_command)
+menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=run_command)
 menu_button_2.pack(side="left", padx=20)
 menu_button_2.config(state=tkinter.DISABLED)
 
-menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", command=pause_command)
+menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", fg="red", command=pause_command)
 menu_button_3.pack(side="left", padx=20)
 menu_button_3.config(state=tkinter.DISABLED)
 

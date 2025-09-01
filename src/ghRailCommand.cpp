@@ -1081,9 +1081,9 @@ ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail) {
 std::string
 ghRailCommandShowVersion() {
   std::string ret = " ";
-  ret += GH_WELCOME_MESSAGE;
+  ret += GH_APP_NAME;
   ret += " ";
-  ret += GH_REVISION;
+  ret += GH_APP_REVISION;
   ret += "\n";
   //std::cout << ret << std::endl;
   return ret;
