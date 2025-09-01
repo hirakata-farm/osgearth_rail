@@ -20,9 +20,9 @@ case "$1" in
       echo $! > ${GFILE}
       ;;
   stop)
-      PID=`cat ${GFILE}`
-      kill -KILL ${PID}
       if [ -e ${GFILE} ]; then
+	  PID=`cat ${GFILE}`
+	  kill -KILL ${PID}
 	  rm ${GFILE}
       fi
       ;;
