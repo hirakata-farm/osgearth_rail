@@ -139,37 +139,23 @@ ghRail::GetDescription()
   return desc.get<std::string>();
 }
 
-string
+bool
 ghRail::SetTrainLabel(string trainid, bool flag)
 {
-  
-  std::string ret = "trainid:";
-
   if ( trainid.empty() ) {
     for (const auto& [key, value] : p_units) {
       p_units[key].SetModelLabel(flag);
     }
-    if ( flag ) {
-      ret += " all label ON";
-    } else {
-      ret += " all label OFF";
-    }
+    return true;
   } else {
-    ret += trainid;
-    ret += " ";
     if ( p_units.count(trainid) < 1 ) {
       // No Units
-      ret += "Not found";
+      return false;
     } else {
       p_units[trainid].SetModelLabel(flag);
-      if ( flag ) {
-	ret += " label ON";
-      } else {
-	ret += " label OFF";
-      }
+      return true;
     }
   }
-  return ret;
 }
 
 string
@@ -249,30 +235,19 @@ ghRail::GetTrainIcon(string trainid)
   return ret;
 }
 
-string
-ghRail::GetTrackingTrain() {
-  return p_tracking;
-}
+//string
+//ghRail::GetTrackingTrain() {
+//  return p_tracking;
+//}
 
 bool
-ghRail::SetTrackingTrain(string trainid) {
-
+ghRail::IsTrainID(string trainid) {
   if ( p_units.count(trainid) < 1 ) {
-    // No Units
-    if ( trainid == GH_COMMAND_CAMERA_UNTRACKING ) {
-      p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
-    } else {
-      return false;
-    }
+    return false;
   } else {
-    p_tracking = trainid;
+    return true;
   }
-  return true;
-
 }
-
-
-
 
 int
 ghRail::Setup(string configname)
@@ -423,18 +398,16 @@ ghRail::Setup(string configname)
   p_configure = configname;
   p_running = false;
   p_clockspeed = 1.0;
-  p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
-  p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
+  //p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
+  //p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
   p_previous_simulationTime = 0.0;
   p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
   p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
   p_altmode = GH_DEFAULT_ALTMODE;
   p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
-  for (int i = 0; i < GH_SHM_COUNT; i++) {
-    p_shm[i].key = -1;
-  }
+  p_shm_clock.key = -1;
+  p_shm_train.key = -1;  
 
-  
   return GH_SETUP_RESULT_OK;
 }
 
@@ -442,22 +415,20 @@ ghRail::Setup(string configname)
 //
 
 void
-ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Viewer* _view )
+ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  ghWindow* _win )
 {
 
   osg::AnimationPath::ControlPoint point;
   osg::Vec3d position_centric;
-  osg::Vec3d position_tracking = osg::Vec3d(0.0,0.0,0.0);
-
+  std::map<std::string, osg::Vec3d> position_tracking;
+  ghWindow *wtmp = _win;
+ 
   double timediff = simulationTime - p_previous_simulationTime; // [sec]
   if ( GH_THRESHOLD_TIME_BACK_SEC < timediff && timediff < 0 ) {
     // Time is going back just a little
     //std::cout << "warning simulation time " << to_string(timediff) << std::endl;
     return;
   }
-  
-  osg::Vec3d eye, up, center;
-  _view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
   double distance = 0.0;
 
   _updateShmClockTime(simulationTime);
@@ -493,8 +464,6 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 	  // NOP
 	}
       } else {
-	distance = osg::Vec3d(eye - position_centric).length();
-
 	if ( i == 0 ) {
 	  //
 	  // coach   i == 0
@@ -518,14 +487,22 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 	    }
 	  }
 
-	  if ( key == p_tracking ) {
-	    position_tracking = position_centric;
+	  //
+	  //  Check Tracking 
+	  //
+	  wtmp = _win;
+	  while (wtmp != (ghWindow *)NULL) {
+	    if ( wtmp->tracking == key ) {
+	      position_tracking[wtmp->name] = position_centric;
+	    }
+	    wtmp = wtmp->next ;
 	  }
 
 	} else {
 	  //
 	  // coach   i != 0
 	  //
+	  distance = _getMinimumDistanceFromCamera(_win,position_centric);
 	  if ( distance > p_displaydistance ) {
 	    if ( p_units[key].GetModelStatus(i) < GH_MODEL_STATUS_LOADED ) {
 	      // NOP
@@ -564,31 +541,28 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  osgViewer::Vie
 
   //
   //
-  // Camera tracking update
+  // Camera update
   //
   //
-  if ( position_tracking.x() == 0 && position_tracking.y() == 0 ) {
-    // NOP
-    p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
-  } else {
-    // Camera Position Update
-    if ( p_prev_position_tracking.x() == 0 && p_prev_position_tracking.y() == 0 ) {
-      // NOP first frame
-    } else {
-
-      osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking ^ eye);
-      osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking - eye);
+  wtmp = _win;
+  while (wtmp != (ghWindow *)NULL) {
+    if ( position_tracking.count(wtmp->name) > 0 && p_prev_position_tracking.count(wtmp->name) > 0 ) {
+      osg::Vec3d eye, up, center;
+      wtmp->view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
+      osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking[wtmp->name] ^ eye);
+      osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking[wtmp->name] - eye);
       osg::Vec3d upvec = osg::Vec3d(rightvec ^ dirvec);
       osg::Matrixd mat ;
-      mat.makeLookAt( eye + (position_tracking - p_prev_position_tracking) , position_tracking , upvec );
-      _view->getCameraManipulator()->setByInverseMatrix(mat);
+      mat.makeLookAt( eye + (position_tracking[wtmp->name] - p_prev_position_tracking[wtmp->name]) , position_tracking[wtmp->name] , upvec );
+      wtmp->view->getCameraManipulator()->setByInverseMatrix(mat);
+    } else {
+      // NOP
     }
-    p_prev_position_tracking = position_tracking;
+    _updateShmCameraViewport(wtmp->view,wtmp->shm);
+    wtmp = wtmp->next ;
   }
 
-  _updateShmCameraViewport(_view);
-
-  
+  p_prev_position_tracking = position_tracking;
   p_previous_simulationTime = simulationTime;
 }
 
@@ -604,60 +578,64 @@ ghRail::GetBaseDatetime() {
 }
 
 int 
-ghRail::InitShm(int shmkey,int shmtype) {
-
-  p_shm[shmtype].key = shmkey;
-  p_shm[shmtype].type = shmtype;
-  
-  if ( shmtype == GH_SHM_TYPE_CLOCK_TIME ) {
-    // sizeof int = 4
-    p_shm[shmtype].size = sizeof(int);
-  } else if ( shmtype == GH_SHM_TYPE_TRAIN_POSITION ) {
-    int num = 0;
-    for (const auto& [key, value] : p_units) {
-      if ( ! key.empty() ) {
-	num ++;
-      }
-    }
-    p_shm[shmtype].size = sizeof(GH_SHM_TrainPosition)*num;
-  } else if ( shmtype == GH_SHM_TYPE_CAMERA_VIEWPORT ) {
-    // sizeof double 8 * 24 = 192
-    p_shm[shmtype].size = sizeof(double)*2*12;
-  } else {
-    p_shm[shmtype].key = -1;
-    return -1;
-  }
-  /////////////////
-  
-  if ((p_shm[shmtype].shmid = shmget(p_shm[shmtype].key, p_shm[shmtype].size, IPC_CREAT | 0666)) < 0) {
-    //printf("Error getting shared memory id");
-    p_shm[shmtype].key = -1;
+ghRail::InitShmClock(int shmkey) {
+  p_shm_clock.key = shmkey;
+  p_shm_clock.type = GH_SHM_TYPE_CLOCK_TIME;
+  p_shm_clock.size = sizeof(int);
+  if ((p_shm_clock.shmid = shmget(p_shm_clock.key, p_shm_clock.size, IPC_CREAT | 0666)) < 0) {
+    p_shm_clock.key = -1;
     return -1;
   }
   // Attached shared memory
-  if ((p_shm[shmtype].addr = (char *)shmat(p_shm[shmtype].shmid, (void *)0, 0)) == (char *) -1) {
-    //printf("Error attaching shared memory id");
-    p_shm[shmtype].key = -1;
+  if ((p_shm_clock.addr = (char *)shmat(p_shm_clock.shmid, (void *)0, 0)) == (char *) -1) {
+    p_shm_clock.key = -1;
     return -1;
   }
+  return p_shm_clock.size;
+}
 
-  return p_shm[shmtype].size;
-  
+int 
+ghRail::InitShmTrain(int shmkey) {
+
+  p_shm_train.key = shmkey;
+  p_shm_train.type = GH_SHM_TYPE_TRAIN_POSITION;
+  int num = 0;
+  for (const auto& [key, value] : p_units) {
+    if ( ! key.empty() ) {
+      num ++;
+    }
+  }
+  p_shm_train.size = sizeof(ghShmTrainPosition)*num;
+  if ((p_shm_train.shmid = shmget(p_shm_train.key, p_shm_train.size, IPC_CREAT | 0666)) < 0) {
+    p_shm_train.key = -1;
+    return -1;
+  }
+  if ((p_shm_train.addr = (char *)shmat(p_shm_train.shmid, (void *)0, 0)) == (char *) -1) {
+    p_shm_train.key = -1;
+    return -1;
+  }
+  return p_shm_train.size;
 }
 
 
 int 
 ghRail::RemoveShm(int shmkey) {
 
-  for (int i = 0; i < GH_SHM_COUNT; i++) {
-    if ( p_shm[i].key = shmkey || shmkey == 0 ) {
+  if ( p_shm_clock.key = shmkey || shmkey == 0 ) {
       // Detach shmkey
-      shmdt( p_shm[i].addr );
-      shmctl(  p_shm[i].shmid, IPC_RMID, NULL);
-      p_shm[i].key = -1;
-    } else {
-      // NOP
-    }
+    shmdt( p_shm_clock.addr );
+    shmctl(  p_shm_clock.shmid, IPC_RMID, NULL);
+    p_shm_clock.key = -1;
+  } else {
+    // NOP
+  }
+  if ( p_shm_train.key = shmkey || shmkey == 0 ) {
+      // Detach shmkey
+    shmdt( p_shm_train.addr );
+    shmctl(  p_shm_train.shmid, IPC_RMID, NULL);
+    p_shm_train.key = -1;
+  } else {
+    // NOP
   }
 
   return -1;
@@ -690,7 +668,7 @@ ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d positio
 void
 ghRail::_updateShmClockTime(double stime) {
 
-  if ( p_shm[GH_SHM_TYPE_CLOCK_TIME].key < 0 ) return;
+  if ( p_shm_clock.key < 0 ) return;
 
   double timezone_sec = (double)GetTimeZoneMinutes() * 60.0;
   
@@ -700,17 +678,17 @@ ghRail::_updateShmClockTime(double stime) {
   //data[1] = (int)( stime - data[0] * 3600 ) / 60;
   //data[2] = (int)stime % 60;
 
-  memcpy( p_shm[GH_SHM_TYPE_CLOCK_TIME].addr , &data, sizeof(int) ) ;
+  memcpy( p_shm_clock.addr , &data, sizeof(int) ) ;
 }
 
 void
 ghRail::_updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position) {
 
-  if ( p_shm[GH_SHM_TYPE_TRAIN_POSITION].key < 0 ) return;
+  if ( p_shm_train.key < 0 ) return;
 
   osgEarth::Ellipsoid WGS84;
   osg::Vec3d position_lnglat = WGS84.geocentricToGeodetic(position);
-  GH_SHM_TrainPosition data;
+  ghShmTrainPosition data;
 
   memset(&data.train[0], 0, sizeof(char)*32);
   int len = strtrain.length();
@@ -726,21 +704,19 @@ ghRail::_updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position
     data.position[1] = position_lnglat.y();
   }
 
-  int offset = sizeof(GH_SHM_TrainPosition) * cnt;
+  int offset = sizeof(ghShmTrainPosition) * cnt;
 
-  memcpy( p_shm[GH_SHM_TYPE_TRAIN_POSITION].addr + offset , &data, sizeof(GH_SHM_TrainPosition) ) ;  
+  memcpy( p_shm_train.addr + offset , &data, sizeof(ghShmTrainPosition) ) ;  
 
 }
 
 void
-ghRail::_updateShmCameraViewport(osgViewer::Viewer* _view) {
-
-  if ( p_shm[GH_SHM_TYPE_CAMERA_VIEWPORT].key < 0 ) return;
-
+ghRail::_updateShmCameraViewport(osgViewer::View* _view,ghSharedMemory shm) {
+  if ( shm.key < 0 ) return;
   std::vector<osg::Vec3d> points = _calcCameraViewpoints(_view);
   // points max 12
   double data[2];
-  double *ptr = (double *)p_shm[GH_SHM_TYPE_CAMERA_VIEWPORT].addr;
+  double *ptr = (double *)shm.addr;
   memset(ptr, 0, sizeof(double)*2*12);
   for (int i = 0; i < points.size(); i++) {
     data[0] = points[i].x();
@@ -748,12 +724,30 @@ ghRail::_updateShmCameraViewport(osgViewer::Viewer* _view) {
     memcpy( ptr , &data[0], sizeof(double)*2 ) ;
     ptr=ptr+2;
   }
-
 }
 
+double
+ghRail::_getMinimumDistanceFromCamera(ghWindow *_win,osg::Vec3d position) {
+  double distance = 0;
+  double min_distance = 1000000;  
+  osg::Vec3d eye, up, center;
+  ghWindow *tmp = _win;
 
+  while (tmp != (ghWindow *)NULL)
+    {
+      tmp->view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
+      distance = osg::Vec3d(eye - position).length();
+      if ( distance < min_distance ) {
+	min_distance = distance;
+      }
+      if (tmp->next == NULL ) return( min_distance ) ;
+      tmp = tmp->next ;
+    }
+  return( min_distance ) ;
+}
+  
 std::vector<osg::Vec3d>
-_calcCameraViewpoints(osgViewer::Viewer* _view) {
+_calcCameraViewpoints(osgViewer::View* _view) {
 
   osg::Matrixd proj = _view->getCamera()->getProjectionMatrix();
   osg::Matrixd mv = _view->getCamera()->getViewMatrix();
@@ -824,4 +818,169 @@ _calcCameraViewpoints(osgViewer::Viewer* _view) {
 
   // points max 12
   return points;
+}
+
+ghWindow *
+ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height) {
+  ghWindow *win;
+  if ((win = (ghWindow *)calloc( (unsigned)1, (unsigned)sizeof( ghWindow ) )) == NULL)
+    {
+      return( (ghWindow *)NULL ) ;
+    }
+  
+  win->view = new osgViewer::View();
+  win->name = name;
+  win->tracking = GH_COMMAND_CAMERA_UNTRACKING;
+  win->view->setUpViewInWindow( 0, 0, width, height, 0 );
+  win->view->getCamera()->setViewport( 0, 0, width, height );
+  win->manipulator = new osgEarth::EarthManipulator(args);
+  win->view->setCameraManipulator( win->manipulator );
+  win->shm.key = -1;
+  win->next = NULL;
+  return win;
+}
+
+ghWindow *
+ghAddNewWindow( ghWindow *_win, std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height) {
+  ghWindow *tmp = ghGetLastWindow(_win);
+  ghWindow *newwin;
+  if ( tmp != (ghWindow *)NULL ) {
+    newwin = ghCreateNewWindow(name,args,width,height);
+    if ( newwin != (ghWindow *)NULL ) {
+      tmp->next = newwin;
+      return newwin;
+    }
+  }
+  return( (ghWindow *)NULL ) ;
+}
+
+void
+ghRemoveWindow( ghWindow *_win, std::string name )
+{
+  ghWindow *tmp = _win;
+  ghWindow *prev = _win;
+  ghWindow *rwin;
+
+  while (tmp != (ghWindow *)NULL)
+    {
+      if (tmp->name == name ) {
+	rwin = tmp;
+	prev->next = tmp->next ;
+	break;
+      }
+      prev = tmp;
+      tmp = tmp->next;
+    }
+
+  if ( rwin->shm.key > 0 ) {
+      shmdt( rwin->shm.addr );
+      shmctl( rwin->shm.shmid, IPC_RMID, NULL);
+  }
+
+  free( rwin ) ;
+
+}
+
+void
+ghDisposeWindow( ghWindow *_win )
+{
+  ghWindow *tmp = _win;
+  ghWindow *next;
+  while (tmp != (ghWindow *)NULL) {
+    if ( tmp->shm.key > 0 ) {
+      shmdt( tmp->shm.addr );
+      shmctl( tmp->shm.shmid, IPC_RMID, NULL);
+    }
+    next = tmp->next ;
+    free( tmp ) ;
+    tmp = next ;
+  }
+}
+
+ghWindow *
+ghGetLastWindow(ghWindow *_win) {
+
+  ghWindow *tmp = _win;
+
+  while (tmp != (ghWindow *)NULL)
+    {
+      if (tmp->next == NULL ) return( tmp ) ;
+      tmp = tmp->next ;
+    }
+
+  return( (ghWindow *)NULL ) ;
+
+}
+
+int
+ghCountWindow(ghWindow *_win) {
+
+  ghWindow *tmp = _win;
+  int ret = 0;
+  
+  while (tmp != (ghWindow *)NULL)
+    {
+      if (tmp->next == NULL ) return( ret ) ;
+      ret++;
+      tmp = tmp->next ;
+    }
+  return( ret ) ;
+}
+
+
+ghWindow *
+ghGetWindowByName(ghWindow *_win,std::string name) {
+
+  ghWindow *tmp = _win;
+
+  while (tmp != (ghWindow *)NULL)
+    {
+      if (tmp->name == name ) return( tmp ) ;
+      tmp = tmp->next ;
+    }
+
+  return( (ghWindow *)NULL ) ;
+
+
+}
+
+void
+ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str) {
+  osgViewer::Viewer::Windows windows;
+  view->getWindows(windows);
+  for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
+    {
+      osgViewer::GraphicsWindow* ww = *itr;
+      string name = ww->getWindowName();
+      if ( name.empty() ) {
+	ww->setWindowName(str);
+	break;
+      }
+    }
+}
+
+
+
+int
+ghInitShmWindow(int shmkey,ghWindow *_win,std::string name) {
+
+  ghWindow *tmp = ghGetWindowByName(_win,name);
+  if ( tmp->shm.key > 0 ) {
+    // Already use
+    return -1;
+  }
+  tmp->shm.key = shmkey;
+  tmp->shm.type = GH_SHM_TYPE_CAMERA_VIEWPORT;
+  // sizeof double 8 * 24 = 192
+  tmp->shm.size = sizeof(double)*2*12;
+  if ((tmp->shm.shmid = shmget(tmp->shm.key, tmp->shm.size, IPC_CREAT | 0666)) < 0) {
+    tmp->shm.key = -1;
+    return -1;
+  }
+  // Attached shared memory
+  if ((tmp->shm.addr = (char *)shmat(tmp->shm.shmid, (void *)0, 0)) == (char *) -1) {
+    tmp->shm.key = -1;
+    return -1;
+  }
+  return tmp->shm.size;
 }

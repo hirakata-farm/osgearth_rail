@@ -13,10 +13,10 @@
 *
 */
 #include <osgEarthImGui/ImGuiApp>
-#include <osgEarth/EarthManipulator>
 #include <osgEarth/ExampleResources>
 #include <osgEarth/Sky>
 #include <osgViewer/Viewer>
+#include <osgViewer/CompositeViewer>
 #include <osgViewer/ViewerEventHandlers>
 #include <osgEarth/MapNode>
 #include <osgDB/PluginQuery>
@@ -44,17 +44,14 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define GEOGLYPH_ELAPSED_THRESHOLD 1.0
-#define GEOGLYPH_SUN_AMBIENT 0.03
 
 #define LC "[imgui] "
 
 using namespace osgEarth;
 using namespace osgEarth::Util;
 
-
 int
-usage(const char* name)
+ghUsage(const char* name)
 {
     OE_NOTICE
         << "\nUsage: " << name << " file.earth" << std::endl
@@ -63,7 +60,7 @@ usage(const char* name)
 }
 
 void
-showPlugins()
+ghShowPlugins()
 {
 
   osgDB::FileNameList plugins = osgDB::listAllAvailablePlugins();
@@ -112,7 +109,7 @@ std::mutex ghMutex;
 /////////////////////
 
 void
-socketthread() {
+ghSocketThread() {
 
   char buffer[1024] = {0};
   ghCommandQueue *cmdtmp = (ghCommandQueue *)NULL ;
@@ -184,7 +181,7 @@ ghChildQuit( int sig )
 }
 /**                  **/
 int
-socketInit(int port)
+ghSocketInit(int port)
 {
   int fd;
   struct sockaddr_in address;
@@ -218,31 +215,38 @@ socketInit(int port)
   return fd;
 }
 
+/////////////////////////////////////////
+ghWindow *ghWin_anchor;
+
 int
-mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
+ghMainLoop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 {
 
-  // Set up the viewer and input handler:
-  osgViewer::Viewer ghViewer(args);
-  osgEarth::EarthManipulator *ghManipulator = new osgEarth::EarthManipulator(args);
+  osgViewer::CompositeViewer ghViewer(args);  //  Application Root
   osgEarth::SkyNode *ghSky; // manipulate date-time
   double ghSimulationTime = 0.0;
 
-  ghViewer.setUpViewInWindow( 0, 0, width, height, 0 );
-  ghViewer.setThreadingModel(ghViewer.ThreadPerContext);
-  ghViewer.setCameraManipulator( ghManipulator );
+  ghViewer.setThreadingModel(ghViewer.ThreadPerCamera);
+  /*
+    SingleThreaded 	
+    CullDrawThreadPerContext 	
+    ThreadPerContext 	
+    DrawThreadPerContext 	
+    CullThreadPerCameraDrawThreadPerContext 	
+    ThreadPerCamera 	
+    AutomaticSelection 
+   */
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
-  osgViewer::Viewer::Windows windows;
-  ghViewer.getWindows(windows);
-  windows[0]->setWindowName(GH_WELCOME_MESSAGE);
+  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,args,width,height);
+  ghViewer.addView( ghWin_anchor->view );
+  /***  Set window name ***/
+  ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 
-  //
-  // Load the earth file.
-  //
-  osg::ref_ptr<osg::Node> ghNode3D = MapNodeHelper().load(args, &ghViewer);
+  /**   Load the earth file  **/
+  osg::ref_ptr<osg::Node> basenode = MapNodeHelper().load(args, &ghViewer);
     
-  if (ghNode3D.valid())
+  if (basenode.valid())
     {
       // Call this to add the GUI. 
       auto ui = new ImGuiAppEngine(args);
@@ -257,43 +261,45 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
       ui->add("Tools", new SystemGUI());
       ui->add("Tools", new TerrainGUI());
 
-      osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(ghNode3D);
-      //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
-      
+      /***  Use half of threads **/
       int available_threads = (int)std::thread::hardware_concurrency();
       available_threads = available_threads / 2.0;
       if ( available_threads < 1 ) available_threads = 1;
       jobs::get_pool("oe.rex.loadtile")->set_concurrency(available_threads);
-  
-      /***   Sky and date time **/
+
+      /***  map node  **/
+      osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(basenode);
+      //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
+
+      /***  Sky and date time **/
       ghSky = SkyNode::create();
       ghSky->setDateTime(DateTime());
       ghSky->setSimulationTimeTracksDateTime(true);
       ghSky->setAtmosphereVisible(true);
-      ghSky->getSunLight()->setAmbient(osg::Vec4(GEOGLYPH_SUN_AMBIENT, GEOGLYPH_SUN_AMBIENT, GEOGLYPH_SUN_AMBIENT, 1.0f));
+      ghSky->getSunLight()->setAmbient(osg::Vec4(GH_SUN_AMBIENT, GH_SUN_AMBIENT, GH_SUN_AMBIENT, 1.0f));
       ghSky->setLighting(true);
       ghSky->setSunVisible(true);
       ghSky->setMoonVisible(false);
       ghSky->setStarsVisible(true);
-      auto parent = mapNode->getParent(0);
+      auto ghRootNode = mapNode->getParent(0);
       ghSky->addChild(mapNode);
-      parent->addChild(ghSky);
-      parent->removeChild(mapNode);
-      /***   Sky and date time **/
+      ghRootNode->addChild(ghSky);
+      ghRootNode->removeChild(mapNode);
+      /***  Sky and date time **/
 
       ui->onStartup = []()
       {
 	ImGui::GetIO().FontAllowUserScaling = true;
       };
-      ghViewer.getEventHandlers().push_front(ui);
-      ghViewer.setSceneData(ghNode3D);
+      ghWin_anchor->view->getEventHandlers().push_front(ui);
+      ghWin_anchor->view->setSceneData( ghRootNode );
 
       ghRailGUI *ghGui = new ghRailGUI();
       ui->add("Clock", ghGui );
       ghRail ghrail; //    Rail Class 
       ghrail.SetClockSpeed(1.0);
       ghrail.SetPlayPause(false);
-      std::thread ghSock(socketthread);
+      std::thread ghSock(ghSocketThread);
       /////////////////////////////////////////////  Socket LOOP
     
       double _elapsed_prev = 0.0f;    // Important
@@ -309,9 +315,9 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 	    ghSimulationTime = _calcSimulationTime(dt,ghrail.GetBaseDatetime(), _elapsed_sec);
 
 	    // Simulation Update
-	    ghrail.Update( ghSimulationTime, mapNode , &ghViewer);
+	    ghrail.Update( ghSimulationTime, mapNode , ghWin_anchor);
 
-	    if ( _elapsed_sec > GEOGLYPH_ELAPSED_THRESHOLD ) {
+	    if ( _elapsed_sec > GH_ELAPSED_THRESHOLD ) {
 	      // Change Date Time Dislpay
 	      ghSky->setDateTime(_calcElapsedTime(dt,_elapsed_sec));
 	      _elapsed_sec = 0.0f;
@@ -327,17 +333,28 @@ mainloop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 	  ghViewer.frame();
 
 	  // Execute Socket Command
-	  int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghrail,&ghViewer,ghSky,ghSimulationTime);
+	  int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghrail,ghWin_anchor,ghSky,ghSimulationTime);
 	  if ( result == GH_POST_EXECUTE_EXIT ) {
 	    ghrail.RemoveShm(0);
+	    ghDisposeWindow( ghWin_anchor );
 	    break;
 	  } else if ( result == GH_POST_EXECUTE_CLOSE ) {
 	    ghrail.RemoveShm(0);
+	    ghDisposeWindow( ghWin_anchor );
 	    break;
 	  } else if ( result == GH_POST_EXECUTE_SETCLOCK ) {
 	    _elapsed_sec = 0.0f;
 	  } else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
 	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );	    
+	  } else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
+	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],args,width/2,height/2);
+	    ghViewer.addView( nwin->view );
+	    nwin->view->setSceneData( ghRootNode );
+	    ghSetWindowTitle(&ghViewer,cmdqueue->argstr[0]);
+	  } else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
+	    ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
+	    ghViewer.removeView( rwin->view );
+	    ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
 	  } else {
 	    // NOP
 	  }
@@ -361,7 +378,7 @@ main(int argc, char** argv)
 {
     osg::ArgumentParser arguments(&argc, argv);
     if (arguments.read("--help"))
-        return usage(argv[0]);
+        return ghUsage(argv[0]);
     fprintf( stderr,"\n--------------------------------------------\n" ) ;
     fprintf( stderr,"    %s\n", GH_WELCOME_MESSAGE ) ;
     fprintf( stderr,"    %s rev %s\n", GH_APP_NAME, GH_APP_REVISION ) ;
@@ -385,7 +402,7 @@ main(int argc, char** argv)
 
     signal( SIGCHLD, ghSignalChild ) ;
     int	server_fd ;
-    if ((server_fd = socketInit(listen_port)) < 0)
+    if ((server_fd = ghSocketInit(listen_port)) < 0)
     {
       fprintf( stderr,"Cannot Initialize Socket, exited\n" ) ;
       exit( -1 ) ;
@@ -431,7 +448,7 @@ main(int argc, char** argv)
 	  close( server_fd ) ;
 
 	  //////////////////
-	  mainloop(arguments,MapWidth,MapHeight);
+	  ghMainLoop(arguments,MapWidth,MapHeight);
 	  //////////////////
 	  close( client_fd ) ;
 

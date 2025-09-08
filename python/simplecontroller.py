@@ -12,7 +12,7 @@
 #    https://github.com/TomSchimansky/TkinterMapView
 #
 #
-# apt-get install python3-tk python3-pip python3-pil python3-pil.imagetk
+# apt-get install python3-tk python3-pip python3-pil python3-pil.imagetk python3-sysv-ipc
 # pip3 install tkintermapview -t packages
 #
 #
@@ -44,8 +44,8 @@ field_isloaded = False
 shm_time = None
 shm_train = None
 shm_train_size_byte = 0
-shm_camera = None
-tracking_id = None
+shm_camera = { "root" : None }
+#tracking_id = None
 
 class SocketClient():
 
@@ -89,7 +89,7 @@ remote_socket = SocketClient(socket_buffer_size,False)
 
 
 def about():
-    message = "simple osgearth_rail controller 0.2"
+    message = "simple osgearth_rail controller 0.3"
     messagebox.showinfo("about",message)
 
 def setup_shm():
@@ -105,9 +105,9 @@ def setup_shm():
     shmmsg = re.split(r"\s+", response)
     shm_train = sysv_ipc.SharedMemory(int(shmmsg[3]))
     shm_train_size_byte = int(shmmsg[4])
-    response = remote_socket.send("shm set camera viewport\n")
+    response = remote_socket.send("shm set camera root viewport\n")
     shmmsg = re.split(r"\s+", response)
-    shm_camera = sysv_ipc.SharedMemory(int(shmmsg[3]))
+    shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[4]))
     remote_polling_second = 1
     
 
@@ -153,7 +153,7 @@ def click_train_marker(marker):
     timetable_dialog( marker.text, response[idpos:strlen] )
         
 def update_socket_marker(data):
-    global tracking_id
+    #global tracking_id
     markerlist = data.split(",")
     for item in trainid:
         existflag = False
@@ -165,13 +165,11 @@ def update_socket_marker(data):
                 lat = float(markerdata[2])
                 if trainname in markers:
                     markers[trainname].set_position(lat,lng)
-                    if tracking_id == trainname:
-                        update_map_center(lat,lng)
                 else:
                     message = "train icon " + trainname + "\n"
                     response = remote_socket.send(message)
                     msgstr = re.split(r"\s+", response)
-                    if msgstr[2] != "Not":
+                    if msgstr[2] != "not":
                         imagedata = urlopen(msgstr[3])
                         image = ImageTk.PhotoImage(data=imagedata.read())
                         markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
@@ -192,7 +190,7 @@ def update_socket_viewport(data):
             lng = float(pointdata[0])
             lat = float(pointdata[1])
             positionlist.append((lat,lng))
-    if len(positionlist) > 4:
+    if len(positionlist) > 3:
         viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
 
 def update_shm_clock():
@@ -217,7 +215,7 @@ def update_shm_clock():
 def update_shm_train():
     global shm_train
     global shm_train_size_byte
-    global tracking_id
+    #global tracking_id
     bytedata = shm_train.read()
     offset = 0
     for icnt in range(0,shm_train_size_byte,48):
@@ -236,13 +234,13 @@ def update_shm_train():
             else:
                 if trainname in markers:
                     markers[trainname].set_position(lat,lng)
-                    if tracking_id == trainname:
-                        update_map_center(lat,lng)
+                    #if tracking_id == trainname:
+                    #    update_map_center(lat,lng)
                 else:
                     message = "train icon " + trainname + "\n"
                     response = remote_socket.send(message)
                     msgstr = re.split(r"\s+", response)
-                    if msgstr[2] != "Not":
+                    if msgstr[2] != "not":
                         imagedata = urlopen(msgstr[3])
                         image = ImageTk.PhotoImage(data=imagedata.read())
                         markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
@@ -255,15 +253,19 @@ def update_shm_train():
 
 def update_shm_camera():
     global shm_camera
-    bytedata = shm_camera.read()
-    double_number = struct.unpack('<24d', bytedata)
-    map_widget.delete_all_polygon()
-    positionlist = []
-    for i in range(0,24,2):
-        if double_number[i+1] != 0.0 or double_number[i] != 0.0:
-            positionlist.append((double_number[i+1],double_number[i]))
-    if len(positionlist) > 4:            
-        viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+
+    for item in shm_camera:
+        bytedata = shm_camera[item].read()
+        double_number = struct.unpack('<24d', bytedata)
+        map_widget.delete_all_polygon()
+        positionlist = []
+        for i in range(0,24,2):
+            if double_number[i+1] != 0.0 or double_number[i] != 0.0:
+                positionlist.append((double_number[i+1],double_number[i]))
+        if len(positionlist) > 3:            
+            viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+
+                    
 
 def update_map_center(lat,lng):
     center = map_widget.get_position()
@@ -287,7 +289,7 @@ def timerproc_socket():
             timelabel_var.set(timestr[3])
         response = remote_socket.send("train position all\n");
         update_socket_marker(response)
-        response = remote_socket.send("camera get viewport\n");
+        response = remote_socket.send("camera get root viewport\n");
         update_socket_viewport(response)
         polling_timer=threading.Timer(remote_polling_second,timerproc_socket)
         polling_timer.start()
@@ -387,7 +389,6 @@ def server_exit_dialog():
     dialog.title("3D view close")
 
     def on_exit_ok():
-
         global field_isloaded
         global polling_timer
         response = remote_socket.send("exit\n");
@@ -439,7 +440,7 @@ def clock_dialog():
         minute = minute_spinbox.get()
         message = "clock set time " + hour + ":" + minute + "\n"
         response = remote_socket.send(message);
-        messagebox.showinfo("receive",response)
+        #messagebox.showinfo("receive",response)
     def close_selected_time():
         dialog.destroy()
 
@@ -489,7 +490,7 @@ def speed_dialog():
             message += str(scaleS.get()) + "\n"
             labeltxt += str(scaleS.get())
         response = remote_socket.send(message);            
-        messagebox.showinfo("receive",response)
+        #messagebox.showinfo("receive",response)
         speedlabel_var.set(labeltxt)
     def close_selected_speed():
         dialog.destroy()
@@ -525,15 +526,36 @@ def speed_dialog():
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
-def check_centermap():
-    global tracking_id
-    global tracking_ver
-    if centermap_var.get() == 1:
-        tracking_id = tracking_ver.get()
-    else:
-        tracking_id = None
+def camera_add_dialog():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("400x300")
+    dialog.title("New Camera add")
 
-def camera_dialog():
+    lbl = tkinter.Label(dialog,text='Name')
+    lbl.place(x=30, y=10)
+
+    txt = tkinter.Entry(dialog,width=20)
+    txt.place(x=200, y=10)
+    defaultname = "CAMERA" + str(len(windows));
+    txt.insert(0,defaultname)
+
+    def on_button_ok():
+        cname = txt.get();
+        message = "camera add " + txt.get() + "\n"
+        response = remote_socket.send(message);
+        windows[txt.get()] = "NONE";
+        dialog.destroy()
+
+    def on_button_no():
+        dialog.destroy()
+    
+    ok_button = tkinter.Button(dialog, text="  OK  ", command=on_button_ok)
+    no_button = tkinter.Button(dialog, text="Close", command=on_button_no)    
+    ok_button.place(x=50,y=80)
+    no_button.place(x=250,y=80)
+
+    
+def camera_tracking_dialog():
     global tracking_ver
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
@@ -541,35 +563,43 @@ def camera_dialog():
     dialog.title("Camera Tracking")
 
     def set_camera_tracking():
-        global tracking_id
-        tracking_id = combo.get()
-        message = "camera set tracking " + tracking_id + "\n"
+        c_id = ccombo.get()
+        t_id = tcombo.get()
+        message = "camera set " + c_id + " tracking " + t_id + "\n"
         response = remote_socket.send(message);
-        if tracking_id == "NONE":
-            centermap_button.config(state=tkinter.DISABLED)
-        else:
-            centermap_button.config(state=tkinter.NORMAL)
-        messagebox.showinfo("receive",response)
+        windows[c_id] = t_id;
+        #messagebox.showinfo("receive",response)
+        dialog.destroy()        
     def close_camera_tracking():
         dialog.destroy()        
 
-    name_label = ttk.Label(dialog, text="train ID:")
-    name_label.grid(row=0, column=0, padx=5, pady=5)
+    cname_label = ttk.Label(dialog, text="camera ID:")
+    cname_label.grid(row=0, column=0, padx=5, pady=5)
 
-    options = []
+    tname_label = ttk.Label(dialog, text="train ID:")
+    tname_label.grid(row=1, column=0, padx=5, pady=5)
+
+    c_options = []
+    for item in windows:
+        c_options.append(item)
+    camera_ver = tkinter.StringVar()
+    ccombo = ttk.Combobox ( dialog , values = c_options , textvariable = camera_ver , height = 5)
+    ccombo.grid(row=0, column=1, columnspan=2, pady=5)
+
+    t_options = []
     for item in markers:
         if item != "sample":
-            options.append( item )
+            t_options.append( item )
         else:
-            options.append("NONE")
+            t_options.append("NONE")
     tracking_ver = tkinter.StringVar()
-    combo = ttk.Combobox ( dialog , values = options , textvariable = tracking_ver , height = 5)
-    combo.grid(row=0, column=1, columnspan=2, pady=5)
+    tcombo = ttk.Combobox ( dialog , values = t_options , textvariable = tracking_ver , height = 5)
+    tcombo.grid(row=1, column=1, columnspan=2, pady=5)
 
     ok_button = ttk.Button(dialog, text="Camera Tracking ", command=set_camera_tracking)
-    ok_button.grid(row=3, column=0, pady=10)
+    ok_button.grid(row=3, column=1, pady=10)
     close_button = ttk.Button(dialog, text="Close ", command=close_camera_tracking)
-    close_button.grid(row=3, column=2, pady=10)
+    close_button.grid(row=3, column=3, pady=10)
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
@@ -579,7 +609,7 @@ def run_command():
     response = remote_socket.send("run\n");
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
-    messagebox.showinfo("receive",response)
+    #messagebox.showinfo("receive",response)
     if remote_host == "localhost":
         t=threading.Thread(target=timerproc_shm)
     else:
@@ -591,7 +621,7 @@ def pause_command():
     response = remote_socket.send("pause\n");
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
-    messagebox.showinfo("receive",response)
+    #messagebox.showinfo("receive",response)
     if polling_timer.is_alive():
         polling_timer.cancel()
 
@@ -625,9 +655,14 @@ menu_button_1.pack(side="left", padx=10)
 
 # setting menu dropdown
 menu1 = tkinter.Menu(menu_button_1, tearoff=0)
+camera_menu = tkinter.Menu(menu1, tearoff=0)
 menu1.add_command(label="clock", command=clock_dialog)
 menu1.add_command(label="speed", command=speed_dialog)
-menu1.add_command(label="camera", command=camera_dialog)
+menu1.add_cascade(label="camera", menu=camera_menu)
+
+camera_menu.add_command(label="tracking", command=camera_tracking_dialog)
+camera_menu.add_command(label="New(add)", command=camera_add_dialog)
+
 menu_button_1.config(menu=menu1)
 menu1.entryconfig("clock", state=tkinter.DISABLED)
 menu1.entryconfig("speed", state=tkinter.DISABLED)
@@ -654,10 +689,10 @@ speedlabel_var.set("x 1.0")
 speedlabel = tkinter.Label(menu_frame,textvariable=speedlabel_var, bg="lightgray")
 speedlabel.pack(side="left", padx=10)
 
-centermap_var = tkinter.IntVar()
-centermap_button = tkinter.Checkbutton(menu_frame, text="Center map", variable=centermap_var, command=check_centermap)
-centermap_button.pack(side="left", padx=20)
-centermap_button.config(state=tkinter.DISABLED)
+#centermap_var = tkinter.IntVar()
+#centermap_button = tkinter.Checkbutton(menu_frame, text="Center map", variable=centermap_var, command=check_centermap)
+#centermap_button.pack(side="left", padx=20)
+#centermap_button.config(state=tkinter.DISABLED)
 
 #
 # create map widget
@@ -668,5 +703,6 @@ map_widget.pack(fill="both", expand=True)
 map_widget.set_zoom(2)
 
 markers = { "sample" : map_widget.set_marker( 0, 0, text="sample") }
+windows = { "root" : "NONE" }
 
 root_tk.mainloop()

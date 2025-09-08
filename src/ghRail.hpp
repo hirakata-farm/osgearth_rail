@@ -28,6 +28,8 @@
 #include <osgDB/ReadFile>
 #include <osgEarth/MapNode>
 #include <osgViewer/Viewer>
+#include <osgViewer/CompositeViewer>
+#include <osgEarth/EarthManipulator>
 #include <osgEarth/TerrainEngineNode>
 
 # include <nlohmann/json.hpp>
@@ -38,12 +40,15 @@ using namespace std;
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.2"
+#define GH_APP_REVISION "0.3"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
 #define GH_DEFAULT_SOCKET_PORT 57139
 #define GH_MAX_SOCKET 3
+
+#define GH_ELAPSED_THRESHOLD 1.0
+#define GH_SUN_AMBIENT 0.03
 
 /////////////////////////////////////////////////////////
 
@@ -79,7 +84,6 @@ using namespace std;
 #define GH_SHM_TYPE_CLOCK_TIME      0 // int 4 byte :  [sec]
 #define GH_SHM_TYPE_TRAIN_POSITION  1 // (char[32],double[2])x(numoftrains)  48xn byte : [id,lat,lng]
 #define GH_SHM_TYPE_CAMERA_VIEWPORT 2 // (double[2])x12  192 byte : [lat,lng]
-#define GH_SHM_COUNT 3
 // sizeof double 8
 // sizeof int    4
 // sizeof char   1
@@ -90,14 +94,33 @@ typedef struct
   int	size;
   int	shmid ;
   char	*addr ;
-} GH_SharedMemory ;
+} ghSharedMemory ;
 
 typedef struct
 {
   char train[32];
   double position[2];
-} GH_SHM_TrainPosition;
+} ghShmTrainPosition;
 
+typedef struct ghWindow
+{
+  std::string name;
+  osgViewer::View* view;
+  osgEarth::EarthManipulator *manipulator;
+  string tracking;
+  ghSharedMemory shm;
+  ghWindow *next;
+} ghWindow;
+
+ghWindow *ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height);
+ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height);
+void ghRemoveWindow( ghWindow *_win , std::string name);
+void ghDisposeWindow( ghWindow *_win );
+ghWindow *ghGetLastWindow(ghWindow *_win);
+int ghCountWindow(ghWindow *_win);
+ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
+void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
+int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 
 //
 //
@@ -108,7 +131,9 @@ class ghRail
     {
     public:
       int Setup(string fieldname);
-      void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::Viewer* _view );
+      //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::Viewer* _view );
+      //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::View* _view );
+      void Update(double simulationTime, osgEarth::MapNode* _map, ghWindow* _win);
 
       string GetConfigure();
 
@@ -124,30 +149,31 @@ class ghRail
       string GetUnits();
       string GetTimezoneStr();
       string GetDescription();
-      string SetTrainLabel(string trainid, bool flag);
+      bool SetTrainLabel(string trainid, bool flag);
       string GetTrainPosition(string trainid, double simtime);
       string GetTrainTimetable(string trainid);
       string GetTrainIcon(string trainid);
       bool IsLoaded();
       bool IsPlaying();
       void SetPlayPause(bool flag);
-      int InitShm(int shmkey,int shmtype);
+      int InitShmClock(int shmkey);
+      int InitShmTrain(int shmkey);
       int RemoveShm(int shmkey);      
       
-      string GetTrackingTrain();
-      bool SetTrackingTrain(string trainid);
+      //string GetTrackingTrain();
+      bool IsTrainID(string trainid);
 
       int GetTimeZoneMinutes();
       osgEarth::DateTime GetBaseDatetime();
-
 
     private:
       //vector<int> p_locomotives{-84,-60,-36,-12,12,36,60,84};   // 8 coaches Even obsolete
       //vector<int> p_locomotives{-96,-72,-48,-24,0,24,48,72,96};  // 9 coaches Odd obsolete
       string p_configure;
-      string p_tracking;
+      //string p_tracking;
       double p_previous_simulationTime;
-      osg::Vec3d p_prev_position_tracking;
+      //osg::Vec3d p_prev_position_tracking;
+      std::map<std::string, osg::Vec3d> p_prev_position_tracking;
       bool p_running;
       double p_clockspeed;
 
@@ -166,17 +192,18 @@ class ghRail
       std::map<std::string, nlohmann::json> p_station;
       int p_numlines;
       std::map<std::string, ghRailUnit> p_units;
-      GH_SharedMemory p_shm[GH_SHM_COUNT];
+      ghSharedMemory p_shm_clock;
+      ghSharedMemory p_shm_train;
       
       osgEarth::GeoPoint _calcGeoPoint(const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach);
       void _updateShmClockTime(double stime);
       void _updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position);
-      void _updateShmCameraViewport(osgViewer::Viewer* _view);
-      
+      void _updateShmCameraViewport(osgViewer::View* _view,ghSharedMemory shm);
+      double _getMinimumDistanceFromCamera(ghWindow *_win,osg::Vec3d position);
     };
 
 
-std::vector<osg::Vec3d> _calcCameraViewpoints(osgViewer::Viewer* _view);
+std::vector<osg::Vec3d> _calcCameraViewpoints(osgViewer::View* _view);
 
 #endif
 

@@ -50,6 +50,8 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "camera set tracking ",
   "camera get tracking ",
   "camera get viewport ",
+  "camera add ",
+  "camera remove ",
   "train label on ",
   "train label off ",  
   "train position ",
@@ -72,6 +74,54 @@ GH_COMMAND_ALTMODE_STRING[3] = {
   GH_STRING_CLAMP,
   GH_STRING_RELATIVE,
   GH_STRING_ABSOLUTE
+};
+
+std::vector<std::string> GH_RESERVED_STRING =
+{
+  GH_STRING_SET,
+  GH_STRING_GET,
+  GH_STRING_NOP,
+  GH_STRING_EXIT,
+  GH_STRING_CLOSE,
+  GH_STRING_START,
+  GH_STRING_RUN,
+  GH_STRING_STOP,
+  GH_STRING_PAUSE,
+  GH_STRING_CLOCK,
+  GH_STRING_TIME,
+  GH_STRING_SPEED,
+  GH_STRING_CAMERA,
+  GH_STRING_POSITION,
+  GH_STRING_LOOKAT,
+  GH_STRING_UPVEC,
+  GH_STRING_TRACKING,
+  GH_STRING_VIEWPORT,
+  GH_STRING_ROOT,
+  GH_STRING_NONE,
+  GH_STRING_ALL,
+  GH_STRING_ADD,
+  GH_STRING_FIELD,
+  GH_STRING_TRAIN,
+  GH_STRING_TIMEZONE,
+  GH_STRING_DESCRIPTION,
+  GH_STRING_LABEL,
+  GH_STRING_ON,
+  GH_STRING_OFF,
+  GH_STRING_TIMETABLE,
+  GH_STRING_ICON,
+  GH_STRING_CONFIG,
+  GH_STRING_MAXCLOCKSPEED,
+  GH_STRING_ALTMODE,
+  GH_STRING_CLAMP,
+  GH_STRING_RELATIVE,
+  GH_STRING_ABSOLUTE,
+  GH_STRING_DISPLAYDISTANCE,
+  GH_STRING_SHOW,
+  GH_STRING_STATUS,
+  GH_STRING_VERSION,
+  GH_STRING_SHM,
+  GH_STRING_REMOVE,
+  GH_STRING_OK
 };
 
   
@@ -114,13 +164,16 @@ ghRailParseCommand(string str) {
   int command_size = command.size();
   int argint = -1;
   double argdouble = -1;
-  cmd->type = GH_COMMAND_UNKNOWN; 
-  cmd->argstr = GH_STRING_NOP;
-  cmd->isexecute = false;
+  cmd->type = GH_COMMAND_UNKNOWN;
+  cmd->argstridx = 0;
+  cmd->argstr[0] = GH_STRING_NOP;
+  cmd->argstr[1] = GH_STRING_NOP;  
+  cmd->argnumidx = 0;
   cmd->argnum[0]  = 0.0;
   cmd->argnum[1]  = 0.0;
   cmd->argnum[2]  = 0.0;
-  
+  cmd->isexecute = false;
+
   if ( command_size > 0 )  {
     if ( command[0] == GH_STRING_EXIT ) {
       cmd->type = GH_COMMAND_EXIT;
@@ -139,7 +192,8 @@ ghRailParseCommand(string str) {
 	if ( command[1] == GH_STRING_SET && command_size == 3 ) {
 	  //  get arg
 	  cmd->type = GH_COMMAND_FIELD_SET;
-	  cmd->argstr = command[2];
+	  cmd->argstr[0] = command[2];
+	  cmd->argstridx = 1;
 	} else if ( command[1] == GH_STRING_GET && command_size == 2 ) {
 	  cmd->type = GH_COMMAND_FIELD_GET;
 	} else if ( command[1] == GH_STRING_GET && command_size == 3 ) {
@@ -179,11 +233,13 @@ ghRailParseCommand(string str) {
 	      if ( argint > -1 && argint < 60 ) {
 		cmd->argnum[1]  = (double)argint;
 		cmd->type = GH_COMMAND_CLOCK_SET_TIME;
+		cmd->argnumidx = 2;
 	      }
 	    }
 	  } else if ( command[2] == GH_STRING_SPEED && command_size == 4 ) {
 	    cmd->argnum[0] = std::stod(command[3]);
 	    cmd->type = GH_COMMAND_CLOCK_SET_SPEED;
+	    cmd->argnumidx = 1;
 	  } else {
 	    // NOP
 	  }
@@ -202,41 +258,70 @@ ghRailParseCommand(string str) {
     } else if ( command[0] == GH_STRING_CAMERA ) {
       if ( command[1] == GH_STRING_SET ) {
 	//  get arg
-	if ( command[2] == GH_STRING_POSITION && command_size == 6 )  {
+	if ( command[3] == GH_STRING_POSITION && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_POS;
+	  cmd->argstr[0] = command[2]; // Camera Name
 	  cmd->argnum[0] = std::stod(command[3]);
 	  cmd->argnum[1] = std::stod(command[4]);
 	  cmd->argnum[2] = std::stod(command[5]);
-	} else if ( command[2] == GH_STRING_LOOKAT && command_size == 6 )  {
+	  cmd->argnumidx = 3;
+	  cmd->argstridx = 1;	  
+	} else if ( command[3] == GH_STRING_LOOKAT && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_LOOK;
+	  cmd->argstr[0] = command[2]; // Camera Name
 	  cmd->argnum[0] = std::stod(command[3]);
 	  cmd->argnum[1] = std::stod(command[4]);
 	  cmd->argnum[2] = std::stod(command[5]);
-	} else if ( command[2] == GH_STRING_UPVEC && command_size == 6 )  {
+	  cmd->argnumidx = 3;
+	  cmd->argstridx = 1;	  
+	} else if ( command[3] == GH_STRING_UPVEC && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_UP;
+	  cmd->argstr[0] = command[2]; // Camera Name
 	  cmd->argnum[0] = std::stod(command[3]);
 	  cmd->argnum[1] = std::stod(command[4]);
 	  cmd->argnum[2] = std::stod(command[5]);
-	} else if ( command[2] == GH_STRING_TRACKING && command_size == 4 )  {
+	  cmd->argnumidx = 3;
+	  cmd->argstridx = 1;	  
+	} else if ( command[3] == GH_STRING_TRACKING && command_size == 5 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_TRACK;
-	  cmd->argstr = command[3];
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstr[1] = command[4];  // train ID
+	  cmd->argstridx = 2;	  
 	} else {
 	  // NOP
 	}
       } else if ( command[1] == GH_STRING_GET ) {
-	if ( command[2] == GH_STRING_POSITION && command_size == 3 )  {
+	if ( command[3] == GH_STRING_POSITION && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_POS;
-	} else if ( command[2] == GH_STRING_LOOKAT && command_size == 3 )  {
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  
+	} else if ( command[3] == GH_STRING_LOOKAT && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_LOOK;
-	} else if ( command[2] == GH_STRING_UPVEC && command_size == 3 )  {
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  	  
+	} else if ( command[3] == GH_STRING_UPVEC && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_UP;
-	} else if ( command[2] == GH_STRING_TRACKING && command_size == 3 )  {
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  
+	} else if ( command[3] == GH_STRING_TRACKING && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_TRACK;
-	} else if ( command[2] == GH_STRING_VIEWPORT && command_size == 3 )  {
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  	  
+	} else if ( command[3] == GH_STRING_VIEWPORT && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_VIEWPORT;
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  	  
 	} else {
 	  // NOP
 	}
+      } else if ( command[1] == GH_STRING_ADD && command_size == 3 ) {
+	cmd->type = GH_COMMAND_CAMERA_ADD;
+	cmd->argstr[0] = command[2]; // Camera Name
+	cmd->argstridx = 1;	  	  	
+      } else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
+	cmd->type = GH_COMMAND_CAMERA_REMOVE;
+	cmd->argstr[0] = command[2]; // Camera Name
+	cmd->argstridx = 1;	  	  		
       } else {
 	// NOP
       }
@@ -244,22 +329,27 @@ ghRailParseCommand(string str) {
       if ( command[1] == GH_STRING_LABEL ) {
 	if ( command[2] == GH_STRING_ON && command_size == 4 ) {
 	    cmd->type = GH_COMMAND_TRAIN_LABEL_ON;
-	    cmd->argstr = command[3];
+	    cmd->argstr[0] = command[3];
+	    cmd->argstridx = 1;	  	  		
 	} else if ( command[2] == GH_STRING_OFF && command_size == 4 ) {
 	    cmd->type = GH_COMMAND_TRAIN_LABEL_OFF;
-	    cmd->argstr = command[3];
+	    cmd->argstr[0] = command[3];
+	    cmd->argstridx = 1;	  	  			    
 	} else {
 	  // NOP
 	}
       } else if ( command[1] == GH_STRING_POSITION && command_size == 3  ) {
 	cmd->type = GH_COMMAND_TRAIN_POSITION;
-	cmd->argstr = command[2];
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  		
       } else if ( command[1] == GH_STRING_TIMETABLE  && command_size == 3 ) {
 	cmd->type = GH_COMMAND_TRAIN_TIMETABLE;
-	cmd->argstr = command[2];
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  			
       } else if ( command[1] == GH_STRING_ICON  && command_size == 3 ) {
 	cmd->type = GH_COMMAND_TRAIN_ICON;
-	cmd->argstr = command[2];
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  				
       } else {
 	// NOP
       }
@@ -268,22 +358,27 @@ ghRailParseCommand(string str) {
 	  if ( command[2] == GH_STRING_MAXCLOCKSPEED && command_size == 4 ) {
 	    cmd->type = GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED;
 	    cmd->argnum[0] = std::stod(command[3]);
+	    cmd->argnumidx = 1;	  	  			
 	  } else if ( command[2] == GH_STRING_ALTMODE && command_size == 4 ) {
 	    if ( command[3] == GH_STRING_CLAMP ) {
 	      cmd->type = GH_COMMAND_CONFIG_SET_ALTMODE;
 	      cmd->argnum[0] = GH_ALTMODE_CLAMP;
+	      cmd->argnumidx = 1;	  	  			
 	    } else if ( command[3] == GH_STRING_RELATIVE ) {
 	      cmd->type = GH_COMMAND_CONFIG_SET_ALTMODE;
 	      cmd->argnum[0] = GH_ALTMODE_RELATIVE;
+	      cmd->argnumidx = 1;	  	  				      
 	    } else if ( command[3] == GH_STRING_ABSOLUTE ) {
 	      cmd->type = GH_COMMAND_CONFIG_SET_ALTMODE;
 	      cmd->argnum[0] = GH_ALTMODE_ABSOLUTE;
+	      cmd->argnumidx = 1;	  	  				      
 	    } else {
 	      // NOP
 	    }
 	  } else if ( command[2] == GH_STRING_DISPLAYDISTANCE && command_size == 4 ) {
 	    cmd->type = GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE;
 	    cmd->argnum[0] = std::stod(command[3]);
+	    cmd->argnumidx = 1;	  	  				    
 	  } else {
 	    // NOP
 	  }
@@ -301,19 +396,22 @@ ghRailParseCommand(string str) {
 	  // NOP
       }
     } else if ( command[0] == GH_STRING_SHM ) {
-      if ( command[1] == GH_STRING_SET && command_size == 4 ) {
-	if ( command[2] == GH_STRING_CLOCK && command[3] == GH_STRING_TIME ) {
+      if ( command[1] == GH_STRING_SET ) {
+	if ( command[2] == GH_STRING_CLOCK && command[3] == GH_STRING_TIME && command_size == 4 ) {
 	  cmd->type = GH_COMMAND_SHM_CLOCK_TIME;
-	} else if ( command[2] == GH_STRING_TRAIN && command[3] == GH_STRING_POSITION ) {
+	} else if ( command[2] == GH_STRING_TRAIN && command[3] == GH_STRING_POSITION && command_size == 4 ) {
 	  cmd->type = GH_COMMAND_SHM_TRAIN_POS;
-	} else if ( command[2] == GH_STRING_CAMERA &&  command[3] == GH_STRING_VIEWPORT ) {
+	} else if ( command[2] == GH_STRING_CAMERA && command[4] == GH_STRING_VIEWPORT && command_size == 5 ) {
 	  cmd->type = GH_COMMAND_SHM_CAMERA_VIEW;
+	  cmd->argstr[0] = command[3];
+	  cmd->argstridx = 1;	  	  			
 	} else {
 	  // NOP
 	}
       }	else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
 	cmd->type = GH_COMMAND_SHM_REMOVE;
 	cmd->argnum[0] = std::stod(command[2]);
+	cmd->argnumidx = 1;	  	  			
       }  else {
 	// NOP
       }
@@ -332,7 +430,7 @@ int
 ghRailExecuteCommand( ghCommandQueue *cmd,
 		      int socket,
 		      ghRail *rail,
-		      osgViewer::Viewer* _view,
+		      ghWindow* _win,
 		      osgEarth::SkyNode* _sky,
 		      double simtime ) {
 
@@ -340,141 +438,171 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
   if ( cmd == NULL ) return retval;
   if ( cmd->isexecute ) return retval; // Already execute
 
-  std::string result = "Geoglyph:";
-  const char* exitmsg = "Geoglyph: osgearth_rail exited.\n";
-  const char* closemsg = "Geoglyph: osgearth_rail closed.\n";
-  
-  switch (cmd->type) {
-  case GH_COMMAND_EXIT:
-    send(socket, exitmsg, std::strlen(exitmsg), 0);
-    cmd->isexecute = true;    
-    retval = GH_POST_EXECUTE_EXIT;
-    return retval;
-    break;
-  case GH_COMMAND_CLOSE:
-    send(socket, closemsg, std::strlen(closemsg), 0);
-    cmd->isexecute = true;    
-    retval = GH_POST_EXECUTE_CLOSE;
-    return retval;
-    break;
-  case GH_COMMAND_START:
-    result += ghRailCommandStart(cmd,rail);
-    break;
-  case GH_COMMAND_STOP:
-    result += ghRailCommandStop(cmd,rail);
-    break;
-  case GH_COMMAND_FIELD_SET:
-    result += ghRailCommandFieldSet(cmd,rail,_sky);
-    retval = GH_POST_EXECUTE_TIMEZONE;
-    break;
-  case GH_COMMAND_FIELD_GET:
-    result += ghRailCommandFieldGet(cmd,rail);
-    break;
-  case GH_COMMAND_FIELD_GET_TRAIN:
-    result += ghRailCommandFieldTrain(cmd,rail);
-    break;
-  case GH_COMMAND_FIELD_GET_TIMEZONE:
-    result += ghRailCommandFieldTimezone(cmd,rail);
-    break;
-  case GH_COMMAND_FIELD_GET_DESC:
-    result += ghRailCommandFieldDescription(cmd,rail);
-    break;
-  case GH_COMMAND_CLOCK_SET_TIME:
-    result += ghRailCommandClockSetTime(cmd,rail,_sky);
-    retval = GH_POST_EXECUTE_SETCLOCK;
-    break;
-  case GH_COMMAND_CLOCK_GET_TIME:
-    result += ghRailCommandClockGetTime(cmd,rail,_sky);
-    break;
-  case GH_COMMAND_CLOCK_SET_SPEED:
-    result += ghRailCommandClockSetSpeed(cmd,rail);
-    break;
-  case GH_COMMAND_CLOCK_GET_SPEED:
-    result += ghRailCommandClockGetSpeed(cmd,rail);
-    break;
-  case GH_COMMAND_TRAIN_LABEL_ON:
-    result += ghRailCommandTrainLabelOn(cmd,rail);
-    break;
-  case GH_COMMAND_TRAIN_LABEL_OFF:
-    result += ghRailCommandTrainLabelOff(cmd,rail);
-    break;
-  case GH_COMMAND_TRAIN_POSITION:
-    result += ghRailCommandTrainPosition(cmd,rail,simtime);
-    break;
-  case GH_COMMAND_TRAIN_TIMETABLE:
-    result += ghRailCommandTrainTimetable(cmd,rail);
-    break;
-  case GH_COMMAND_TRAIN_ICON:
-    result += ghRailCommandTrainIcon(cmd,rail);
-    break;
-  case GH_COMMAND_CAMERA_SET_POS:
-    result += ghRailCommandCameraSetPosition(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_GET_POS:
-    result += ghRailCommandCameraGetPosition(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_SET_LOOK:
-    result += ghRailCommandCameraSetLookat(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_GET_LOOK:
-    result += ghRailCommandCameraGetLookat(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_SET_UP:
-    result += ghRailCommandCameraSetUpvec(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_GET_UP:
-    result += ghRailCommandCameraGetUpvec(cmd,rail,_view);
-    break;
-  case GH_COMMAND_CAMERA_SET_TRACK:
-    result += ghRailCommandCameraSetTracking(cmd,rail);
-    break;
-  case GH_COMMAND_CAMERA_GET_TRACK:
-    result += ghRailCommandCameraGetTracking(cmd,rail);
-    break;
-  case GH_COMMAND_CAMERA_GET_VIEWPORT:
-    result += ghRailCommandCameraViewport(cmd,_view);
-    break;
-  case GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED:
-    result += ghRailCommandConfigSetMaxspeed(cmd,rail);
-    break;
-  case GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED:
-    result += ghRailCommandConfigGetMaxspeed(cmd,rail);
-    break;
-  case GH_COMMAND_CONFIG_SET_ALTMODE:
-    result += ghRailCommandConfigSetAltmode(cmd,rail);
-    break;
-  case GH_COMMAND_CONFIG_GET_ALTMODE:
-    result += ghRailCommandConfigGetAltmode(cmd,rail);
-    break;
-  case GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE:
-    result += ghRailCommandConfigSetDisplaydistance(cmd,rail);
-    break;
-  case GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE:
-    result += ghRailCommandConfigGetDisplaydistance(cmd,rail);
-    break;
-  case GH_COMMAND_SHM_CLOCK_TIME:
-    result += ghRailCommandShmSet(GH_SHM_TYPE_CLOCK_TIME,cmd,rail);
-    break;
-  case GH_COMMAND_SHM_TRAIN_POS:
-    result += ghRailCommandShmSet(GH_SHM_TYPE_TRAIN_POSITION,cmd,rail);
-    break;
-  case GH_COMMAND_SHM_CAMERA_VIEW:
-    result += ghRailCommandShmSet(GH_SHM_TYPE_CAMERA_VIEWPORT,cmd,rail);
-    break;
-  case GH_COMMAND_SHM_REMOVE:
-    result += ghRailCommandShmRemove(cmd,rail);
-    break;
-  case GH_COMMAND_SHOW_STATUS:
-    result += ghRailCommandShowStatus(cmd,rail);
-    break;
-  case GH_COMMAND_SHOW_VERSION:
-    result += ghRailCommandShowVersion();
-    break;
-  default:
-    // NOP
-    result += GH_COMMAND_MESSAGE_UNKOWN;
+  char resultstring[GH_EXECUTE_BUFFER_SIZE];
+  int  resultcode;
+
+  memset(&resultstring[0], 0, sizeof(char)*GH_EXECUTE_BUFFER_SIZE);
+
+  if ( rail->IsLoaded() ) {
+    // simulation data loaded
+    switch (cmd->type) {
+    case GH_COMMAND_EXIT:
+      retval = GH_POST_EXECUTE_EXIT;
+      resultcode = GH_EXECUTE_SUCCESS;      
+      break;
+    case GH_COMMAND_CLOSE:
+      retval = GH_POST_EXECUTE_CLOSE;
+      resultcode = GH_EXECUTE_SUCCESS;      
+      break;
+    case GH_COMMAND_START:
+      rail->SetPlayPause(true);
+      resultcode = GH_EXECUTE_SUCCESS;
+      break;
+    case GH_COMMAND_STOP:
+      rail->SetPlayPause(false);
+      resultcode = GH_EXECUTE_SUCCESS;      
+      break;
+    case GH_COMMAND_FIELD_GET:
+      resultcode = ghRailCommandFieldGet(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_FIELD_GET_TRAIN:
+      resultcode = ghRailCommandFieldTrain(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_FIELD_GET_TIMEZONE:
+      resultcode = ghRailCommandFieldTimezone(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_FIELD_GET_DESC:
+      resultcode = ghRailCommandFieldDescription(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_CLOCK_SET_TIME:
+      resultcode = ghRailCommandClockSetTime(cmd,rail,_sky);
+      if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_SETCLOCK;
+      break;
+    case GH_COMMAND_CLOCK_GET_TIME:
+      resultcode = ghRailCommandClockGetTime(cmd,rail,_sky,&resultstring[0]);
+      break;
+    case GH_COMMAND_CLOCK_SET_SPEED:
+      resultcode = ghRailCommandClockSetSpeed(cmd,rail);
+      break;
+    case GH_COMMAND_CLOCK_GET_SPEED:
+      resultcode = ghRailCommandClockGetSpeed(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_TRAIN_LABEL_ON:
+      resultcode = ghRailCommandTrainLabel(cmd,rail,true);
+      break;
+    case GH_COMMAND_TRAIN_LABEL_OFF:
+      resultcode = ghRailCommandTrainLabel(cmd,rail,false);
+      break;
+    case GH_COMMAND_TRAIN_POSITION:
+      resultcode = ghRailCommandTrainPosition(cmd,rail,simtime,&resultstring[0]);
+      break;
+    case GH_COMMAND_TRAIN_TIMETABLE:
+      resultcode = ghRailCommandTrainTimetable(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_TRAIN_ICON:
+      resultcode = ghRailCommandTrainIcon(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_POS:
+      resultcode = ghRailCommandCameraSetPosition(cmd,rail,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_POS:
+      resultcode = ghRailCommandCameraGetPosition(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_LOOK:
+      resultcode = ghRailCommandCameraSetLookat(cmd,rail,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_LOOK:
+      resultcode = ghRailCommandCameraGetLookat(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_UP:
+      resultcode = ghRailCommandCameraSetUpvec(cmd,rail,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_UP:
+      resultcode = ghRailCommandCameraGetUpvec(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_TRACK:
+      resultcode = ghRailCommandCameraSetTracking(cmd,rail,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_TRACK:
+      resultcode = ghRailCommandCameraGetTracking(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_GET_VIEWPORT:
+      resultcode = ghRailCommandCameraViewport(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_ADD:
+      resultcode = ghRailCommandCameraAdd(cmd,rail,_win);
+      if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_ADD;
+      break;
+    case GH_COMMAND_CAMERA_REMOVE:
+      resultcode = ghRailCommandCameraRemove(cmd,rail,_win);
+      if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_REMOVE;
+      break;
+    case GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED:
+      resultcode = ghRailCommandConfigSetMaxspeed(cmd,rail);
+      break;
+    case GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED:
+      resultcode = ghRailCommandConfigGetMaxspeed(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_CONFIG_SET_ALTMODE:
+      resultcode = ghRailCommandConfigSetAltmode(cmd,rail);
+      break;
+    case GH_COMMAND_CONFIG_GET_ALTMODE:
+      resultcode = ghRailCommandConfigGetAltmode(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE:
+      resultcode = ghRailCommandConfigSetDisplaydistance(cmd,rail);
+      break;
+    case GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE:
+      resultcode = ghRailCommandConfigGetDisplaydistance(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHM_CLOCK_TIME:
+      resultcode = ghRailCommandShmSet(GH_SHM_TYPE_CLOCK_TIME,cmd,rail,NULL,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHM_TRAIN_POS:
+      resultcode = ghRailCommandShmSet(GH_SHM_TYPE_TRAIN_POSITION,cmd,rail,NULL,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHM_CAMERA_VIEW:
+      resultcode = ghRailCommandShmSet(GH_SHM_TYPE_CAMERA_VIEWPORT,cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHM_REMOVE:
+      resultcode = ghRailCommandShmRemove(cmd,rail);
+      break;
+    case GH_COMMAND_SHOW_STATUS:
+      resultcode = ghRailCommandShowStatus(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHOW_VERSION:
+      resultcode = ghRailCommandShowVersion(&resultstring[0]);
+      break;
+    default:
+      resultcode = GH_EXECUTE_UNKNOWN;
+    }
+  } else {
+    // Not loaded
+    switch (cmd->type) {
+    case GH_COMMAND_EXIT:
+      retval = GH_POST_EXECUTE_EXIT;
+      resultcode = GH_EXECUTE_SUCCESS;      
+      break;
+    case GH_COMMAND_CLOSE:
+      retval = GH_POST_EXECUTE_CLOSE;
+      resultcode = GH_EXECUTE_SUCCESS;      
+      break;
+    case GH_COMMAND_FIELD_SET:
+      resultcode = ghRailCommandFieldSet(cmd,rail,_sky);
+      if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_TIMEZONE;
+      break;
+    case GH_COMMAND_SHOW_STATUS:
+      resultcode = ghRailCommandShowStatus(cmd,rail,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_SHOW_VERSION:
+      resultcode = ghRailCommandShowVersion(&resultstring[0]);
+      break;
+    default:
+      resultcode = GH_EXECUTE_NOT_LOADED;
+    }
   }
 
+  std::string result = ghRailReturnMessage(cmd,resultcode,&resultstring[0]);
   const char* retmsg = result.c_str();
   send(socket, retmsg, std::strlen(retmsg), 0);
   cmd->isexecute = true;    
@@ -482,100 +610,113 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
   return retval;
 }
 
-
 std::string
-ghRailCommandStart(ghCommandQueue *cmd, ghRail *rail) {
+ghRailReturnMessage(ghCommandQueue *cmd,int code, char *message){
 
-  if ( rail->IsLoaded() ) {
-    rail->SetPlayPause(true);
-    return GH_COMMAND_MESSAGE[GH_COMMAND_START];
+  std::string result = "Geoglyph:";
+  result += GH_COMMAND_MESSAGE[cmd->type];
+  int messagelength = std::strlen(message);
+  //std::cout << messagelength << std::endl;
+
+  for (int i = 0; i < cmd->argstridx; i++) {
+    result += " ";
+    result += cmd->argstr[i];
+  }
+  if ( code == GH_EXECUTE_SUCCESS ) {
+    // NOP
+  } else if ( code == GH_EXECUTE_UNKNOWN ) {
+    result += " Unknown";
+  } else if ( code == GH_EXECUTE_NOT_LOADED ) {
+    result += " not loaded";
+  } else if ( code == GH_EXECUTE_CANNOT_LOAD ) {
+    result += " cannot load";
+  } else if ( code == GH_EXECUTE_SIZE_ERROR ) {
+    result += " size error";
+  } else if ( code == GH_EXECUTE_NOT_FOUND ) {
+    result += " not found";
+  } else if ( code == GH_EXECUTE_ALREADY_EXIST ) {
+    result += " already exist";
+  } else if ( code == GH_EXECUTE_RESERVED ) {
+    result += " cannot use reserved keywod";
+  } else if ( code == GH_EXECUTE_CANNOT_GET ) {
+    result += " cannot get data";
+  } else if ( code == GH_EXECUTE_CANNOT_ALLOCATE ) {
+    result += " cannot allocate data";
   } else {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+    // NOP
+  }
+  for (int i = 0; i < cmd->argnumidx; i++) {
+    result += " ";
+    result += std::to_string(cmd->argnum[i]);
   }
 
-}
-
-std::string
-ghRailCommandStop(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( rail->IsLoaded() ) {
-    rail->SetPlayPause(false);
-    return GH_COMMAND_MESSAGE[GH_COMMAND_STOP];
-  } else {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+  if ( messagelength > 0 ) {
+    result += " ";
+    std::string messagestr(message); 
+    result += messagestr.c_str();
   }
- 
+  
+  return result;
 }
 
-std::string
+
+int
 ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky) {
   int res = -1;
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_FIELD_SET];
-  ret += cmd->argstr;
-  if ( rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_ALREADY_LOADED;
-  }
-  res = rail->Setup(cmd->argstr);
+  res = rail->Setup(cmd->argstr[0]);
   if (  res == GH_SETUP_RESULT_OK ) {
-    ret += " loaded\n";
     _sky->setDateTime( rail->GetBaseDatetime());
+    return GH_EXECUTE_SUCCESS;
   } else {
-    ret += " can NOT load\n";
+    std::cout << "Error field code " << res << std::endl;
+    return GH_EXECUTE_CANNOT_LOAD;
   }
-  return ret;
 }
-std::string
-ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_FIELD_GET];
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+int
+ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail, char *result) {
+
+  std::string ret(rail->GetConfigure());
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
   }
-  ret += rail->GetConfigure();
-  ret += "\n";
-  return ret;
-}
-
-std::string
-ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_FIELD_GET_TRAIN];
-  ret += rail->GetUnits();
-  ret += "\n";  
-  return ret;
-
-}
-std::string
-ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_FIELD_GET_TIMEZONE];
-  ret += rail->GetTimezoneStr();
-  ret += "\n";  
-  return ret;
-}
-std::string
-ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-   return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_FIELD_GET_DESC];
-  ret += rail->GetDescription();
-  ret += "\n";  
-  return ret;
 }
 
-std::string
+int
+ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail, char *result) {
+  std::string ret(rail->GetUnits());
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+int
+ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail, char *result) {
+  std::string ret(rail->GetTimezoneStr());
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+int
+ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail, char *result) {
+  std::string ret(rail->GetDescription());
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
 ghRailCommandClockSetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
 
   osgEarth::DateTime dt = _sky->getDateTime();
 
@@ -603,23 +744,11 @@ ghRailCommandClockSetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *
   }
   _sky->setDateTime( osgEarth::DateTime( (int)year, (int)month, (int)days, (double)dhours ) );
 
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CLOCK_SET_TIME];
-  std::string s_hour = std::to_string(hours);
-  std::string s_min = std::to_string(mins);
-  ret += s_hour;
-  ret += ":";
-  ret += s_min;
-  ret += "\n";
-  return ret;
-  
+  return GH_EXECUTE_SUCCESS;
 }
 
-std::string
-ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
+int
+ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky, char *result) {
 
   osgEarth::DateTime dt = _sky->getDateTime();
 
@@ -644,227 +773,277 @@ ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *
   hours = floor(dhours);
   mins = (int) ( ( dhours - hours ) * 60 ) ;
 
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CLOCK_GET_TIME];
-  std::string s_hour = std::to_string(hours);
+  std::string ret = std::to_string(hours);
   std::string s_min = std::to_string(mins);
-    
-  ret += s_hour;
   ret += ":";
   ret += s_min;
-  ret += "\n";
-  return ret;
+
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
   
 }
 
-std::string
+int
 ghRailCommandClockSetSpeed(ghCommandQueue *cmd, ghRail *rail) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
   rail->SetClockSpeed(cmd->argnum[0]);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CLOCK_SET_SPEED];
-  double speed = rail->GetClockSpeed();
-  std::string s_sp = std::to_string(speed);
-  ret += s_sp;
-  ret += "\n";
-  return ret;
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CLOCK_GET_SPEED];
+
+int
+ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail, char *result) {
   double speed = rail->GetClockSpeed();
-  std::string s_sp = std::to_string(speed);
-  ret += s_sp;
-  ret += "\n";
-  return ret;
+  std::string ret = std::to_string(speed);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
+ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail,bool flag) {
+  bool ret ;
+  if ( cmd->argstr[0] == GH_STRING_ALL ) {
+    ret = rail->SetTrainLabel("",flag);
+  } else {
+    ret = rail->SetTrainLabel(cmd->argstr[0],flag);
+  }
+  if ( ret ) {
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
+  }
+}
+
+int
+ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime,char *result) {
+  
+  std::string ret = " ";
+  if ( cmd->argstr[0] == GH_STRING_ALL ) {
+    ret += rail->GetTrainPosition("",simtime);
+  } else {
+    if ( rail->IsTrainID(cmd->argstr[0]) ) {
+      ret += rail->GetTrainPosition(cmd->argstr[0],simtime);
+    } else {
+      return GH_EXECUTE_NOT_FOUND;
+    }
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
+ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail,char *result) {
+
+  std::string ret = " ";
+  if ( rail->IsTrainID(cmd->argstr[0]) ) {
+    ret += rail->GetTrainTimetable(cmd->argstr[0]);
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
+ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail,char *result) {
+  std::string ret = " ";
+  if ( rail->IsTrainID(cmd->argstr[0]) ) {
+    ret += rail->GetTrainIcon(cmd->argstr[0]);
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
 
-std::string
-ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
+int
+ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
-
-  //osgEarth::GeoPoint eyeGeo;
-  //eyeGeo.fromWorld( _map->getMapSRS(), eye );
-  
   osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
   osg::Matrixd mat ;
   mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-  _view->getCameraManipulator()->setByInverseMatrix(mat);
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_SET_POS];
-  ret += std::to_string(eye2.x());
-  ret += " ";
-  ret += std::to_string(eye2.y());
-  ret += " ";
-  ret += std::to_string(eye2.z());
-  ret += "\n";
-  return ret;
-
+  tmp->view->getCameraManipulator()->setByInverseMatrix(mat);
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
 
+int
+ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,char *result) {
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
-
-  //osgEarth::GeoPoint eyeGeo;
-  //eyeGeo.fromWorld( _map->getMapSRS(), eye );
   
   osg::Vec3 position = WGS84.geocentricToGeodetic(eye);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_POS];
-  ret += std::to_string(position.x());
+  std::string ret = std::to_string(position.x());
   ret += " ";
   ret += std::to_string(position.y());
   ret += " ";
   ret += std::to_string(position.z());
-  ret += "\n";
-  return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
-std::string
-ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
+int
+ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
 
   osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
   osg::Matrixd mat ;
   mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-  _view->getCameraManipulator()->setByInverseMatrix(mat);
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_SET_LOOK];
-  ret += std::to_string(center2.x());
-  ret += " ";
-  ret += std::to_string(center2.y());
-  ret += " ";
-  ret += std::to_string(center2.z());
-  ret += "\n";
-  return ret;
+  tmp->view->getCameraManipulator()->setByInverseMatrix(mat);
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
+int
+ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
 
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
 
   osg::Vec3 center2 = WGS84.geocentricToGeodetic(center);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_LOOK];
-  ret += std::to_string(center2.x());
+  std::string ret = std::to_string(center2.x());
   ret += " ";
   ret += std::to_string(center2.y());
   ret += " ";
   ret += std::to_string(center2.z());
-  ret += "\n";
-  return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
-std::string
-ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
+int
+ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
 
   osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
   osg::Matrixd mat ;
   mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
-  _view->getCameraManipulator()->setByInverseMatrix(mat);
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_SET_UP];
-  ret += std::to_string(up2.x());
-  ret += " ";
-  ret += std::to_string(up2.y());
-  ret += " ";
-  ret += std::to_string(up2.z());
-  ret += "\n";
-  return ret;
-
+  tmp->view->getCameraManipulator()->setByInverseMatrix(mat);
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghRail *rail, osgViewer::Viewer* _view) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-
+int
+ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
   osgEarth::Ellipsoid WGS84;
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+    return GH_EXECUTE_NOT_FOUND;
+  }
   osg::Vec3d eye, up, center;
-  osg::Camera *cam = _view->getCamera();
+  osg::Camera *cam = tmp->view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
 
   osg::Vec3 up2 = WGS84.geocentricToGeodetic(up);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_UP];
-  ret += std::to_string(up2.x());
+  std::string ret = std::to_string(up2.x());
   ret += " ";
   ret += std::to_string(up2.y());
   ret += " ";
   ret += std::to_string(up2.z());
-  ret += "\n";
-  return ret;
-}
-
-std::string
-ghRailCommandCameraSetTracking(ghCommandQueue *cmd, ghRail *rail) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-
-  if ( rail->SetTrackingTrain(cmd->argstr) ) {
-    std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_SET_TRACK];
-    ret += cmd->argstr;
-    ret += "\n";
-    return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
   } else {
-      return " camera tracking Undefined train\n";
+    return GH_EXECUTE_SIZE_ERROR;
   }
 }
 
-std::string
-ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+int
+ghRailCommandCameraSetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win) {
+  if ( rail->IsTrainID(cmd->argstr[1]) ) {
+    ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+    if ( tmp != NULL ) {
+      tmp->tracking = cmd->argstr[1];
+      return GH_EXECUTE_SUCCESS;
+    } else {
+      return GH_EXECUTE_NOT_FOUND;
+    }
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
   }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_TRACK];
-  ret += rail->GetTrackingTrain();
-  ret += "\n";
-  return ret;
 }
 
+int
+ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,char *result) {
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+      return GH_EXECUTE_NOT_FOUND;
+  }
+  std::string ret(tmp->tracking);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
 
-std::string
-ghRailCommandCameraViewport(ghCommandQueue *cmd, osgViewer::Viewer* _view) {
+int
+ghRailCommandCameraViewport(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
 
-  std::vector<osg::Vec3d> points = _calcCameraViewpoints(_view);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CAMERA_GET_VIEWPORT];
+  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
+  if ( tmp == (ghWindow *)NULL ) {
+      return GH_EXECUTE_NOT_FOUND;
+  }
+  std::vector<osg::Vec3d> points = _calcCameraViewpoints(tmp->view);
+  std::string ret = " ";
   // points max 12
   for (int i = 0; i < points.size(); i++) {
     ret += ",";
@@ -874,219 +1053,190 @@ ghRailCommandCameraViewport(ghCommandQueue *cmd, osgViewer::Viewer* _view) {
     //ret += " ";
     //ret += std::to_string(points[i].z());
   }
-  ret += "\n";
-  return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
     
 }
 
-std::string
-ghRailCommandTrainLabelOn(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+int
+ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+  string cname = cmd->argstr[0];
+  ghWindow *tmp = _win;
+  for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
+    if ( GH_RESERVED_STRING[i] == cname ) {
+      return GH_EXECUTE_RESERVED;
+    }
   }
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_LABEL_ON];
-  ret += cmd->argstr;
-  if ( cmd->argstr == GH_STRING_ALL ) {
-    ret += rail->SetTrainLabel("",true);
-  } else {
-    ret += rail->SetTrainLabel(cmd->argstr,true);
+  while (tmp != (ghWindow *)NULL) {
+    if ( tmp->name == cname ) {
+      return GH_EXECUTE_ALREADY_EXIST;
+    }
+    tmp = tmp->next ;
   }
-  ret += "\n";
-  return ret;
-
+  return GH_EXECUTE_SUCCESS;
 }
 
-std::string
-ghRailCommandTrainLabelOff(ghCommandQueue *cmd, ghRail *rail) {
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+int
+ghRailCommandCameraRemove(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+  string cname = cmd->argstr[0];
+  ghWindow *tmp = _win;
+  while (tmp != (ghWindow *)NULL) {
+    if ( tmp->name == cname ) {
+      return GH_EXECUTE_SUCCESS;
+    }
+    tmp = tmp->next ;
   }
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_LABEL_OFF];
-  ret += "off ";
-  ret += cmd->argstr;
-  if ( cmd->argstr == GH_STRING_ALL ) {
-    ret += rail->SetTrainLabel("",false);
-  } else {
-    ret += rail->SetTrainLabel(cmd->argstr,false);
-  }
-  ret += "\n";
-  return ret;
-
-}
-
-std::string
-ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_POSITION];
-  ret += cmd->argstr;
-  ret += " ";
-  if ( cmd->argstr == GH_STRING_ALL ) {
-    ret += rail->GetTrainPosition("",simtime);
-  } else {
-    ret += rail->GetTrainPosition(cmd->argstr,simtime);
-  }
-  ret += "\n";
-  return ret;
-
-}
-
-std::string
-ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_TIMETABLE];
-  ret += cmd->argstr;
-  ret += " ";
-  ret += rail->GetTrainTimetable(cmd->argstr);
-  ret += "\n";
-  return ret;
-
-}
-
-std::string
-ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail) {
-
-  if ( ! rail->IsLoaded() ) {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
-  }
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_TRAIN_ICON];
-  ret += cmd->argstr;
-  ret += " ";
-  ret += rail->GetTrainIcon(cmd->argstr);
-  ret += "\n";
-  return ret;
-
+  return GH_EXECUTE_NOT_FOUND;
 }
 
 
-
-
-
-std::string
+int
 ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail) {
   rail->SetClockMaxSpeed(cmd->argnum[0]);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED];
-  std::string s_sp = std::to_string(cmd->argnum[0]);
-  ret += s_sp;
-  ret += "\n";
-  return ret;
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail) {
-
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED];
+int
+ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail,char *result) {
   double speed = rail->GetClockMaxSpeed();
-  std::string s_sp = std::to_string(speed);
-  ret += s_sp;
-  ret += "\n";
-  return ret;
+  std::string ret = std::to_string(speed);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
-std::string
+int
 ghRailCommandConfigSetAltmode(ghCommandQueue *cmd, ghRail *rail) {
-
   int mode = (int)cmd->argnum[0];
   rail->SetAltmode(mode);
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_SET_ALTMODE];
-  ret += GH_COMMAND_ALTMODE_STRING[mode];
-  return ret;
+  return GH_EXECUTE_SUCCESS;
 }
 
-std::string
-ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_GET_ALTMODE];
-  ret += GH_COMMAND_ALTMODE_STRING[rail->GetAltmode()];
-  return ret;
+int
+ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail,char *result) {
+  std::string ret = GH_COMMAND_ALTMODE_STRING[rail->GetAltmode()];
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
-std::string
+int
 ghRailCommandConfigSetDisplaydistance(ghCommandQueue *cmd, ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE];
   rail->SetDisplayDistance(cmd->argnum[0]);
-  std::string dis = std::to_string(cmd->argnum[0]);
-  ret += dis;
-  return ret;
+  return GH_EXECUTE_SUCCESS;
 }
-std::string
-ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE];
+int
+ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail,char *result) {
   double dis = rail->GetDisplayDistance();
-  std::string s_dis = std::to_string(dis);
-  ret += s_dis;
-  ret += "\n";
-  return ret;
-
+  std::string ret = std::to_string(dis);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
-std::string
-ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[cmd->type];
-  int shmkey = ftok(GH_SHM_PATH,shmtype);
+int
+ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win,char *result) {
+
+  int offset = 0;
+  if ( _win != (ghWindow *)NULL ) {
+    offset = 24 + ghCountWindow(_win);
+  }
+  int shmkey = ftok(GH_SHM_PATH,shmtype+offset);
+  std::string ret = " ";
   if (shmkey < 0) {
-    ret += " cannot get shm key";
+    return GH_EXECUTE_CANNOT_GET;
   } else {
     std::string skey = std::to_string(shmkey);
     ret += skey + " ";
-    int ssize = rail->InitShm(shmkey,shmtype);
+    int ssize = -1;
+    if ( shmtype == GH_SHM_TYPE_CLOCK_TIME ) {
+      ssize = rail->InitShmClock(shmkey);
+    } else if ( shmtype == GH_SHM_TYPE_TRAIN_POSITION ) {
+      ssize = rail->InitShmTrain(shmkey);
+    } else if ( shmtype == GH_SHM_TYPE_CAMERA_VIEWPORT ) {
+      ssize = ghInitShmWindow(shmkey,_win,cmd->argstr[0]);
+    } else {
+      return GH_EXECUTE_NOT_FOUND;
+    }
     if ( ssize < 0 ) {
-      ret += " cannot allocate shm size ";
+      return GH_EXECUTE_CANNOT_ALLOCATE;
     } else {
       ret += std::to_string(ssize);
     }
   }
-
-  return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
-std::string
+
+int
 ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail) {
-  std::string ret = GH_COMMAND_MESSAGE[GH_COMMAND_SHM_REMOVE];
   int shmkey = (int)cmd->argnum[0];
   int ssize = rail->RemoveShm(shmkey);
-  
+  return GH_EXECUTE_SUCCESS;
 }
 
-std::string
-ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail) {
+int
+ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
 
+  ghWindow *wtmp = _win;
+  std::string ret = " ";
   if ( rail->IsLoaded() ) {
-    std::string ret = " ";
     if ( rail->IsPlaying() ) {
       ret += "running ";
     } else {
       ret += "paused ";
     }
-    ret += "tracking ";
-    ret += rail->GetTrackingTrain();
+    while (wtmp != (ghWindow *)NULL) {
+      ret += "camera ";
+      ret += wtmp->name;
+      ret += " tracking ";
+      ret += wtmp->tracking;
+      wtmp = wtmp->next ;
+    }
     ret += " speed ";
     ret += std::to_string( rail->GetClockSpeed() );
-    ret += "\n";
-    return ret;
   } else {
-    return GH_COMMAND_MESSAGE_NOT_LOADED;
+    ret += " not loaded yet.";
   }
+
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+  
   
 }
 
-
-std::string
-ghRailCommandShowVersion() {
+int
+ghRailCommandShowVersion(char *result) {
   std::string ret = " ";
   ret += GH_APP_NAME;
   ret += " ";
   ret += GH_APP_REVISION;
-  ret += "\n";
-  //std::cout << ret << std::endl;
-  return ret;
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 }
 
 

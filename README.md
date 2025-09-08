@@ -38,11 +38,15 @@ https://www.youtube.com/watch?v=YVDdq4JZ19Y
 
 https://earth.geoglyph.info/
 
- ## Demo video
+ ## Demo
+
+ ![test image](https://github.com/user-attachments/assets/48d0127e-eba1-42ae-b7e0-64b15cfe6e9a)
+ 
+multi view demo https://www.youtube.com/watch?v=opiigSCtFOg
 
 Thalys simulation from Paris to Brussels using Open Street Map imagery layer. https://www.youtube.com/watch?v=qBoS3elHFFE
 
-Thalys simulation using ArcGISp imagery layer. https://www.youtube.com/watch?v=xtAWG-OCOR4
+Thalys simulation using ArcGIS imagery layer. https://www.youtube.com/watch?v=xtAWG-OCOR4
 
 
 
