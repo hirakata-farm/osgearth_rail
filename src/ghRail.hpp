@@ -32,6 +32,10 @@
 #include <osgEarth/EarthManipulator>
 #include <osgEarth/TerrainEngineNode>
 
+// view configurations.
+#include <osgViewer/config/SingleWindow>
+#include <osgViewer/config/SingleScreen>
+
 # include <nlohmann/json.hpp>
 
 using namespace std;
@@ -112,13 +116,15 @@ typedef struct ghWindow
   ghWindow *next;
 } ghWindow;
 
-ghWindow *ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height);
-ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height);
+ghWindow *ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
 void ghRemoveWindow( ghWindow *_win , std::string name);
 void ghDisposeWindow( ghWindow *_win );
 ghWindow *ghGetLastWindow(ghWindow *_win);
 int ghCountWindow(ghWindow *_win);
 ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
+void ghSetConfigWindow(ghWindow* _win,std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+void ghGetConfigWindow(ghWindow* _win,std::string name,int *ret);
 void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
 int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 

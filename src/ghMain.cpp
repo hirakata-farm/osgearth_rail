@@ -219,14 +219,14 @@ ghSocketInit(int port)
 ghWindow *ghWin_anchor;
 
 int
-ghMainLoop(osg::ArgumentParser args,unsigned int width, unsigned int height)
+ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheight)
 {
 
   osgViewer::CompositeViewer ghViewer(args);  //  Application Root
   osgEarth::SkyNode *ghSky; // manipulate date-time
   double ghSimulationTime = 0.0;
 
-  ghViewer.setThreadingModel(ghViewer.ThreadPerCamera);
+  ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
   /*
     SingleThreaded 	
     CullDrawThreadPerContext 	
@@ -238,7 +238,7 @@ ghMainLoop(osg::ArgumentParser args,unsigned int width, unsigned int height)
    */
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
-  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,args,width,height);
+  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,args,0,0,maxwidth,maxheight);
   ghViewer.addView( ghWin_anchor->view );
   /***  Set window name ***/
   ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
@@ -347,7 +347,7 @@ ghMainLoop(osg::ArgumentParser args,unsigned int width, unsigned int height)
 	  } else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
 	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );	    
 	  } else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
-	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],args,width/2,height/2);
+	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],args,0,0,floor(maxwidth/2),floor(maxheight/2));
 	    ghViewer.addView( nwin->view );
 	    nwin->view->setSceneData( ghRootNode );
 	    ghSetWindowTitle(&ghViewer,cmdqueue->argstr[0]);

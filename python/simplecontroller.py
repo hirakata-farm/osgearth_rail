@@ -45,6 +45,7 @@ shm_time = None
 shm_train = None
 shm_train_size_byte = 0
 shm_camera = { "root" : None }
+viewport_camera = {};
 #tracking_id = None
 
 class SocketClient():
@@ -76,7 +77,7 @@ class SocketClient():
             rcv_data = rcv_data.decode('utf-8').rstrip()
             if self.showtimestamp:
                 print('[{0}] Recv:{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rcv_data) )
-            return rcv_data        
+            return re.split(r"\s+", rcv_data)
     
     def close(self):
         if self.socket != None:        
@@ -98,15 +99,12 @@ def setup_shm():
     global shm_train_size_byte
     global shm_camera
     global remote_polling_second
-    response = remote_socket.send("shm set clock time\n")
-    shmmsg = re.split(r"\s+", response)
+    shmmsg = remote_socket.send("shm set clock time\n")
     shm_time = sysv_ipc.SharedMemory(int(shmmsg[3]))
-    response = remote_socket.send("shm set train position\n")
-    shmmsg = re.split(r"\s+", response)
+    shmmsg = remote_socket.send("shm set train position\n")
     shm_train = sysv_ipc.SharedMemory(int(shmmsg[3]))
     shm_train_size_byte = int(shmmsg[4])
-    response = remote_socket.send("shm set camera root viewport\n")
-    shmmsg = re.split(r"\s+", response)
+    shmmsg = remote_socket.send("shm set camera root viewport\n")
     shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[4]))
     remote_polling_second = 1
     
@@ -147,10 +145,9 @@ def timetable_dialog(id, data):
 def click_train_marker(marker):
     message = "train timetable " + marker.text + "\n"
     response = remote_socket.send(message)
-    idpos = response.find(marker.text)
-    idpos = idpos + len(marker.text) + 3
-    strlen = len(response) - 1
-    timetable_dialog( marker.text, response[idpos:strlen] )
+    train_id = response[2]
+    train_timetable = " ".join(response[3:])
+    timetable_dialog( train_id, train_timetable.rstrip(',') )
         
 def update_socket_marker(data):
     #global tracking_id
@@ -166,13 +163,13 @@ def update_socket_marker(data):
                 if trainname in markers:
                     markers[trainname].set_position(lat,lng)
                 else:
-                    message = "train icon " + trainname + "\n"
-                    response = remote_socket.send(message)
-                    msgstr = re.split(r"\s+", response)
-                    if msgstr[2] != "not":
-                        imagedata = urlopen(msgstr[3])
-                        image = ImageTk.PhotoImage(data=imagedata.read())
-                        markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
+                    if len(trainname) > 1:
+                        message = "train icon " + trainname + "\n"
+                        msgstr = remote_socket.send(message)
+                        if msgstr[2] != "not":
+                            imagedata = urlopen(msgstr[3])
+                            image = ImageTk.PhotoImage(data=imagedata.read())
+                            markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
                 existflag = True
                 break
         if existflag == False:
@@ -186,7 +183,7 @@ def update_socket_viewport(data):
     pointlist = data.split(",")
     for point in pointlist:
         pointdata = point.split(" ")
-        if pointdata[0] != "Geoglyph:camera":
+        if len(pointdata) > 1:
             lng = float(pointdata[0])
             lat = float(pointdata[1])
             positionlist.append((lat,lng))
@@ -237,13 +234,13 @@ def update_shm_train():
                     #if tracking_id == trainname:
                     #    update_map_center(lat,lng)
                 else:
-                    message = "train icon " + trainname + "\n"
-                    response = remote_socket.send(message)
-                    msgstr = re.split(r"\s+", response)
-                    if msgstr[2] != "not":
-                        imagedata = urlopen(msgstr[3])
-                        image = ImageTk.PhotoImage(data=imagedata.read())
-                        markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
+                    if len(trainname) > 1:
+                        message = "train icon " + trainname + "\n"
+                        msgstr = remote_socket.send(message)
+                        if msgstr[2] != "not":
+                            imagedata = urlopen(msgstr[3])
+                            image = ImageTk.PhotoImage(data=imagedata.read())
+                            markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
             offset = offset+48
         else:
             print(offset)
@@ -251,20 +248,20 @@ def update_shm_train():
             traindata = struct.unpack('<32s2d', byteslice)
             print(traindata)
 
-def update_shm_camera():
+def update_shm_viewport():
     global shm_camera
+    global viewport_camera
 
+    map_widget.delete_all_polygon()
     for item in shm_camera:
         bytedata = shm_camera[item].read()
         double_number = struct.unpack('<24d', bytedata)
-        map_widget.delete_all_polygon()
         positionlist = []
         for i in range(0,24,2):
             if double_number[i+1] != 0.0 or double_number[i] != 0.0:
                 positionlist.append((double_number[i+1],double_number[i]))
         if len(positionlist) > 3:            
-            viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
-
+            viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
                     
 
 def update_map_center(lat,lng):
@@ -283,14 +280,13 @@ def timerproc_socket():
     global polling_timer
 
     if field_isloaded:
-        response = remote_socket.send("clock get time\n");
-        timestr = re.split(r"\s+", response)
+        timestr = remote_socket.send("clock get time\n");
         if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
             timelabel_var.set(timestr[3])
         response = remote_socket.send("train position all\n");
-        update_socket_marker(response)
+        update_socket_marker(" ".join(response[3:]))
         response = remote_socket.send("camera get root viewport\n");
-        update_socket_viewport(response)
+        update_socket_viewport(" ".join(response[4:]))
         polling_timer=threading.Timer(remote_polling_second,timerproc_socket)
         polling_timer.start()
 
@@ -301,7 +297,7 @@ def timerproc_shm():
     if field_isloaded:
         update_shm_clock()
         update_shm_train()
-        update_shm_camera()
+        update_shm_viewport()
 
         polling_timer=threading.Timer(remote_polling_second,timerproc_shm)
         polling_timer.start()
@@ -325,7 +321,8 @@ def server_connect_dialog():
     option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
-    option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)
+    #option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)
+    option5_radio = ttk.Radiobutton(dialog, text="London GATWICK", value="G175749103GATWICK", variable=selected_option)    
     option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)
     option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)    
 
@@ -350,8 +347,12 @@ def server_connect_dialog():
 
         time.sleep(5) # wait time for Setup 3D Viewer
         message = "field set " + selected_option.get() + "\n"
-        response = remote_socket.send(message);
-        messagebox.showinfo("receive",response)
+        fieldresult = remote_socket.send(message);
+        if len(fieldresult) > 3:
+            dialog.destroy()
+            messagebox.showinfo("Warning", "Field load error")
+            return
+        messagebox.showinfo("receive",message)
         menu0.entryconfig("3D view open", state=tkinter.DISABLED)
         menu0.entryconfig("3D view close", state=tkinter.NORMAL)
         menu1.entryconfig("clock", state=tkinter.NORMAL)
@@ -361,8 +362,7 @@ def server_connect_dialog():
         menu_button_3.config(state=tkinter.DISABLED)
         response = remote_socket.send("clock set time 12:00\n")
         response = remote_socket.send("config set altmode relative\n")
-        response = remote_socket.send("field get train\n")
-        trainid = re.split(r"\s+", response)
+        trainid = remote_socket.send("field get train\n")
         del trainid[0]  # Geoglyph header string
         del trainid[0]  # train string
         #print (str(len(trainid)) + " trains")
@@ -427,8 +427,7 @@ def clock_dialog():
     dialog.geometry("300x100")
     dialog.title("Clock")
 
-    response = remote_socket.send("clock get time\n");
-    timestr = re.split(r"\s+", response)
+    timestr = remote_socket.send("clock get time\n");
     if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
         timestr2 = timestr[3].split(":")
     else:
@@ -472,8 +471,7 @@ def speed_dialog():
     dialog.geometry("300x200")
     dialog.title("Speed")
 
-    response = remote_socket.send("clock get speed\n");
-    speedstr = re.split(r"\s+", response)
+    speedstr = remote_socket.send("clock get speed\n");
     if len(speedstr) > 3 and speedstr[0] == "Geoglyph:clock":
         speed = float(speedstr[3])
     else:
@@ -539,11 +537,33 @@ def camera_add_dialog():
     defaultname = "CAMERA" + str(len(windows));
     txt.insert(0,defaultname)
 
+    # width Spinbox
+    w_spinbox = ttk.Spinbox(dialog, from_=320, to=1020, increment=10, wrap=True, width=8)
+    w_spinbox.set(640) # Initial value
+    w_spinbox.place(x=150, y=40)
+    w_label = ttk.Label(dialog, text="width")
+    w_label.place(x=50, y=40)
+
+    # height Spinbox
+    h_spinbox = ttk.Spinbox(dialog, from_=240, to=940, increment=10, wrap=True, width=8)
+    h_spinbox.set(480) # Initial value    
+    h_spinbox.place(x=150, y=70)
+    h_label = ttk.Label(dialog, text="height")
+    h_label.place(x=50, y=70)
+
     def on_button_ok():
-        cname = txt.get();
-        message = "camera add " + txt.get() + "\n"
+        cname = txt.get()
+        w = w_spinbox.get()
+        h = h_spinbox.get()
+        #message = "camera add " + cname + " " + w + " " + h + "\n"
+        message = "camera add " + cname + "\n"
         response = remote_socket.send(message);
-        windows[txt.get()] = "NONE";
+        message = "camera set " + cname + " window " + w + " " + h + "\n"
+        response = remote_socket.send(message);
+        message = "shm set camera " + cname + " viewport\n"
+        shmmsg = remote_socket.send(message)
+        shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
+        windows[cname] = "NONE";
         dialog.destroy()
 
     def on_button_no():
@@ -551,8 +571,8 @@ def camera_add_dialog():
     
     ok_button = tkinter.Button(dialog, text="  OK  ", command=on_button_ok)
     no_button = tkinter.Button(dialog, text="Close", command=on_button_no)    
-    ok_button.place(x=50,y=80)
-    no_button.place(x=250,y=80)
+    ok_button.place(x=50,y=180)
+    no_button.place(x=250,y=180)
 
     
 def camera_tracking_dialog():
@@ -688,11 +708,6 @@ speedlabel_var = tkinter.StringVar()
 speedlabel_var.set("x 1.0")
 speedlabel = tkinter.Label(menu_frame,textvariable=speedlabel_var, bg="lightgray")
 speedlabel.pack(side="left", padx=10)
-
-#centermap_var = tkinter.IntVar()
-#centermap_button = tkinter.Checkbutton(menu_frame, text="Center map", variable=centermap_var, command=check_centermap)
-#centermap_button.pack(side="left", padx=20)
-#centermap_button.config(state=tkinter.DISABLED)
 
 #
 # create map widget

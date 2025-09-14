@@ -50,6 +50,10 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "camera set tracking ",
   "camera get tracking ",
   "camera get viewport ",
+  "camera set window ",
+  "camera get window ",
+  "camera set screen ",
+  "camera get screen ",
   "camera add ",
   "camera remove ",
   "train label on ",
@@ -97,6 +101,8 @@ std::vector<std::string> GH_RESERVED_STRING =
   GH_STRING_TRACKING,
   GH_STRING_VIEWPORT,
   GH_STRING_ROOT,
+  GH_STRING_WINDOW,
+  GH_STRING_SCREEN,
   GH_STRING_NONE,
   GH_STRING_ALL,
   GH_STRING_ADD,
@@ -261,25 +267,25 @@ ghRailParseCommand(string str) {
 	if ( command[3] == GH_STRING_POSITION && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_POS;
 	  cmd->argstr[0] = command[2]; // Camera Name
-	  cmd->argnum[0] = std::stod(command[3]);
-	  cmd->argnum[1] = std::stod(command[4]);
-	  cmd->argnum[2] = std::stod(command[5]);
+	  cmd->argnum[0] = std::stod(command[4]);
+	  cmd->argnum[1] = std::stod(command[5]);
+	  cmd->argnum[2] = std::stod(command[6]);
 	  cmd->argnumidx = 3;
 	  cmd->argstridx = 1;	  
 	} else if ( command[3] == GH_STRING_LOOKAT && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_LOOK;
 	  cmd->argstr[0] = command[2]; // Camera Name
-	  cmd->argnum[0] = std::stod(command[3]);
-	  cmd->argnum[1] = std::stod(command[4]);
-	  cmd->argnum[2] = std::stod(command[5]);
+	  cmd->argnum[0] = std::stod(command[4]);
+	  cmd->argnum[1] = std::stod(command[5]);
+	  cmd->argnum[2] = std::stod(command[6]);
 	  cmd->argnumidx = 3;
 	  cmd->argstridx = 1;	  
 	} else if ( command[3] == GH_STRING_UPVEC && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_UP;
 	  cmd->argstr[0] = command[2]; // Camera Name
-	  cmd->argnum[0] = std::stod(command[3]);
-	  cmd->argnum[1] = std::stod(command[4]);
-	  cmd->argnum[2] = std::stod(command[5]);
+	  cmd->argnum[0] = std::stod(command[4]);
+	  cmd->argnum[1] = std::stod(command[5]);
+	  cmd->argnum[2] = std::stod(command[6]);
 	  cmd->argnumidx = 3;
 	  cmd->argstridx = 1;	  
 	} else if ( command[3] == GH_STRING_TRACKING && command_size == 5 )  {
@@ -287,6 +293,24 @@ ghRailParseCommand(string str) {
 	  cmd->argstr[0] = command[2];  // Camera Name
 	  cmd->argstr[1] = command[4];  // train ID
 	  cmd->argstridx = 2;	  
+	} else if ( command[3] == GH_STRING_SCREEN && ( command_size == 6 || command_size == 7 ) )  {
+	  cmd->type = GH_COMMAND_CAMERA_SET_SCREEN;
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  
+	  cmd->argnum[0] = std::stod(command[4]);  // screen x 
+	  cmd->argnum[1] = std::stod(command[5]);  // screen y
+	  cmd->argnumidx = 2;
+	  if ( command_size == 7 ) {
+	    cmd->argnum[2] = std::stod(command[6]);  // screen num
+	    cmd->argnumidx = 3;
+	  }
+	} else if ( command[3] == GH_STRING_WINDOW && command_size == 6 )  {
+	  cmd->type = GH_COMMAND_CAMERA_SET_WINDOW;
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  
+	  cmd->argnum[0] = std::stod(command[4]);  // window width
+	  cmd->argnum[1] = std::stod(command[5]);  // window height
+	  cmd->argnumidx = 2;
 	} else {
 	  // NOP
 	}
@@ -311,6 +335,14 @@ ghRailParseCommand(string str) {
 	  cmd->type = GH_COMMAND_CAMERA_GET_VIEWPORT;
 	  cmd->argstr[0] = command[2];  // Camera Name
 	  cmd->argstridx = 1;	  	  
+	} else if ( command[3] == GH_STRING_SCREEN && command_size == 4 )  {
+	  cmd->type = GH_COMMAND_CAMERA_GET_SCREEN;
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  	  
+	} else if ( command[3] == GH_STRING_WINDOW && command_size == 4 )  {
+	  cmd->type = GH_COMMAND_CAMERA_GET_WINDOW;
+	  cmd->argstr[0] = command[2];  // Camera Name
+	  cmd->argstridx = 1;	  	  
 	} else {
 	  // NOP
 	}
@@ -318,6 +350,9 @@ ghRailParseCommand(string str) {
 	cmd->type = GH_COMMAND_CAMERA_ADD;
 	cmd->argstr[0] = command[2]; // Camera Name
 	cmd->argstridx = 1;	  	  	
+	//cmd->argnum[0] = std::stod(command[3]);
+	//cmd->argnum[1] = std::stod(command[4]);
+	//cmd->argnumidx = 2;	  	  	
       } else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
 	cmd->type = GH_COMMAND_CAMERA_REMOVE;
 	cmd->argstr[0] = command[2]; // Camera Name
@@ -503,38 +538,50 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
       resultcode = ghRailCommandTrainIcon(cmd,rail,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_POS:
-      resultcode = ghRailCommandCameraSetPosition(cmd,rail,_win);
+      resultcode = ghRailCommandCameraSetPosition(cmd,_win);
       break;
     case GH_COMMAND_CAMERA_GET_POS:
-      resultcode = ghRailCommandCameraGetPosition(cmd,rail,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraGetPosition(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_LOOK:
-      resultcode = ghRailCommandCameraSetLookat(cmd,rail,_win);
+      resultcode = ghRailCommandCameraSetLookat(cmd,_win);
       break;
     case GH_COMMAND_CAMERA_GET_LOOK:
-      resultcode = ghRailCommandCameraGetLookat(cmd,rail,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraGetLookat(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_UP:
-      resultcode = ghRailCommandCameraSetUpvec(cmd,rail,_win);
+      resultcode = ghRailCommandCameraSetUpvec(cmd,_win);
       break;
     case GH_COMMAND_CAMERA_GET_UP:
-      resultcode = ghRailCommandCameraGetUpvec(cmd,rail,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraGetUpvec(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_TRACK:
       resultcode = ghRailCommandCameraSetTracking(cmd,rail,_win);
       break;
     case GH_COMMAND_CAMERA_GET_TRACK:
-      resultcode = ghRailCommandCameraGetTracking(cmd,rail,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraGetTracking(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_GET_VIEWPORT:
-      resultcode = ghRailCommandCameraViewport(cmd,rail,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraViewport(cmd,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_SCREEN:
+      resultcode = ghRailCommandCameraSetScreen(cmd,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_SCREEN:
+      resultcode = ghRailCommandCameraGetScreen(cmd,_win,&resultstring[0]);
+      break;
+    case GH_COMMAND_CAMERA_SET_WINDOW:
+      resultcode = ghRailCommandCameraSetWindow(cmd,_win);
+      break;
+    case GH_COMMAND_CAMERA_GET_WINDOW:
+      resultcode = ghRailCommandCameraGetWindow(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_ADD:
-      resultcode = ghRailCommandCameraAdd(cmd,rail,_win);
+      resultcode = ghRailCommandCameraAdd(cmd,_win);
       if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_ADD;
       break;
     case GH_COMMAND_CAMERA_REMOVE:
-      resultcode = ghRailCommandCameraRemove(cmd,rail,_win);
+      resultcode = ghRailCommandCameraRemove(cmd,_win);
       if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_REMOVE;
       break;
     case GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED:
@@ -876,7 +923,7 @@ ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail,char *result) {
 
 
 int
-ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win) {
+ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
@@ -894,7 +941,7 @@ ghRailCommandCameraSetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win)
 }
 
 int
-ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,char *result) {
+ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow* _win,char *result) {
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
   if ( tmp == (ghWindow *)NULL ) {
@@ -919,7 +966,7 @@ ghRailCommandCameraGetPosition(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,
 }
 
 int
-ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
@@ -937,7 +984,7 @@ ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) 
   return GH_EXECUTE_SUCCESS;
 }
 int
-ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
+ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow* _win,char *result) {
 
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
@@ -963,7 +1010,7 @@ ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,c
 }
 
 int
-ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow* _win) {
 
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
@@ -981,7 +1028,7 @@ ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
   return GH_EXECUTE_SUCCESS;
 }
 int
-ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
+ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow* _win,char *result) {
   osgEarth::Ellipsoid WGS84;
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
   if ( tmp == (ghWindow *)NULL ) {
@@ -1006,7 +1053,7 @@ ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,ch
 }
 
 int
-ghRailCommandCameraSetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win) {
+ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow* _win) {
   if ( rail->IsTrainID(cmd->argstr[1]) ) {
     ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
     if ( tmp != NULL ) {
@@ -1021,7 +1068,7 @@ ghRailCommandCameraSetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win)
 }
 
 int
-ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,char *result) {
+ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win,char *result) {
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
   if ( tmp == (ghWindow *)NULL ) {
       return GH_EXECUTE_NOT_FOUND;
@@ -1036,7 +1083,7 @@ ghRailCommandCameraGetTracking(ghCommandQueue *cmd, ghRail *rail,ghWindow* _win,
 }
 
 int
-ghRailCommandCameraViewport(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,char *result) {
+ghRailCommandCameraViewport(ghCommandQueue *cmd, ghWindow* _win,char *result) {
 
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
   if ( tmp == (ghWindow *)NULL ) {
@@ -1063,7 +1110,39 @@ ghRailCommandCameraViewport(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win,ch
 }
 
 int
-ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win) {
+
+  ghSetConfigWindow(_win,cmd->argstr[0],cmd->argnum[0],cmd->argnum[1],-1,-1);
+ 
+}
+
+int
+ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win, char *result) {
+  int current[4];
+  ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
+
+  std::cout << "conf:" << current[0] <<  "  " << current[1] <<  "  " << current[2] <<  "  " << current[3] << std::endl;
+}
+
+int
+ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win) {
+
+  ghSetConfigWindow(_win,cmd->argstr[0],-1,-1,cmd->argnum[0],cmd->argnum[1]);
+  
+}
+
+int
+ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result) {
+  int current[4];
+  ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
+
+  std::cout << "conf:" << current[0] <<  "  " << current[1] <<  "  " << current[2] <<  "  " << current[3] << std::endl;  
+
+}
+
+
+int
+ghRailCommandCameraAdd(ghCommandQueue *cmd, ghWindow* _win) {
   string cname = cmd->argstr[0];
   ghWindow *tmp = _win;
   for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
@@ -1081,7 +1160,7 @@ ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
 }
 
 int
-ghRailCommandCameraRemove(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win) {
+ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win) {
   string cname = cmd->argstr[0];
   ghWindow *tmp = _win;
   while (tmp != (ghWindow *)NULL) {

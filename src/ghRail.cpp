@@ -821,17 +821,17 @@ _calcCameraViewpoints(osgViewer::View* _view) {
 }
 
 ghWindow *
-ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height) {
+ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height) {
   ghWindow *win;
   if ((win = (ghWindow *)calloc( (unsigned)1, (unsigned)sizeof( ghWindow ) )) == NULL)
     {
       return( (ghWindow *)NULL ) ;
     }
-  
   win->view = new osgViewer::View();
   win->name = name;
   win->tracking = GH_COMMAND_CAMERA_UNTRACKING;
-  win->view->setUpViewInWindow( 0, 0, width, height, 0 );
+  //win->view->setUpViewInWindow( x, y, width, height, 0 ); deprecated!
+  win->view->apply(new osgViewer::SingleWindow(x,y,width,height,0)); // ScreenNum=0
   win->view->getCamera()->setViewport( 0, 0, width, height );
   win->manipulator = new osgEarth::EarthManipulator(args);
   win->view->setCameraManipulator( win->manipulator );
@@ -841,12 +841,15 @@ ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int width,u
 }
 
 ghWindow *
-ghAddNewWindow( ghWindow *_win, std::string name,osg::ArgumentParser args,unsigned int width,unsigned int height) {
+ghAddNewWindow( ghWindow *_win, std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height) {
   ghWindow *tmp = ghGetLastWindow(_win);
   ghWindow *newwin;
+  //osg::DisplaySettings *ds;
   if ( tmp != (ghWindow *)NULL ) {
-    newwin = ghCreateNewWindow(name,args,width,height);
+    newwin = ghCreateNewWindow(name,args,x,y,width,height);
     if ( newwin != (ghWindow *)NULL ) {
+      //ds = tmp->view->getDisplaySettings();
+      //newwin->view->setDisplaySettings(ds);
       tmp->next = newwin;
       return newwin;
     }
@@ -943,6 +946,67 @@ ghGetWindowByName(ghWindow *_win,std::string name) {
 
 
 }
+
+void
+ghSetConfigWindow( ghWindow* _win, std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height) {
+
+  osgViewer::Viewer::Windows windows;
+  ghWindow *w = ghGetWindowByName(_win,name);
+  int current[4];
+
+  w->view->getViewerBase()->getWindows(windows);
+  for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
+    {
+      osgViewer::GraphicsWindow* ww = *itr;
+      if ( name == ww->getWindowName() ) {
+ 	ww->getWindowRectangle ( current[0], current[1], current[2], current[3]);
+	if ( x < 0 ) {
+	  // NOP
+	} else {
+	  current[0] = (int) x;
+	}
+	if ( y < 0 ) {
+	  // NOP
+	} else {
+	  current[1] = (int) y;
+	}
+	if ( width < 0 ) {
+	  // NOP
+	} else {
+	  current[2] = (int) width;
+	}
+	if ( height < 0 ) {
+	  // NOP
+	} else {
+	  current[3] = (int) height;
+	}
+	ww->setWindowRectangle ( current[0], current[1], current[2], current[3]);
+	return;
+      }
+    }
+
+  return;
+}
+
+void
+ghGetConfigWindow( ghWindow* _win, std::string name, int *ret) {
+
+  osgViewer::Viewer::Windows windows;
+  ghWindow *w = ghGetWindowByName(_win,name);
+
+  w->view->getViewerBase()->getWindows(windows);
+  for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
+    {
+      osgViewer::GraphicsWindow* ww = *itr;
+      if ( name == ww->getWindowName() ) {
+ 	ww->getWindowRectangle ( ret[0], ret[1], ret[2], ret[3] );
+	return;
+      }
+    }
+
+  return;
+}
+
 
 void
 ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str) {
