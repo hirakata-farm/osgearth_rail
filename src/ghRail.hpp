@@ -116,8 +116,8 @@ typedef struct ghWindow
   ghWindow *next;
 } ghWindow;
 
-ghWindow *ghCreateNewWindow(std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
-ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,osg::ArgumentParser args,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+ghWindow *ghCreateNewWindow(std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
 void ghRemoveWindow( ghWindow *_win , std::string name);
 void ghDisposeWindow( ghWindow *_win );
 ghWindow *ghGetLastWindow(ghWindow *_win);

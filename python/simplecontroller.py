@@ -321,8 +321,7 @@ def server_connect_dialog():
     option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
-    #option5_radio = ttk.Radiobutton(dialog, text="London north area (UK)", value="G175517100LONDON", variable=selected_option)
-    option5_radio = ttk.Radiobutton(dialog, text="London GATWICK", value="G175749103GATWICK", variable=selected_option)    
+    option5_radio = ttk.Radiobutton(dialog, text="London area (UK)", value="G175517100LONDON", variable=selected_option)
     option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)
     option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)    
 

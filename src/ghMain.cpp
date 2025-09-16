@@ -238,15 +238,15 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
    */
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
-  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,args,0,0,maxwidth,maxheight);
+  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,0,0,maxwidth,maxheight);
   ghViewer.addView( ghWin_anchor->view );
   /***  Set window name ***/
   ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 
   /**   Load the earth file  **/
-  osg::ref_ptr<osg::Node> basenode = MapNodeHelper().load(args, &ghViewer);
+  osg::ref_ptr<osg::Node> ghNode3D = MapNodeHelper().load(args, &ghViewer);
     
-  if (basenode.valid())
+  if (ghNode3D.valid())
     {
       // Call this to add the GUI. 
       auto ui = new ImGuiAppEngine(args);
@@ -268,7 +268,7 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
       jobs::get_pool("oe.rex.loadtile")->set_concurrency(available_threads);
 
       /***  map node  **/
-      osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(basenode);
+      osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(ghNode3D);
       //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
 
       /***  Sky and date time **/
@@ -281,10 +281,10 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
       ghSky->setSunVisible(true);
       ghSky->setMoonVisible(false);
       ghSky->setStarsVisible(true);
-      auto ghRootNode = mapNode->getParent(0);
+      auto parent = mapNode->getParent(0);
       ghSky->addChild(mapNode);
-      ghRootNode->addChild(ghSky);
-      ghRootNode->removeChild(mapNode);
+      parent->addChild(ghSky);
+      parent->removeChild(mapNode);
       /***  Sky and date time **/
 
       ui->onStartup = []()
@@ -292,7 +292,7 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
 	ImGui::GetIO().FontAllowUserScaling = true;
       };
       ghWin_anchor->view->getEventHandlers().push_front(ui);
-      ghWin_anchor->view->setSceneData( ghRootNode );
+      ghWin_anchor->view->setSceneData( ghNode3D );
 
       ghRailGUI *ghGui = new ghRailGUI();
       ui->add("Clock", ghGui );
@@ -347,9 +347,9 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
 	  } else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
 	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );	    
 	  } else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
-	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],args,0,0,floor(maxwidth/2),floor(maxheight/2));
+	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],0,0,floor(maxwidth/2),floor(maxheight/2));
 	    ghViewer.addView( nwin->view );
-	    nwin->view->setSceneData( ghRootNode );
+	    nwin->view->setSceneData( ghNode3D );
 	    ghSetWindowTitle(&ghViewer,cmdqueue->argstr[0]);
 	  } else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
 	    ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
@@ -391,14 +391,15 @@ main(int argc, char** argv)
     //
     unsigned int MapWidth = 0;
     unsigned int MapHeight = 0;
+    unsigned int screenNum = 0;
     osg::GraphicsContext::WindowingSystemInterface* wsi = osg::GraphicsContext::getWindowingSystemInterface();
     if ( wsi )
-      wsi->getScreenResolution( osg::GraphicsContext::ScreenIdentifier(0), MapWidth, MapHeight );
-
+      wsi->getScreenResolution( osg::GraphicsContext::ScreenIdentifier(screenNum), MapWidth, MapHeight );
     // Limit 4K
     if ( MapWidth > 3840 ) MapWidth = 3840;
     if ( MapHeight > 2160 ) MapHeight = 2160;
-    
+    //
+    ////////////////////////////////////////
 
     signal( SIGCHLD, ghSignalChild ) ;
     int	server_fd ;

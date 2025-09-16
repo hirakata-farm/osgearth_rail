@@ -1113,6 +1113,7 @@ int
 ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win) {
 
   ghSetConfigWindow(_win,cmd->argstr[0],cmd->argnum[0],cmd->argnum[1],-1,-1);
+  return GH_EXECUTE_SUCCESS;
  
 }
 
@@ -1120,14 +1121,23 @@ int
 ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win, char *result) {
   int current[4];
   ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
+  std::string ret = std::to_string(current[0]);
+  ret += " ";
+  ret += std::to_string(current[1]);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 
-  std::cout << "conf:" << current[0] <<  "  " << current[1] <<  "  " << current[2] <<  "  " << current[3] << std::endl;
 }
 
 int
 ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win) {
 
   ghSetConfigWindow(_win,cmd->argstr[0],-1,-1,cmd->argnum[0],cmd->argnum[1]);
+  return GH_EXECUTE_SUCCESS;
   
 }
 
@@ -1135,8 +1145,15 @@ int
 ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result) {
   int current[4];
   ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
-
-  std::cout << "conf:" << current[0] <<  "  " << current[1] <<  "  " << current[2] <<  "  " << current[3] << std::endl;  
+  std::string ret = std::to_string(current[2]);
+  ret += " ";
+  ret += std::to_string(current[3]);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
 
 }
 
