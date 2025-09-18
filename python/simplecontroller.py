@@ -550,14 +550,32 @@ def camera_add_dialog():
     h_label = ttk.Label(dialog, text="height")
     h_label.place(x=50, y=70)
 
+    # screenX Spinbox
+    x_spinbox = ttk.Spinbox(dialog, from_=0, to=1920, increment=10, wrap=True, width=8)
+    x_spinbox.set(0) # Initial value
+    x_spinbox.place(x=150, y=100)
+    x_label = ttk.Label(dialog, text="screen x")
+    x_label.place(x=50, y=100)
+
+    # screenY Spinbox
+    y_spinbox = ttk.Spinbox(dialog, from_=0, to=1080, increment=10, wrap=True, width=8)
+    y_spinbox.set(0) # Initial value    
+    y_spinbox.place(x=150, y=130)
+    y_label = ttk.Label(dialog, text="screen y")
+    y_label.place(x=50, y=130)
+
     def on_button_ok():
         cname = txt.get()
         w = w_spinbox.get()
         h = h_spinbox.get()
+        x = x_spinbox.get()
+        y = y_spinbox.get()
         #message = "camera add " + cname + " " + w + " " + h + "\n"
         message = "camera add " + cname + "\n"
         response = remote_socket.send(message);
         message = "camera set " + cname + " window " + w + " " + h + "\n"
+        response = remote_socket.send(message);
+        message = "camera set " + cname + " screen " + x + " " + y + "\n"
         response = remote_socket.send(message);
         message = "shm set camera " + cname + " viewport\n"
         shmmsg = remote_socket.send(message)

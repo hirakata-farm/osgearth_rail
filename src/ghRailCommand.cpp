@@ -67,6 +67,8 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "config get altmode ",      
   "config set displaydistance ",
   "config get displaydistance ",
+  "config set max window ",
+  "config get max window ",  
   "shm clock time ",
   "shm train position ",
   "shm camera viewport ",
@@ -122,6 +124,7 @@ std::vector<std::string> GH_RESERVED_STRING =
   GH_STRING_RELATIVE,
   GH_STRING_ABSOLUTE,
   GH_STRING_DISPLAYDISTANCE,
+  GH_STRING_MAXWINDOW,
   GH_STRING_SHOW,
   GH_STRING_STATUS,
   GH_STRING_VERSION,
@@ -414,6 +417,10 @@ ghRailParseCommand(string str) {
 	    cmd->type = GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE;
 	    cmd->argnum[0] = std::stod(command[3]);
 	    cmd->argnumidx = 1;	  	  				    
+	  } else if ( command[2] == GH_STRING_MAXWINDOW && command_size == 4 ) {
+	    cmd->type = GH_COMMAND_CONFIG_SET_MAXWINDOW;
+	    cmd->argnum[0] = std::stoi(command[3]);
+	    cmd->argnumidx = 1;	  	  			
 	  } else {
 	    // NOP
 	  }
@@ -424,6 +431,8 @@ ghRailParseCommand(string str) {
 	  cmd->type = GH_COMMAND_CONFIG_GET_ALTMODE;
 	} else if ( command[2] == GH_STRING_DISPLAYDISTANCE  ) {
 	  cmd->type = GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE;
+	} else if ( command[2] == GH_STRING_MAXWINDOW  ) {
+	  cmd->type = GH_COMMAND_CONFIG_GET_MAXWINDOW;
 	} else {
 	  // NOP
 	}
@@ -577,7 +586,7 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
       resultcode = ghRailCommandCameraGetWindow(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_ADD:
-      resultcode = ghRailCommandCameraAdd(cmd,_win);
+      resultcode = ghRailCommandCameraAdd(cmd,rail,_win);
       if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_ADD;
       break;
     case GH_COMMAND_CAMERA_REMOVE:
@@ -601,6 +610,12 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
       break;
     case GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE:
       resultcode = ghRailCommandConfigGetDisplaydistance(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_CONFIG_SET_MAXWINDOW:
+      resultcode = ghRailCommandConfigSetMaxwindow(cmd,rail);
+      break;
+    case GH_COMMAND_CONFIG_GET_MAXWINDOW:
+      resultcode = ghRailCommandConfigGetMaxwindow(cmd,rail,&resultstring[0]);
       break;
     case GH_COMMAND_SHM_CLOCK_TIME:
       resultcode = ghRailCommandShmSet(GH_SHM_TYPE_CLOCK_TIME,cmd,rail,NULL,&resultstring[0]);
@@ -1159,7 +1174,7 @@ ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result) {
 
 
 int
-ghRailCommandCameraAdd(ghCommandQueue *cmd, ghWindow* _win) {
+ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail,  ghWindow* _win) {
   string cname = cmd->argstr[0];
   ghWindow *tmp = _win;
   for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
@@ -1172,6 +1187,10 @@ ghRailCommandCameraAdd(ghCommandQueue *cmd, ghWindow* _win) {
       return GH_EXECUTE_ALREADY_EXIST;
     }
     tmp = tmp->next ;
+  }
+  int maxwin = rail->GetMaxWindow();
+  if ( ghCountWindow(_win) == maxwin ) {
+    return GH_EXECUTE_SIZE_ERROR;
   }
   return GH_EXECUTE_SUCCESS;
 }
@@ -1241,6 +1260,24 @@ ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail,char *re
     return GH_EXECUTE_SIZE_ERROR;
   }
 }
+
+int
+ghRailCommandConfigSetMaxwindow(ghCommandQueue *cmd, ghRail *rail) {
+  rail->SetMaxWindow((int)cmd->argnum[0]);
+  return GH_EXECUTE_SUCCESS;
+}
+int
+ghRailCommandConfigGetMaxwindow(ghCommandQueue *cmd, ghRail *rail,char *result) {
+  int maxwin = rail->GetMaxWindow();
+  std::string ret = std::to_string(maxwin);
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
 
 int
 ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win,char *result) {

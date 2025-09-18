@@ -71,9 +71,11 @@ train icon (train id)
 config set maxclockspeed 30.0 ( default 12.0 )
 config set altmode clamp ( clamp(default), absolute, relative )
 config set displaydistance 100000 ( default 3000[m] )
+config set maxwindow 8 ( default 4 )
 config get maxclockspeed
 config get altmode
 config get displaydistance
+config get maxwindow
 
 shm set clock time
 shm set train position
@@ -156,13 +158,15 @@ show version
 #define GH_COMMAND_CONFIG_GET_ALTMODE          38
 #define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  39
 #define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  40
+#define GH_COMMAND_CONFIG_SET_MAXWINDOW        41
+#define GH_COMMAND_CONFIG_GET_MAXWINDOW        42
 
-#define GH_COMMAND_SHM_CLOCK_TIME  41
-#define GH_COMMAND_SHM_TRAIN_POS   42
-#define GH_COMMAND_SHM_CAMERA_VIEW 43
-#define GH_COMMAND_SHM_REMOVE      44
+#define GH_COMMAND_SHM_CLOCK_TIME  43
+#define GH_COMMAND_SHM_TRAIN_POS   44
+#define GH_COMMAND_SHM_CAMERA_VIEW 45
+#define GH_COMMAND_SHM_REMOVE      46
 
-#define GH_NUMBER_OF_COMMANDS      45 //  count for above commands
+#define GH_NUMBER_OF_COMMANDS      47 //  count for above commands
 
 ////////////////////////////////////////////////////
 //
@@ -216,6 +220,7 @@ show version
 #define GH_STRING_RELATIVE        "relative"
 #define GH_STRING_ABSOLUTE        "absolute"
 #define GH_STRING_DISPLAYDISTANCE "displaydistance"
+#define GH_STRING_MAXWINDOW       "maxwindow"
 
 #define GH_STRING_SHOW    "show"
 #define GH_STRING_STATUS  "status"
@@ -304,7 +309,7 @@ int ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win, char *result);
 int ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result);
-int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghWindow* _win);
+int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
 int ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win);
 
 int ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
@@ -313,6 +318,8 @@ int ghRailCommandConfigSetAltmode(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail, char *result);
 int ghRailCommandConfigSetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandConfigSetMaxwindow(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandConfigGetMaxwindow(ghCommandQueue *cmd, ghRail *rail, char *result);
 
 int ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win, char *result);
 int ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail);

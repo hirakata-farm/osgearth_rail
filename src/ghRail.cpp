@@ -78,8 +78,11 @@ ghRail::GetClockSpeed()
 void
 ghRail::SetClockMaxSpeed(double sp)
 {
-  if ( sp < GH_DEFAULT_MAX_CLOCK_SPEED ) p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
-  p_max_clockspeed = sp;
+  if ( sp < GH_DEFAULT_MAX_CLOCK_SPEED ) {
+    p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
+  } else {
+    p_max_clockspeed = sp;
+  }
 }
 
 double
@@ -112,6 +115,22 @@ ghRail::GetDisplayDistance()
 {
   return p_displaydistance;
 }
+void
+ghRail::SetMaxWindow(int wins)
+{
+  if ( wins < GH_DEFAULT_MAX_WINDOW ) {
+    p_max_window = GH_DEFAULT_MAX_WINDOW;
+  } else {
+    p_max_window = wins;
+  }
+}
+
+int
+ghRail::GetMaxWindow()
+{
+  return p_max_window;
+}
+
 
 
 string
@@ -405,6 +424,8 @@ ghRail::Setup(string configname)
   p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
   p_altmode = GH_DEFAULT_ALTMODE;
   p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
+  p_max_window = GH_DEFAULT_MAX_WINDOW;
+  p_min_window = GH_DEFAULT_MIN_WINDOW;
   p_shm_clock.key = -1;
   p_shm_train.key = -1;  
 
@@ -883,11 +904,14 @@ ghRemoveWindow( ghWindow *_win, std::string name )
 }
 
 void
-ghDisposeWindow( ghWindow *_win )
+ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win )
 {
   ghWindow *tmp = _win;
   ghWindow *next;
   while (tmp != (ghWindow *)NULL) {
+    if ( tmp->view != NULL ) {
+	view->removeView(tmp->view);
+    }
     if ( tmp->shm.key > 0 ) {
       shmdt( tmp->shm.addr );
       shmctl( tmp->shm.shmid, IPC_RMID, NULL);
@@ -946,12 +970,13 @@ ghGetWindowByName(ghWindow *_win,std::string name) {
 }
 
 void
-ghSetConfigWindow( ghWindow* _win, std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height) {
+ghSetConfigWindow( ghWindow* _win, std::string name,int x,int y,int width,int height) {
 
   osgViewer::Viewer::Windows windows;
   ghWindow *w = ghGetWindowByName(_win,name);
   int current[4];
-
+  memset(&current[0], 0, sizeof(int)*4);
+  
   w->view->getViewerBase()->getWindows(windows);
   for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
     {

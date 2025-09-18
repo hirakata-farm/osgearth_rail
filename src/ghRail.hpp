@@ -71,6 +71,9 @@ using namespace std;
 #define GH_DEFAULT_DISPLAY_DISTANCE 5000.0 // [m]
 #define GH_MIN_DISPLAY_DISTANCE      100.0 // [m]
 
+#define GH_DEFAULT_MAX_WINDOW 4
+#define GH_DEFAULT_MIN_WINDOW 1
+
 #define GH_ALTMODE_CLAMP 0
 #define GH_ALTMODE_RELATIVE 1
 #define GH_ALTMODE_ABSOLUTE 2
@@ -119,11 +122,11 @@ typedef struct ghWindow
 ghWindow *ghCreateNewWindow(std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
 ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
 void ghRemoveWindow( ghWindow *_win , std::string name);
-void ghDisposeWindow( ghWindow *_win );
+void ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win );
 ghWindow *ghGetLastWindow(ghWindow *_win);
 int ghCountWindow(ghWindow *_win);
 ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
-void ghSetConfigWindow(ghWindow* _win,std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+void ghSetConfigWindow(ghWindow* _win,std::string name,int x,int y,int width,int height);
 void ghGetConfigWindow(ghWindow* _win,std::string name,int *ret);
 void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
 int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
@@ -151,6 +154,8 @@ class ghRail
       void SetAltmode(int mode);
       double GetDisplayDistance();
       void SetDisplayDistance(double distance);
+      void SetMaxWindow(int wins);
+      int  GetMaxWindow();
 
       string GetUnits();
       string GetTimezoneStr();
@@ -187,6 +192,8 @@ class ghRail
       double p_min_clockspeed;
       int p_altmode;
       double p_displaydistance;
+      double p_max_window;
+      double p_min_window;
 
       ghRailTime p_time;
       ghRailJSON p_config;

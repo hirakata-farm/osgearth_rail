@@ -108,37 +108,6 @@ int listen_port = GH_DEFAULT_SOCKET_PORT;
 std::mutex ghMutex;
 /////////////////////
 
-void
-ghSocketThread() {
-
-  char buffer[1024] = {0};
-  ghCommandQueue *cmdtmp = (ghCommandQueue *)NULL ;
-
-  while (true)
-    {
-      // Wait for client receive message
-      read(client_fd, buffer, 1024);
-      std::string command(buffer);
-      if ( command.size() > 3 ) {
-	cmdtmp = cmdqueue;
-	cmdqueue = ghRailParseCommand(command);
-	if ( cmdqueue != NULL ) {
-	  cmdqueue->prev = cmdtmp;
-	  
-	  memset(buffer, 0, sizeof(buffer));
-	    
-	  if ( cmdqueue->type == GH_COMMAND_CLOSE ||
-	       cmdqueue->type == GH_COMMAND_EXIT ) {
-	    break;
-	  }
-	}
-      } else {
-	// Too short buffer
-      }
-    }
-  //  End of client socket read loop
-}
-
 /*
  *   Child Process quit.
  *    cleanup defunct process
@@ -216,16 +185,93 @@ ghSocketInit(int port)
 }
 
 /////////////////////////////////////////
-ghWindow *ghWin_anchor;
+
+osgViewer::CompositeViewer *ghView_anchor;  //  Application Root
+ghWindow *ghWin_anchor;           // 3D window 
+ghRailGUI *ghGui;                 // ImGui 
+ghRail ghRail3D;                  // Simulation    Rail Class 
+osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
+osgEarth::SkyNode *ghSky;         // manipulate date-time
+
+double ghSimulationTime = 0.0;
+double ghElapsedSec = 10.0f;
+unsigned int ghScreenWidth = 0;
+unsigned int ghScreenHeight = 0;
+unsigned int ghScreenNum = 0;
+
+void
+ghSocketThread() {
+
+  char buffer[1024] = {0};
+  ghCommandQueue *cmdtmp = (ghCommandQueue *)NULL ;
+  bool ghIsThread = true;
+  
+  while (ghIsThread)
+    {
+      // Wait for client receive message
+      read(client_fd, buffer, 1024);
+      std::string command(buffer);
+      if ( command.size() > 3 ) {
+	cmdtmp = cmdqueue;
+	cmdqueue = ghRailParseCommand(command);
+	if ( cmdqueue != NULL ) {
+	  cmdqueue->prev = cmdtmp;
+	  
+	  memset(buffer, 0, sizeof(buffer));
+	    
+	  //if ( cmdqueue->type == GH_COMMAND_CLOSE ||
+	  //     cmdqueue->type == GH_COMMAND_EXIT ) {
+	  //  break;
+	  //}
+	}
+      } else {
+	// Too short buffer
+      }
+
+      if ( cmdqueue->isexecute == false ) {
+
+	// Execute Socket Command
+	int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
+	if ( result == GH_POST_EXECUTE_EXIT ) {
+	  ghIsThread = false;
+	  break;
+	} else if ( result == GH_POST_EXECUTE_CLOSE ) {
+	  ghIsThread = false;
+	  break;
+	} else if ( result == GH_POST_EXECUTE_SETCLOCK ) {
+	  ghElapsedSec = 0.0f;
+	} else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
+	  ghGui->setTimeZone( ghRail3D.GetTimeZoneMinutes() );	    
+	} else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
+	  ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],0,0,floor(ghScreenWidth/2),floor(ghScreenHeight/2));
+	  ghView_anchor->addView( nwin->view );
+	  nwin->view->setSceneData( ghNode3D );
+	  ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
+	} else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
+	  ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
+	  ghView_anchor->removeView( rwin->view );
+	  ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
+	} else {
+	  // NOP
+	}
+
+      }
+    }
+
+  ghRail3D.RemoveShm(0);
+  ghDisposeWindow( ghView_anchor, ghWin_anchor );
+  ghChildQuit( SIGQUIT ) ;
+
+  //  End of client socket read loop
+}
 
 int
-ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheight)
+ghMainLoop(osg::ArgumentParser args)
 {
 
   osgViewer::CompositeViewer ghViewer(args);  //  Application Root
-  osgEarth::SkyNode *ghSky; // manipulate date-time
-  double ghSimulationTime = 0.0;
-
+  ghView_anchor = &ghViewer;
+  
   ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
   /*
     SingleThreaded 	
@@ -238,13 +284,13 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
    */
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
-  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,0,0,maxwidth,maxheight);
+  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,0,0,ghScreenWidth,ghScreenHeight);
   ghViewer.addView( ghWin_anchor->view );
   /***  Set window name ***/
   ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 
   /**   Load the earth file  **/
-  osg::ref_ptr<osg::Node> ghNode3D = MapNodeHelper().load(args, &ghViewer);
+  ghNode3D = MapNodeHelper().load(args, &ghViewer);
     
   if (ghNode3D.valid())
     {
@@ -294,35 +340,33 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
       ghWin_anchor->view->getEventHandlers().push_front(ui);
       ghWin_anchor->view->setSceneData( ghNode3D );
 
-      ghRailGUI *ghGui = new ghRailGUI();
+      ghGui = new ghRailGUI();
       ui->add("Clock", ghGui );
-      ghRail ghrail; //    Rail Class 
-      ghrail.SetClockSpeed(1.0);
-      ghrail.SetPlayPause(false);
+      ghRail3D.SetClockSpeed(1.0);
+      ghRail3D.SetPlayPause(false);
       std::thread ghSock(ghSocketThread);
       /////////////////////////////////////////////  Socket LOOP
     
       double _elapsed_prev = 0.0f;    // Important
       double _elapsed_current = ghViewer.elapsedTime(); // Important
-      double _elapsed_sec = 10.0f;
 
       while (!ghViewer.done())
         {
 	  _elapsed_current = ghViewer.elapsedTime() ; // double [sec]
-	  if ( ghrail.IsPlaying() ) {
-	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghrail.GetClockSpeed(); // duration seconds
+	  if ( ghRail3D.IsPlaying() ) {
+	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghRail3D.GetClockSpeed(); // duration seconds
 	    DateTime dt = ghSky->getDateTime();
-	    ghSimulationTime = _calcSimulationTime(dt,ghrail.GetBaseDatetime(), _elapsed_sec);
+	    ghSimulationTime = _calcSimulationTime(dt,ghRail3D.GetBaseDatetime(), ghElapsedSec);
 
 	    // Simulation Update
-	    ghrail.Update( ghSimulationTime, mapNode , ghWin_anchor);
+	    ghRail3D.Update( ghSimulationTime, mapNode , ghWin_anchor);
 
-	    if ( _elapsed_sec > GH_ELAPSED_THRESHOLD ) {
+	    if ( ghElapsedSec > GH_ELAPSED_THRESHOLD ) {
 	      // Change Date Time Dislpay
-	      ghSky->setDateTime(_calcElapsedTime(dt,_elapsed_sec));
-	      _elapsed_sec = 0.0f;
+	      ghSky->setDateTime(_calcElapsedTime(dt,ghElapsedSec));
+	      ghElapsedSec = 0.0f;
 	    } else {
-	      _elapsed_sec += elapsed;
+	      ghElapsedSec += elapsed;
 	    }
 	  } else {
 	    // Not Playing
@@ -332,32 +376,6 @@ ghMainLoop(osg::ArgumentParser args,unsigned int maxwidth, unsigned int maxheigh
 	  // Frame Update
 	  ghViewer.frame();
 
-	  // Execute Socket Command
-	  int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghrail,ghWin_anchor,ghSky,ghSimulationTime);
-	  if ( result == GH_POST_EXECUTE_EXIT ) {
-	    ghrail.RemoveShm(0);
-	    ghDisposeWindow( ghWin_anchor );
-	    break;
-	  } else if ( result == GH_POST_EXECUTE_CLOSE ) {
-	    ghrail.RemoveShm(0);
-	    ghDisposeWindow( ghWin_anchor );
-	    break;
-	  } else if ( result == GH_POST_EXECUTE_SETCLOCK ) {
-	    _elapsed_sec = 0.0f;
-	  } else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
-	    ghGui->setTimeZone( ghrail.GetTimeZoneMinutes() );	    
-	  } else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
-	    ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],0,0,floor(maxwidth/2),floor(maxheight/2));
-	    ghViewer.addView( nwin->view );
-	    nwin->view->setSceneData( ghNode3D );
-	    ghSetWindowTitle(&ghViewer,cmdqueue->argstr[0]);
-	  } else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
-	    ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
-	    ghViewer.removeView( rwin->view );
-	    ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
-	  } else {
-	    // NOP
-	  }
         } // End of while loop ( rendering loop )
 	//
 	//
@@ -389,15 +407,9 @@ main(int argc, char** argv)
     //
     //Setup our main view that will show the loaded earth file.
     //
-    unsigned int MapWidth = 0;
-    unsigned int MapHeight = 0;
-    unsigned int screenNum = 0;
     osg::GraphicsContext::WindowingSystemInterface* wsi = osg::GraphicsContext::getWindowingSystemInterface();
     if ( wsi )
-      wsi->getScreenResolution( osg::GraphicsContext::ScreenIdentifier(screenNum), MapWidth, MapHeight );
-    // Limit 4K
-    if ( MapWidth > 3840 ) MapWidth = 3840;
-    if ( MapHeight > 2160 ) MapHeight = 2160;
+      wsi->getScreenResolution( osg::GraphicsContext::ScreenIdentifier(ghScreenNum), ghScreenWidth, ghScreenHeight );
     //
     ////////////////////////////////////////
 
@@ -449,7 +461,7 @@ main(int argc, char** argv)
 	  close( server_fd ) ;
 
 	  //////////////////
-	  ghMainLoop(arguments,MapWidth,MapHeight);
+	  ghMainLoop(arguments);
 	  //////////////////
 	  close( client_fd ) ;
 

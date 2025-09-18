@@ -20,7 +20,7 @@ Simple 3D train simulation using osgearth libraries.
 # Getting start.
 
   1. Edit startup script geoglyph3d.sh for your environment.
-  2. Run 3D viewer     %./geoglyph3d.sh
+  2. Run 3D viewer     %./geoglyph3d.sh start
 
   ## for text command interface using socket library.
 
