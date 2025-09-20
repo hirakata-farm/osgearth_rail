@@ -56,6 +56,7 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "camera get screen ",
   "camera add ",
   "camera remove ",
+  "camera get ",
   "train label on ",
   "train label off ",  
   "train position ",
@@ -266,7 +267,7 @@ ghRailParseCommand(string str) {
       }
     } else if ( command[0] == GH_STRING_CAMERA ) {
       if ( command[1] == GH_STRING_SET ) {
-	//  get arg
+	//  set arg
 	if ( command[3] == GH_STRING_POSITION && command_size == 7 )  {
 	  cmd->type = GH_COMMAND_CAMERA_SET_POS;
 	  cmd->argstr[0] = command[2]; // Camera Name
@@ -318,7 +319,10 @@ ghRailParseCommand(string str) {
 	  // NOP
 	}
       } else if ( command[1] == GH_STRING_GET ) {
-	if ( command[3] == GH_STRING_POSITION && command_size == 4 )  {
+	//  get arg	
+	if ( command_size == 2 )  {
+	  cmd->type = GH_COMMAND_CAMERA_GET;
+	} else if ( command[3] == GH_STRING_POSITION && command_size == 4 )  {
 	  cmd->type = GH_COMMAND_CAMERA_GET_POS;
 	  cmd->argstr[0] = command[2];  // Camera Name
 	  cmd->argstridx = 1;	  
@@ -571,7 +575,7 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
       resultcode = ghRailCommandCameraGetTracking(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_GET_VIEWPORT:
-      resultcode = ghRailCommandCameraViewport(cmd,_win,&resultstring[0]);
+      resultcode = ghRailCommandCameraGetViewport(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_SCREEN:
       resultcode = ghRailCommandCameraSetScreen(cmd,_win);
@@ -592,6 +596,9 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
     case GH_COMMAND_CAMERA_REMOVE:
       resultcode = ghRailCommandCameraRemove(cmd,_win);
       if ( resultcode == GH_EXECUTE_SUCCESS ) retval = GH_POST_EXECUTE_CAMERA_REMOVE;
+      break;
+    case GH_COMMAND_CAMERA_GET:
+      resultcode = ghRailCommandCameraGet(cmd,_win,&resultstring[0]);
       break;
     case GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED:
       resultcode = ghRailCommandConfigSetMaxspeed(cmd,rail);
@@ -678,7 +685,6 @@ ghRailReturnMessage(ghCommandQueue *cmd,int code, char *message){
   std::string result = "Geoglyph:";
   result += GH_COMMAND_MESSAGE[cmd->type];
   int messagelength = std::strlen(message);
-  //std::cout << messagelength << std::endl;
 
   for (int i = 0; i < cmd->argstridx; i++) {
     result += " ";
@@ -1098,7 +1104,7 @@ ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win,char *result) 
 }
 
 int
-ghRailCommandCameraViewport(ghCommandQueue *cmd, ghWindow* _win,char *result) {
+ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow* _win,char *result) {
 
   ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
   if ( tmp == (ghWindow *)NULL ) {
@@ -1206,6 +1212,25 @@ ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win) {
     tmp = tmp->next ;
   }
   return GH_EXECUTE_NOT_FOUND;
+}
+
+int
+ghRailCommandCameraGet(ghCommandQueue *cmd,ghWindow* _win, char *result) {
+  ghWindow *tmp = _win;
+  std::string ret = " ";
+    
+  while (tmp != (ghWindow *)NULL) {
+    ret += tmp->name;
+    ret += " ";
+    tmp = tmp->next ;
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+
 }
 
 

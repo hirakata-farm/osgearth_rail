@@ -51,6 +51,7 @@ camera get root tracking
 camera get root viewport
 camera get root screen
 camera get root window
+camera get
 
 field [set|get] (specific ID)
 
@@ -145,28 +146,29 @@ show version
 #define GH_COMMAND_CAMERA_GET_SCREEN 27
 #define GH_COMMAND_CAMERA_ADD    28
 #define GH_COMMAND_CAMERA_REMOVE 29
+#define GH_COMMAND_CAMERA_GET    30
 
-#define GH_COMMAND_TRAIN_LABEL_ON  30
-#define GH_COMMAND_TRAIN_LABEL_OFF 31
-#define GH_COMMAND_TRAIN_POSITION  32
-#define GH_COMMAND_TRAIN_TIMETABLE 33
-#define GH_COMMAND_TRAIN_ICON      34
+#define GH_COMMAND_TRAIN_LABEL_ON  31
+#define GH_COMMAND_TRAIN_LABEL_OFF 32
+#define GH_COMMAND_TRAIN_POSITION  33
+#define GH_COMMAND_TRAIN_TIMETABLE 34
+#define GH_COMMAND_TRAIN_ICON      35
 
-#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    35
-#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    36
-#define GH_COMMAND_CONFIG_SET_ALTMODE          37
-#define GH_COMMAND_CONFIG_GET_ALTMODE          38
-#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  39
-#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  40
-#define GH_COMMAND_CONFIG_SET_MAXWINDOW        41
-#define GH_COMMAND_CONFIG_GET_MAXWINDOW        42
+#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    36
+#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    37
+#define GH_COMMAND_CONFIG_SET_ALTMODE          38
+#define GH_COMMAND_CONFIG_GET_ALTMODE          39
+#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  40
+#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  41
+#define GH_COMMAND_CONFIG_SET_MAXWINDOW        42
+#define GH_COMMAND_CONFIG_GET_MAXWINDOW        43
 
-#define GH_COMMAND_SHM_CLOCK_TIME  43
-#define GH_COMMAND_SHM_TRAIN_POS   44
-#define GH_COMMAND_SHM_CAMERA_VIEW 45
-#define GH_COMMAND_SHM_REMOVE      46
+#define GH_COMMAND_SHM_CLOCK_TIME  44
+#define GH_COMMAND_SHM_TRAIN_POS   45
+#define GH_COMMAND_SHM_CAMERA_VIEW 46
+#define GH_COMMAND_SHM_REMOVE      47
 
-#define GH_NUMBER_OF_COMMANDS      47 //  count for above commands
+#define GH_NUMBER_OF_COMMANDS      48 //  count for above commands
 
 ////////////////////////////////////////////////////
 //
@@ -304,13 +306,14 @@ int ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow* _win);
 int ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow* _win, char *result);
 int ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow* _win);
 int ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win, char *result);
-int ghRailCommandCameraViewport(ghCommandQueue *cmd, ghWindow* _win, char *result);
+int ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow* _win, char *result);
 int ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win, char *result);
 int ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result);
 int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
 int ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win);
+int ghRailCommandCameraGet(ghCommandQueue *cmd, ghWindow* _win, char *result);
 
 int ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail, char *result);

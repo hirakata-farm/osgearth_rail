@@ -357,6 +357,7 @@ def server_connect_dialog():
         menu1.entryconfig("clock", state=tkinter.NORMAL)
         menu1.entryconfig("speed", state=tkinter.NORMAL)
         menu1.entryconfig("camera", state=tkinter.NORMAL)
+        menu1.entryconfig("manual input", state=tkinter.NORMAL)
         menu_button_2.config(state=tkinter.NORMAL)
         menu_button_3.config(state=tkinter.DISABLED)
         response = remote_socket.send("clock set time 12:00\n")
@@ -523,6 +524,37 @@ def speed_dialog():
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
+def manual_input_dialog():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("600x200")
+    dialog.title("Command manual input")
+
+    cmdlbl = tkinter.Label(dialog,text='Command')
+    cmdlbl.place(x=30, y=10)
+
+    cmdlbl = tkinter.Label(dialog,text='Result')
+    cmdlbl.place(x=30, y=40)
+
+    cmdtxt = tkinter.Entry(dialog,width=80)
+    cmdtxt.place(x=100, y=10)
+    
+    cmdret = tkinter.Entry(dialog,width=80)
+    cmdret.place(x=100, y=40)
+    
+    def on_button_ok():
+        cmdret.delete(0, tkinter.END)
+        response = remote_socket.send( cmdtxt.get() );
+        cmdret.insert(0, " ".join(response) )
+        cmdtxt.delete(0, tkinter.END)
+
+    def on_button_no():
+        dialog.destroy()
+    
+    ok_button = tkinter.Button(dialog, text="  OK  ", command=on_button_ok)
+    no_button = tkinter.Button(dialog, text="Close", command=on_button_no)    
+    ok_button.place(x=50,y=70)
+    no_button.place(x=200,y=70)
+
 def camera_add_dialog():
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x300")
@@ -662,6 +694,10 @@ def pause_command():
     if polling_timer.is_alive():
         polling_timer.cancel()
 
+################################################################################
+#
+#    Widget
+#
 ################################################################################    
 # create tkinter window
 root_tk = tkinter.Tk()
@@ -696,6 +732,7 @@ camera_menu = tkinter.Menu(menu1, tearoff=0)
 menu1.add_command(label="clock", command=clock_dialog)
 menu1.add_command(label="speed", command=speed_dialog)
 menu1.add_cascade(label="camera", menu=camera_menu)
+menu1.add_command(label="manual input", command=manual_input_dialog)
 
 camera_menu.add_command(label="tracking", command=camera_tracking_dialog)
 camera_menu.add_command(label="New(add)", command=camera_add_dialog)
@@ -704,6 +741,7 @@ menu_button_1.config(menu=menu1)
 menu1.entryconfig("clock", state=tkinter.DISABLED)
 menu1.entryconfig("speed", state=tkinter.DISABLED)
 menu1.entryconfig("camera", state=tkinter.DISABLED)
+menu1.entryconfig("manual input", state=tkinter.DISABLED)
 
 # add menu item
 menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=run_command)
