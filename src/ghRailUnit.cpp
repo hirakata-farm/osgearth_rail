@@ -20,7 +20,8 @@
 void
 ghRailUnit::Setup( string id,
 		   string marker,
-		   ghRailJSON locomotive, 
+		   ghRailJSON locomotive,
+		   string direction,
 		   nlohmann::json data,
 		   string geom ) 
 {
@@ -28,6 +29,7 @@ ghRailUnit::Setup( string id,
   p_jsondata = data;
   p_lineid = data["lineid"];
   p_routeid = data["route"];
+  p_direction = direction;
   p_islabel = true;
   
   //
@@ -164,7 +166,7 @@ ghRailUnit::GetControlPoint( double seconds, int coach )
 }
 
 osg::Vec3d
-ghRailUnit::GetControlPointLayer(double seconds, int coach )
+ghRailUnit::GetControlPointVector(double seconds, int coach )
 {
   osg::AnimationPath::ControlPoint result =
     osg::AnimationPath::ControlPoint( osg::Vec3(0,0,0),
@@ -1399,4 +1401,41 @@ ghRailUnit::GetMarkerUri() {
   string uri = GEOGLYPH_ROOT_URI;
   string path = GEOGLYPH_RSC_ICON_PATH;
   return uri + path + p_marker;
+}
+
+std::string
+ghRailUnit::GetLineInfo() {
+  return p_lineid + " " + p_direction + " " + p_routeid;
+}
+
+std::string
+ghRailUnit::GetDistanceInfo() {
+
+  std::string ret = " ";
+  nlohmann::json timetable = p_jsondata["timetable"];
+  // timetable[i].get<std::string>()     time string    "0T14:54:00"
+  // timetable[i+1].get<std::string>()   station string
+  // timetable[i+2].get<std::string>()   station type
+
+  int timetable_size = timetable.size();
+  std::string prevname = " ";
+  double distance = 0.0;
+  double firstdistance = -1.0;
+  for (int i = 0; i < timetable_size; i=i+3) {
+    std::string name = timetable[i+1].get<std::string>();
+    if ( name != prevname ) {
+      ret += name;
+      ret += ",";
+      int idx = _getStationIndex( name,1 ) ;  // start from 1
+      distance = p_geometry[idx][3];
+      if ( firstdistance < 0 ) firstdistance = distance;
+      ret += std::to_string( distance - firstdistance );
+      ret += ",";
+
+      prevname = name;
+    }
+  }
+
+
+  return ret;
 }

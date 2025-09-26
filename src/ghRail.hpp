@@ -126,8 +126,8 @@ void ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win );
 ghWindow *ghGetLastWindow(ghWindow *_win);
 int ghCountWindow(ghWindow *_win);
 ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
-void ghSetConfigWindow(ghWindow* _win,std::string name,int x,int y,int width,int height);
-void ghGetConfigWindow(ghWindow* _win,std::string name,int *ret);
+void ghSetConfigWindow(ghWindow* _win,std::string title,int x,int y,int width,int height);
+void ghGetConfigWindow(ghWindow* _win,std::string title,int *ret);
 void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
 int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 
@@ -158,12 +158,15 @@ class ghRail
       int  GetMaxWindow();
 
       string GetUnits();
+      string GetLines();
       string GetTimezoneStr();
       string GetDescription();
       bool SetTrainLabel(string trainid, bool flag);
       string GetTrainPosition(string trainid, double simtime);
       string GetTrainTimetable(string trainid);
       string GetTrainIcon(string trainid);
+      string GetTrainLine(string trainid);
+      string GetTrainDistance(string trainid);      
       bool IsLoaded();
       bool IsPlaying();
       void SetPlayPause(bool flag);

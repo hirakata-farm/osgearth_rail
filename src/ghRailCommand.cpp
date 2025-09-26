@@ -35,6 +35,7 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "field set ",
   "field get ",
   "field train ",
+  "field line ",
   "field timezone ",
   "field description ",
   "clock set time ",
@@ -62,6 +63,8 @@ GH_COMMAND_MESSAGE[GH_NUMBER_OF_COMMANDS] = {
   "train position ",
   "train timetable ",
   "train icon ",
+  "train line ",
+  "train distance ",
   "config set max clock speed ",
   "config get max clock speed ",  
   "config set altmode ",
@@ -111,6 +114,8 @@ std::vector<std::string> GH_RESERVED_STRING =
   GH_STRING_ADD,
   GH_STRING_FIELD,
   GH_STRING_TRAIN,
+  GH_STRING_LINE,
+  GH_STRING_DISTANCE,
   GH_STRING_TIMEZONE,
   GH_STRING_DESCRIPTION,
   GH_STRING_LABEL,
@@ -209,6 +214,8 @@ ghRailParseCommand(string str) {
 	} else if ( command[1] == GH_STRING_GET && command_size == 3 ) {
 	  if ( command[2] == GH_STRING_TRAIN ) {
 	    cmd->type = GH_COMMAND_FIELD_GET_TRAIN;
+	  } else if ( command[2] == GH_STRING_LINE ) {
+	    cmd->type = GH_COMMAND_FIELD_GET_LINE;
 	  } else if ( command[2] == GH_STRING_TIMEZONE ) {
 	    cmd->type = GH_COMMAND_FIELD_GET_TIMEZONE;
 	  } else if ( command[2] == GH_STRING_DESCRIPTION ) {
@@ -392,6 +399,14 @@ ghRailParseCommand(string str) {
 	cmd->type = GH_COMMAND_TRAIN_ICON;
 	cmd->argstr[0] = command[2];
 	cmd->argstridx = 1;	  	  				
+      } else if ( command[1] == GH_STRING_LINE  && command_size == 3 ) {
+	cmd->type = GH_COMMAND_TRAIN_LINE;
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  				
+      } else if ( command[1] == GH_STRING_DISTANCE  && command_size == 3 ) {
+	cmd->type = GH_COMMAND_TRAIN_DISTANCE;
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  				
       } else {
 	// NOP
       }
@@ -516,6 +531,9 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
     case GH_COMMAND_FIELD_GET_TRAIN:
       resultcode = ghRailCommandFieldTrain(cmd,rail,&resultstring[0]);
       break;
+    case GH_COMMAND_FIELD_GET_LINE:
+      resultcode = ghRailCommandFieldLine(cmd,rail,&resultstring[0]);
+      break;
     case GH_COMMAND_FIELD_GET_TIMEZONE:
       resultcode = ghRailCommandFieldTimezone(cmd,rail,&resultstring[0]);
       break;
@@ -549,6 +567,12 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
       break;
     case GH_COMMAND_TRAIN_ICON:
       resultcode = ghRailCommandTrainIcon(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_TRAIN_LINE:
+      resultcode = ghRailCommandTrainLine(cmd,rail,&resultstring[0]);
+      break;
+    case GH_COMMAND_TRAIN_DISTANCE:
+      resultcode = ghRailCommandTrainDistance(cmd,rail,&resultstring[0]);
       break;
     case GH_COMMAND_CAMERA_SET_POS:
       resultcode = ghRailCommandCameraSetPosition(cmd,_win);
@@ -763,6 +787,16 @@ ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail, char *result) {
   }
 }
 int
+ghRailCommandFieldLine(ghCommandQueue *cmd, ghRail *rail, char *result) {
+  std::string ret(rail->GetLines());
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+int
 ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail, char *result) {
   std::string ret(rail->GetTimezoneStr());
   if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
@@ -931,6 +965,38 @@ ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail,char *result) {
   std::string ret = " ";
   if ( rail->IsTrainID(cmd->argstr[0]) ) {
     ret += rail->GetTrainIcon(cmd->argstr[0]);
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
+ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail,char *result) {
+  std::string ret = " ";
+  if ( rail->IsTrainID(cmd->argstr[0]) ) {
+    ret += rail->GetTrainLine(cmd->argstr[0]);
+  } else {
+    return GH_EXECUTE_NOT_FOUND;
+  }
+  if ( ret.size() < GH_EXECUTE_BUFFER_SIZE ) {
+    strcpy(result, ret.c_str());
+    return GH_EXECUTE_SUCCESS;
+  } else {
+    return GH_EXECUTE_SIZE_ERROR;
+  }
+}
+
+int
+ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail,char *result) {
+  std::string ret = " ";
+  if ( rail->IsTrainID(cmd->argstr[0]) ) {
+    ret += rail->GetTrainDistance(cmd->argstr[0]);
   } else {
     return GH_EXECUTE_NOT_FOUND;
   }
@@ -1205,6 +1271,11 @@ int
 ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win) {
   string cname = cmd->argstr[0];
   ghWindow *tmp = _win;
+  for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
+    if ( GH_RESERVED_STRING[i] == cname ) {
+      return GH_EXECUTE_RESERVED;
+    }
+  }
   while (tmp != (ghWindow *)NULL) {
     if ( tmp->name == cname ) {
       return GH_EXECUTE_SUCCESS;

@@ -60,14 +60,17 @@ field set G012142123
 
 field get
 field get train
+field get line
 field get timezone
 field get description
-
 
 train label {on|off} (train id)  
 train position (train id) 
 train timetable (train id)
 train icon (train id) 
+train line (train id)
+train distance (train id)
+
 
 config set maxclockspeed 30.0 ( default 12.0 )
 config set altmode clamp ( clamp(default), absolute, relative )
@@ -122,53 +125,56 @@ show version
 
 #define GH_COMMAND_FIELD_SET  6
 #define GH_COMMAND_FIELD_GET  7
-#define GH_COMMAND_FIELD_GET_TRAIN  8
-#define GH_COMMAND_FIELD_GET_TIMEZONE  9
-#define GH_COMMAND_FIELD_GET_DESC  10
+#define GH_COMMAND_FIELD_GET_TRAIN     8
+#define GH_COMMAND_FIELD_GET_LINE      9
+#define GH_COMMAND_FIELD_GET_TIMEZONE 10
+#define GH_COMMAND_FIELD_GET_DESC     11
 
-#define GH_COMMAND_CLOCK_SET_TIME  11
-#define GH_COMMAND_CLOCK_GET_TIME  12
-#define GH_COMMAND_CLOCK_SET_SPEED 13
-#define GH_COMMAND_CLOCK_GET_SPEED 14
+#define GH_COMMAND_CLOCK_SET_TIME  12
+#define GH_COMMAND_CLOCK_GET_TIME  13
+#define GH_COMMAND_CLOCK_SET_SPEED 14
+#define GH_COMMAND_CLOCK_GET_SPEED 15
 
-#define GH_COMMAND_CAMERA_SET_POS   15
-#define GH_COMMAND_CAMERA_GET_POS   16
-#define GH_COMMAND_CAMERA_SET_LOOK  17
-#define GH_COMMAND_CAMERA_GET_LOOK  18
-#define GH_COMMAND_CAMERA_SET_UP    19
-#define GH_COMMAND_CAMERA_GET_UP    20
-#define GH_COMMAND_CAMERA_SET_TRACK 21
-#define GH_COMMAND_CAMERA_GET_TRACK 22
-#define GH_COMMAND_CAMERA_GET_VIEWPORT 23
-#define GH_COMMAND_CAMERA_SET_WINDOW 24
-#define GH_COMMAND_CAMERA_GET_WINDOW 25
-#define GH_COMMAND_CAMERA_SET_SCREEN 26
-#define GH_COMMAND_CAMERA_GET_SCREEN 27
-#define GH_COMMAND_CAMERA_ADD    28
-#define GH_COMMAND_CAMERA_REMOVE 29
-#define GH_COMMAND_CAMERA_GET    30
+#define GH_COMMAND_CAMERA_SET_POS      16
+#define GH_COMMAND_CAMERA_GET_POS      17
+#define GH_COMMAND_CAMERA_SET_LOOK     18
+#define GH_COMMAND_CAMERA_GET_LOOK     19
+#define GH_COMMAND_CAMERA_SET_UP       20
+#define GH_COMMAND_CAMERA_GET_UP       21
+#define GH_COMMAND_CAMERA_SET_TRACK    22
+#define GH_COMMAND_CAMERA_GET_TRACK    23
+#define GH_COMMAND_CAMERA_GET_VIEWPORT 24
+#define GH_COMMAND_CAMERA_SET_WINDOW   25
+#define GH_COMMAND_CAMERA_GET_WINDOW   26
+#define GH_COMMAND_CAMERA_SET_SCREEN   27
+#define GH_COMMAND_CAMERA_GET_SCREEN   28
+#define GH_COMMAND_CAMERA_ADD          29
+#define GH_COMMAND_CAMERA_REMOVE       30
+#define GH_COMMAND_CAMERA_GET          31
 
-#define GH_COMMAND_TRAIN_LABEL_ON  31
-#define GH_COMMAND_TRAIN_LABEL_OFF 32
-#define GH_COMMAND_TRAIN_POSITION  33
-#define GH_COMMAND_TRAIN_TIMETABLE 34
-#define GH_COMMAND_TRAIN_ICON      35
+#define GH_COMMAND_TRAIN_LABEL_ON  32
+#define GH_COMMAND_TRAIN_LABEL_OFF 33
+#define GH_COMMAND_TRAIN_POSITION  34
+#define GH_COMMAND_TRAIN_TIMETABLE 35
+#define GH_COMMAND_TRAIN_ICON      36
+#define GH_COMMAND_TRAIN_LINE      37
+#define GH_COMMAND_TRAIN_DISTANCE  38
 
-#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    36
-#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    37
-#define GH_COMMAND_CONFIG_SET_ALTMODE          38
-#define GH_COMMAND_CONFIG_GET_ALTMODE          39
-#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  40
-#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  41
-#define GH_COMMAND_CONFIG_SET_MAXWINDOW        42
-#define GH_COMMAND_CONFIG_GET_MAXWINDOW        43
+#define GH_COMMAND_CONFIG_SET_MAXCLOCKSPEED    39
+#define GH_COMMAND_CONFIG_GET_MAXCLOCKSPEED    40
+#define GH_COMMAND_CONFIG_SET_ALTMODE          41
+#define GH_COMMAND_CONFIG_GET_ALTMODE          42
+#define GH_COMMAND_CONFIG_SET_DISPLAYDISTANCE  43
+#define GH_COMMAND_CONFIG_GET_DISPLAYDISTANCE  44
+#define GH_COMMAND_CONFIG_SET_MAXWINDOW        45
+#define GH_COMMAND_CONFIG_GET_MAXWINDOW        46
 
-#define GH_COMMAND_SHM_CLOCK_TIME  44
-#define GH_COMMAND_SHM_TRAIN_POS   45
-#define GH_COMMAND_SHM_CAMERA_VIEW 46
-#define GH_COMMAND_SHM_REMOVE      47
+#define GH_COMMAND_SHM_CLOCK_TIME  47
+#define GH_COMMAND_SHM_TRAIN_POS   48
+#define GH_COMMAND_SHM_CAMERA_VIEW 49
+#define GH_COMMAND_SHM_REMOVE      50
 
-#define GH_NUMBER_OF_COMMANDS      48 //  count for above commands
+#define GH_NUMBER_OF_COMMANDS      51 //  count for above commands
 
 ////////////////////////////////////////////////////
 //
@@ -206,6 +212,8 @@ show version
 
 #define GH_STRING_FIELD       "field"
 #define GH_STRING_TRAIN       "train"
+#define GH_STRING_LINE        "line"
+#define GH_STRING_DISTANCE    "distance"
 #define GH_STRING_TIMEZONE    "timezone"
 #define GH_STRING_DESCRIPTION "description"
 
@@ -285,6 +293,7 @@ int ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *
 int ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail, char *result);
 
 int ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandFieldLine(ghCommandQueue *cmd, ghRail *rail, char *result);
 int ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail, char *result);
 int ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail, char *result);
 
@@ -297,6 +306,8 @@ int ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail,bool flag);
 int ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime, char *result);
 int ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail, char *result);
 int ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail, char *result);
 
 int ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow* _win, char *result);

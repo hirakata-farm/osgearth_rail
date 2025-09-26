@@ -101,11 +101,14 @@ _calcElapsedTime(DateTime dt,double elapsesec) {
   return DateTime(year, month, days, hours);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////
+//
+//  Network Variables
+//
 ghCommandQueue *cmdqueue = (ghCommandQueue *)NULL ;
 int client_fd;
 int listen_port = GH_DEFAULT_SOCKET_PORT;
-std::mutex ghMutex;
+//std::mutex ghMutex;
 /////////////////////
 
 /*
@@ -185,7 +188,9 @@ ghSocketInit(int port)
 }
 
 /////////////////////////////////////////
-
+//
+//  Rendering Variables
+//
 osgViewer::CompositeViewer *ghView_anchor;  //  Application Root
 ghWindow *ghWin_anchor;           // 3D window 
 ghRailGUI *ghGui;                 // ImGui 
@@ -198,6 +203,7 @@ double ghElapsedSec = 10.0f;
 unsigned int ghScreenWidth = 0;
 unsigned int ghScreenHeight = 0;
 unsigned int ghScreenNum = 0;
+bool ghWaitState = false;
 
 void
 ghSocketThread() {
@@ -213,6 +219,8 @@ ghSocketThread() {
       std::string command(buffer);
       if ( command.size() > 3 ) {
 	cmdtmp = cmdqueue;
+
+	// Parse Socket Command
 	cmdqueue = ghRailParseCommand(command);
 	if ( cmdqueue != NULL ) {
 	  cmdqueue->prev = cmdtmp;
@@ -244,13 +252,27 @@ ghSocketThread() {
 	  ghGui->setTimeZone( ghRail3D.GetTimeZoneMinutes() );	    
 	} else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
 	  ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],0,0,floor(ghScreenWidth/2),floor(ghScreenHeight/2));
-	  ghView_anchor->addView( nwin->view );
-	  nwin->view->setSceneData( ghNode3D );
-	  ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
+	  if ( nwin != NULL ) {
+	    ghWaitState = ghRail3D.IsPlaying();
+	    if ( ghWaitState ) ghRail3D.SetPlayPause(false);
+	    ghView_anchor->addView( nwin->view );
+	    nwin->view->setSceneData( ghNode3D );
+	    ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
+	    if ( ghWaitState ) ghRail3D.SetPlayPause(true);
+	    ghWaitState = false;
+	  }
 	} else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
 	  ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
-	  ghView_anchor->removeView( rwin->view );
-	  ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
+	  if ( rwin != NULL ) {
+	    ghWaitState = ghRail3D.IsPlaying();
+	    if ( ghWaitState ) ghRail3D.SetPlayPause(false);
+	    // https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
+	    rwin->view->getCamera()->setNodeMask(0x0);
+	    ghView_anchor->removeView( rwin->view );
+	    ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
+	    if ( ghWaitState ) ghRail3D.SetPlayPause(true);
+	    ghWaitState = false;
+	  }
 	} else {
 	  // NOP
 	}
@@ -258,6 +280,7 @@ ghSocketThread() {
       }
     }
 
+  ghWaitState = false;
   ghRail3D.RemoveShm(0);
   ghDisposeWindow( ghView_anchor, ghWin_anchor );
   ghChildQuit( SIGQUIT ) ;
@@ -368,13 +391,20 @@ ghMainLoop(osg::ArgumentParser args)
 	    } else {
 	      ghElapsedSec += elapsed;
 	    }
+
 	  } else {
+	    
 	    // Not Playing
 	  }
-	  _elapsed_prev = _elapsed_current;
 
-	  // Frame Update
-	  ghViewer.frame();
+	  if ( ! ghWaitState ) {
+
+	    _elapsed_prev = _elapsed_current;
+
+	    // Frame Update
+	    ghViewer.frame();
+	    
+	  }
 
         } // End of while loop ( rendering loop )
 	//

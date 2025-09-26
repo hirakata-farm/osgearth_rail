@@ -22,6 +22,7 @@
 # include <nlohmann/json.hpp>
 
 # include "ghRail.hpp"
+#define GH_STRING_ROOT  "root"
 
 using namespace std;
 using namespace cURLpp::Options;
@@ -145,6 +146,17 @@ ghRail::GetUnits()
 }
 
 string
+ghRail::GetLines()
+{
+  std::string ret = " ";
+  for (const auto& [key, value] : p_line) {
+    ret += " ";
+    ret += key;
+  }
+  return ret;
+}
+
+string
 ghRail::GetTimezoneStr()
 {
   nlohmann::json timezone = p_field.GetJsonObject("timezone");
@@ -253,6 +265,30 @@ ghRail::GetTrainIcon(string trainid)
   }
   return ret;
 }
+string
+ghRail::GetTrainLine(string trainid)
+{
+  std::string ret = " ";
+  if ( p_units.count(trainid) < 1 ) {
+    // No Units
+    ret += "Not found";
+  } else {
+    ret += p_units[trainid].GetLineInfo();
+  }
+  return ret;
+}
+string
+ghRail::GetTrainDistance(string trainid)
+{
+  std::string ret = " ";
+  if ( p_units.count(trainid) < 1 ) {
+    // No Units
+    ret += "Not found";
+  } else {
+    ret += p_units[trainid].GetDistanceInfo();
+  }
+  return ret;
+}
 
 //string
 //ghRail::GetTrackingTrain() {
@@ -301,6 +337,7 @@ ghRail::Setup(string configname)
   //  Line data
   //
   nlohmann::json tlines = p_field.GetJsonObject("lines");
+  std::map<std::string, std::string> tdirs[2]; //  index 0,1 only
 
   p_numlines = 0;
   for (nlohmann::json::iterator it = tlines.begin(); it != tlines.end(); ++it) {
@@ -317,9 +354,11 @@ ghRail::Setup(string configname)
     std::string baseuri = p_line[ lineid ].GetJsonString("baseuri");
 
     std::string directionname;
+    int waycount = 0;
     nlohmann::json tway = p_line[ lineid ].GetJsonObject("way");
     for (nlohmann::json::iterator it2 = tway.begin(); it2 != tway.end(); ++it2) {
       directionname = it2.value()["direction"].get<std::string>();
+      tdirs[waycount][lineid] = directionname;
       directionname = lineid + "_" + directionname;  // directionname = lineid_directionname
       p_station[directionname] = "";                 // p_station[directionname] 
 	
@@ -352,7 +391,7 @@ ghRail::Setup(string configname)
       }
 
       p_station[directionname] = it2.value()["stations"];
-
+      waycount++;
     }
     p_numlines++;
   }
@@ -393,9 +432,11 @@ ghRail::Setup(string configname)
     nlohmann::json tunit = *it7;
     std::string lineid2 = tunit["lineid"].get<std::string>();
     std::string route2 = tunit["route"].get<std::string>();
+    std::string dir2 = tdirs[ tunit["way"].get<int>() ][lineid2];
     std::string trainid2 = tunit["trainid"].get<std::string>();
     std::string routename2 = lineid2 + "_" + route2;
-
+    //std::cout << " line " << lineid2 << " " << dir2 << " " << route2 << " "  << trainid2 << std::endl;    
+    
     //    p_units[trainid2].Setup( trainid2,
     //			     locomotivesize,
     //			     locomotivemodel,
@@ -405,6 +446,7 @@ ghRail::Setup(string configname)
     p_units[trainid2].Setup( trainid2,
 			     p_default_icon,
 			     p_default_locomotive,
+			     dir2,
 			     tunit,
 			     p_route[routename2] );
     p_units[trainid2].SimulatePath( &p_time );
@@ -673,7 +715,7 @@ ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d positio
   position_lnglat = WGS84.geocentricToGeodetic(position);
 
   if ( p_altmode == GH_ALTMODE_RELATIVE ) {
-    osg::Vec3d pos = p_units[key].GetControlPointLayer(simtime,coach);
+    osg::Vec3d pos = p_units[key].GetControlPointVector(simtime,coach);
     if ( pos.z() > 0 ) pos.z() = 0.0;
     geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), pos.z()*layerunit , osgEarth::ALTMODE_RELATIVE );
   } else if ( p_altmode == GH_ALTMODE_ABSOLUTE ) {
@@ -970,18 +1012,20 @@ ghGetWindowByName(ghWindow *_win,std::string name) {
 }
 
 void
-ghSetConfigWindow( ghWindow* _win, std::string name,int x,int y,int width,int height) {
+ghSetConfigWindow( ghWindow* _win, std::string title,int x,int y,int width,int height) {
 
   osgViewer::Viewer::Windows windows;
-  ghWindow *w = ghGetWindowByName(_win,name);
+  //ghWindow *w = ghGetWindowByName(_win,name);
   int current[4];
   memset(&current[0], 0, sizeof(int)*4);
+
+  if ( title == GH_STRING_ROOT ) title = GH_WELCOME_MESSAGE;
   
-  w->view->getViewerBase()->getWindows(windows);
+  _win->view->getViewerBase()->getWindows(windows);
   for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
     {
       osgViewer::GraphicsWindow* ww = *itr;
-      if ( name == ww->getWindowName() ) {
+      if ( title == ww->getWindowName() ) {
  	ww->getWindowRectangle ( current[0], current[1], current[2], current[3]);
 	if ( x < 0 ) {
 	  // NOP
@@ -1012,16 +1056,18 @@ ghSetConfigWindow( ghWindow* _win, std::string name,int x,int y,int width,int he
 }
 
 void
-ghGetConfigWindow( ghWindow* _win, std::string name, int *ret) {
+ghGetConfigWindow( ghWindow* _win, std::string title, int *ret) {
 
   osgViewer::Viewer::Windows windows;
-  ghWindow *w = ghGetWindowByName(_win,name);
+  //ghWindow *w = ghGetWindowByName(_win,name);
 
-  w->view->getViewerBase()->getWindows(windows);
+  if ( title == GH_STRING_ROOT ) title = GH_WELCOME_MESSAGE;
+
+  _win->view->getViewerBase()->getWindows(windows);
   for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
     {
       osgViewer::GraphicsWindow* ww = *itr;
-      if ( name == ww->getWindowName() ) {
+      if ( title == ww->getWindowName() ) {
  	ww->getWindowRectangle ( ret[0], ret[1], ret[2], ret[3] );
 	return;
       }

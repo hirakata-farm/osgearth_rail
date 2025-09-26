@@ -108,11 +108,11 @@ class ghRailUnit
     {
     public:
       //void Setup(string id, vector<int> locomotivesize,vector<string> locomotivemodel,nlohmann::json data,string geom);
-      void Setup(string id, string marker, ghRailJSON locomotive, nlohmann::json data,string geom);      
+      void Setup(string id, string marker, ghRailJSON locomotive, string direction , nlohmann::json data,string geom);      
       //bool SimulatePath(int coaches, ghRailTime *railtime );
       bool SimulatePath( ghRailTime *railtime );
       osg::AnimationPath::ControlPoint GetControlPoint(double seconds,int coach);
-      osg::Vec3d GetControlPointLayer(double seconds,int coach);
+      osg::Vec3d GetControlPointVector(double seconds,int coach);
       string GetModelUri(int coach);
       string SetModelLabel(bool flag);
       string GetTimetable();
@@ -124,10 +124,13 @@ class ghRailUnit
       int GetModelStatus(int coach);
       void SetModelStatus(int coach,int status);
       string GetMarkerUri();
+      string GetLineInfo();
+      string GetDistanceInfo();
     private:
       string p_trainid;
       string p_lineid;
       string p_routeid;
+      string p_direction;
       bool p_islabel;
       ghRailJSON p_locomotive;
       string p_marker;
