@@ -323,7 +323,8 @@ def server_connect_dialog():
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
     option5_radio = ttk.Radiobutton(dialog, text="London area (UK)", value="G175517100LONDON", variable=selected_option)
     option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)
-    option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)    
+    option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)
+    option8_radio = ttk.Radiobutton(dialog, text="Netherland (NS)", value="G175930105DUTCH", variable=selected_option)        
 
     option1_radio.place(x=30,y=40)
     option2_radio.place(x=30,y=60)
@@ -332,6 +333,7 @@ def server_connect_dialog():
     option5_radio.place(x=30,y=120)
     option6_radio.place(x=30,y=140)
     option7_radio.place(x=30,y=160)
+    option8_radio.place(x=30,y=180)
 
     def on_server_ok():
         global trainid
