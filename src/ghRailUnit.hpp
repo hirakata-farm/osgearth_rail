@@ -114,7 +114,7 @@ class ghRailUnit
       osg::AnimationPath::ControlPoint GetControlPoint(double seconds,int coach);
       osg::Vec3d GetControlPointVector(double seconds,int coach);
       string GetModelUri(int coach);
-      string SetModelLabel(bool flag);
+      void SetModelLabel(bool flag);
       string GetTimetable();
       void CreateModelNode(int coach);
       int GetLocomotiveModelSize();

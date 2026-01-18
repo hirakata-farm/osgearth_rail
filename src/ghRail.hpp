@@ -21,9 +21,13 @@
 # include <map>
 # include <cstdlib>
 # include <cstring>
+#ifdef _WINDOWS
+// NOP
+#else
 # include <sys/types.h>
 # include <sys/ipc.h>
 # include <sys/shm.h>
+#endif
 
 #include <osgDB/ReadFile>
 #include <osgEarth/MapNode>
@@ -33,8 +37,8 @@
 #include <osgEarth/TerrainEngineNode>
 
 // view configurations.
-#include <osgViewer/config/SingleWindow>
-#include <osgViewer/config/SingleScreen>
+//#include <osgViewer/config/SingleWindow>
+//#include <osgViewer/config/SingleScreen>
 
 # include <nlohmann/json.hpp>
 
@@ -44,7 +48,7 @@ using namespace std;
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.3"
+#define GH_APP_REVISION "0.3.3"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -111,16 +115,17 @@ typedef struct
 
 typedef struct ghWindow
 {
-  std::string name;
   osgViewer::View* view;
   osgEarth::EarthManipulator *manipulator;
-  string tracking;
+  char *name;
+  char *tracking;
   ghSharedMemory shm;
   ghWindow *next;
 } ghWindow;
 
-ghWindow *ghCreateNewWindow(std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
-ghWindow *ghAddNewWindow(ghWindow *_win,std::string name,unsigned int x,unsigned int y,unsigned int width,unsigned int height);
+osgViewer::View* ghCreateView( std::string name ,int screenNum ,  unsigned int x,unsigned int y,unsigned int width,unsigned int height );
+ghWindow *ghCreateWindow(std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
+ghWindow *ghAddWindow(ghWindow *_win,std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
 void ghRemoveWindow( ghWindow *_win , std::string name);
 void ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win );
 ghWindow *ghGetLastWindow(ghWindow *_win);
@@ -128,7 +133,7 @@ int ghCountWindow(ghWindow *_win);
 ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
 void ghSetConfigWindow(ghWindow* _win,std::string title,int x,int y,int width,int height);
 void ghGetConfigWindow(ghWindow* _win,std::string title,int *ret);
-void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
+//void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
 int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 
 //

@@ -38,10 +38,10 @@ camera [set|get] [camera name] [position|lookat|upvec] (number) (number) (number
 camera set root position 35.2 53.2 32 ( lng[deg], lat[deg], alt[m] )
 camera set root lookat 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
 camera set root upvec 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
-camera set root tracking 1241 ( train number or NONE )
-camera set root screen 100 200 ( screenX, screenY )
-camera set root window 640 480 ( window width, window height )
-camera add ( camera name ) 
+camera set root tracking 1241 ( train_number or NONE )
+camera set root screen 100 200 ( screen_position_x, screen_position_y )
+camera set root window 640 480 ( window_width, window_height ) 
+camera add ( camera name ) 0 0 0.2 ( screen_position_x screen_position_y window_size_ratio_from_ScreenSize )
 camera remove ( camera name )
 
 camera get root position
@@ -106,10 +106,16 @@ show version
 # include <vector>
 # include <cstdlib>
 # include <cstring>
+#ifdef _WINDOWS
+#include <winsock2.h>
+#include <iostream>
+#else
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
+#endif
+
 #include <osgEarth/DateTime>
 #include <osgEarth/Sky>
 #include <osgViewer/Viewer>
@@ -242,7 +248,8 @@ show version
 #define GH_STRING_OK "OK"
 
 //////////////////////////////////////////////////
-#define GH_EXECUTE_BUFFER_SIZE 1024
+//#define GH_EXECUTE_BUFFER_SIZE 1024
+#define GH_EXECUTE_BUFFER_SIZE 4096
 #define GH_EXECUTE_SUCCESS 0
 #define GH_EXECUTE_UNKNOWN 1
 #define GH_EXECUTE_NOT_LOADED 4
@@ -256,12 +263,14 @@ show version
 
 
 #define GH_POST_EXECUTE_NONE 0
+#define GH_POST_EXECUTE_DONE 1
 #define GH_POST_EXECUTE_EXIT 2
 #define GH_POST_EXECUTE_CLOSE 4
 #define GH_POST_EXECUTE_TIMEZONE 8
 #define GH_POST_EXECUTE_SETCLOCK 9
 #define GH_POST_EXECUTE_CAMERA_ADD 12
 #define GH_POST_EXECUTE_CAMERA_REMOVE 14
+
 
 ////////////////////////////////////////////////
 
@@ -272,17 +281,16 @@ typedef struct ghCommandQueue
   int	count ;
   int	type ;
   int   argstridx;
-  string argstr[2] ;
+  std::string argstr[2] ;
   int   argnumidx;
   double argnum[3];
   bool isexecute;
+  std::string result;
   ghCommandQueue *prev;
 } ghCommandQueue ;
 
-std::vector<std::string> ghStringSplit(std::string str, char del);
 ghCommandQueue *ghRailParseCommand(string str);
 int ghRailExecuteCommand(ghCommandQueue *cmd,
-			 int socket,
 			 ghRail *rail,
 			 ghWindow* _win,
 			 osgEarth::SkyNode *_sky,

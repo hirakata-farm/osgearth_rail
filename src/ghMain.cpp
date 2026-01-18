@@ -13,7 +13,7 @@
 *
 */
 #include <osgEarthImGui/ImGuiApp>
-#include <osgEarth/ExampleResources>
+#include <osgEarth/EarthManipulator>
 #include <osgEarth/Sky>
 #include <osgViewer/Viewer>
 #include <osgViewer/CompositeViewer>
@@ -39,11 +39,16 @@
 
 #include <signal.h>
 #include <thread>
-#include <mutex>
+//#include <mutex>
+#ifdef _WINDOWS
+#include <winsock2.h>
+#include <Ws2tcpip.h>
+#pragma comment(lib, "Ws2_32.lib")
+#else
 #include <netinet/in.h>
 #include <unistd.h>
 #include <sys/wait.h>
-
+#endif
 
 #define LC "[imgui] "
 
@@ -110,7 +115,7 @@ int client_fd;
 int listen_port = GH_DEFAULT_SOCKET_PORT;
 //std::mutex ghMutex;
 /////////////////////
-
+#ifndef _WINDOWS
 /*
  *   Child Process quit.
  *    cleanup defunct process
@@ -151,7 +156,58 @@ ghChildQuit( int sig )
     exit( 0 ) ;
 
 }
-/**                  **/
+#endif
+
+#ifdef _WINDOWS
+/**  Windows Socket   **/
+/* https://www.geekpage.jp/programming/winsock/tcp.php */
+WSADATA wsaData;
+int
+ghSocketInit(int port)
+{
+  int fd;
+  int iResult;
+  struct sockaddr_in address;
+
+  iResult = WSAStartup(MAKEWORD(2,2),&wsaData);
+  if ( iResult != 0 ) {
+    perror("WSAStartup failed");
+    exit(EXIT_FAILURE);
+  }
+
+  fd = socket(AF_INET,SOCK_STREAM,IPPROTO_TCP);
+  if ( fd == INVALID_SOCKET ) {
+    perror("socket failed");
+    WSACleanup();
+    exit(EXIT_FAILURE);
+  } else {
+    // NOP
+  }
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = INADDR_ANY;
+  address.sin_port = htons(port);
+
+  // https://prupru-prune.hatenablog.com/entry/2023/12/06/021702
+  iResult = ::bind(fd, (struct sockaddr *)&address, sizeof(address) );
+  if ( iResult == SOCKET_ERROR ) {  
+    perror("winsock2 bind failed");
+    printf("Bind faild %d\n", WSAGetLastError());
+    closesocket(fd);
+    WSACleanup();
+    exit(EXIT_FAILURE);
+  }
+
+  if (listen(fd, SOMAXCONN) < 0) {
+    perror("listen");
+    closesocket(fd);
+    WSACleanup();
+    exit(EXIT_FAILURE);
+  }
+
+  return fd;
+}
+#else
+/**  Unix Socket   **/
 int
 ghSocketInit(int port)
 {
@@ -186,6 +242,8 @@ ghSocketInit(int port)
 
   return fd;
 }
+#endif
+
 
 /////////////////////////////////////////
 //
@@ -200,10 +258,48 @@ osgEarth::SkyNode *ghSky;         // manipulate date-time
 
 double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
-unsigned int ghScreenWidth = 0;
-unsigned int ghScreenHeight = 0;
 unsigned int ghScreenNum = 0;
-bool ghUpdateState = true;
+int ghPostExecute = GH_POST_EXECUTE_NONE;
+
+void
+ghCheckPostExecute() {
+  bool prevState = false;
+
+  if ( ghPostExecute == GH_POST_EXECUTE_SETCLOCK ) {
+    ghElapsedSec = 0.0f;
+  } else if ( ghPostExecute == GH_POST_EXECUTE_TIMEZONE ) {
+    ghGui->setTimeZone( ghRail3D.GetTimeZoneMinutes() );
+  } else if ( ghPostExecute == GH_POST_EXECUTE_CAMERA_ADD ) {
+    ghWindow *nwin = ghAddWindow( ghWin_anchor,
+				  cmdqueue->argstr[0],
+				  ghScreenNum,
+				  (unsigned int)cmdqueue->argnum[0],
+				  (unsigned int)cmdqueue->argnum[1],
+				  cmdqueue->argnum[2]);
+    if ( nwin != NULL ) {
+      prevState = ghRail3D.IsPlaying();
+      if ( prevState ) ghRail3D.SetPlayPause(false);
+      ghView_anchor->addView( nwin->view );
+      nwin->view->setSceneData( ghNode3D );
+      //ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
+      if ( prevState ) ghRail3D.SetPlayPause(true);
+    }
+  } else if ( ghPostExecute == GH_POST_EXECUTE_CAMERA_REMOVE ) {
+    ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
+    if ( rwin != NULL ) {
+      prevState = ghRail3D.IsPlaying();
+      if ( prevState ) ghRail3D.SetPlayPause(false);
+      // https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
+      rwin->view->getCamera()->setNodeMask(0x0);
+      ghView_anchor->removeView( rwin->view );
+      ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
+      if ( prevState ) ghRail3D.SetPlayPause(true);
+    }
+  } else {
+    // NOP
+  }
+  ghPostExecute = GH_POST_EXECUTE_DONE;
+}
 
 void
 ghSocketThread() {
@@ -211,12 +307,16 @@ ghSocketThread() {
   char buffer[1024] = {0};
   ghCommandQueue *cmdtmp = (ghCommandQueue *)NULL ;
   bool isThread = true;
-  bool prevState = false;
+  int recv_result;
   
   while (isThread)
     {
       // Wait for client receive message
+#ifdef _WINDOWS
+      recv_result = recv(client_fd, buffer, 1024, 0);
+#else      
       read(client_fd, buffer, 1024);
+#endif
       std::string command(buffer);
       if ( command.size() > 3 ) {
 	cmdtmp = cmdqueue;
@@ -228,61 +328,44 @@ ghSocketThread() {
 	  
 	  memset(buffer, 0, sizeof(buffer));
 	    
-	  //if ( cmdqueue->type == GH_COMMAND_CLOSE ||
-	  //     cmdqueue->type == GH_COMMAND_EXIT ) {
-	  //  break;
-	  //}
 	}
       } else {
 	// Too short buffer
       }
 
-      if ( cmdqueue->isexecute == false ) {
-
-	// Execute Socket Command
-	int result = ghRailExecuteCommand(cmdqueue,client_fd,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
-	ghUpdateState = false;
-	if ( result == GH_POST_EXECUTE_EXIT ) {
-	  isThread = false;
-	  break;
-	} else if ( result == GH_POST_EXECUTE_CLOSE ) {
-	  isThread = false;
-	  break;
-	} else if ( result == GH_POST_EXECUTE_SETCLOCK ) {
-	  ghElapsedSec = 0.0f;
-	} else if ( result == GH_POST_EXECUTE_TIMEZONE ) {
-	  ghGui->setTimeZone( ghRail3D.GetTimeZoneMinutes() );	    
-	} else if ( result == GH_POST_EXECUTE_CAMERA_ADD ) {
-	  ghWindow *nwin = ghAddNewWindow( ghWin_anchor, cmdqueue->argstr[0],0,0,floor(ghScreenWidth/2),floor(ghScreenHeight/2));
-	  if ( nwin != NULL ) {
-	    prevState = ghRail3D.IsPlaying();
-	    if ( prevState ) ghRail3D.SetPlayPause(false);
-	    ghView_anchor->addView( nwin->view );
-	    nwin->view->setSceneData( ghNode3D );
-	    ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
-	    if ( prevState ) ghRail3D.SetPlayPause(true);
+      if ( cmdqueue ) {
+	if ( cmdqueue->isexecute == false ) {
+	  // Execute Socket Command
+	  ghPostExecute = ghRailExecuteCommand(cmdqueue,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
+	  if ( ghPostExecute == GH_POST_EXECUTE_EXIT ) {
+	    isThread = false;
+	    ghPostExecute = GH_POST_EXECUTE_DONE;
+	  } else if ( ghPostExecute == GH_POST_EXECUTE_CLOSE ) {
+	    isThread = false;
+	    ghPostExecute = GH_POST_EXECUTE_DONE;
+	  } else {
+	    // NOP
 	  }
-	} else if ( result == GH_POST_EXECUTE_CAMERA_REMOVE ) {
-	  ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
-	  if ( rwin != NULL ) {
-	    prevState = ghRail3D.IsPlaying();
-	    if ( prevState ) ghRail3D.SetPlayPause(false);
-	    // https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
-	    rwin->view->getCamera()->setNodeMask(0x0);
-	    ghView_anchor->removeView( rwin->view );
-	    ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
-	    if ( prevState ) ghRail3D.SetPlayPause(true);
-	  }
-	} else {
-	  // NOP
 	}
-	ghUpdateState = true;
+
+	if ( cmdqueue->isexecute == true && cmdqueue->result != GH_STRING_NOP ) {
+	  const char* retmsg = cmdqueue->result.c_str();
+	  send(client_fd, retmsg, std::strlen(retmsg), 0);
+	}
+
+      } else {
+	// NOP
+	//std::cout<<"CommandQueue NULL="<<command<<std::endl;
       }
     }
 
   ghRail3D.RemoveShm(0);
   ghDisposeWindow( ghView_anchor, ghWin_anchor );
+#ifdef _WINDOWS
+  // NOP
+#else
   ghChildQuit( SIGQUIT ) ;
+#endif
 
   //  End of client socket read loop
 }
@@ -294,7 +377,10 @@ ghMainLoop(osg::ArgumentParser args)
   osgViewer::CompositeViewer ghViewer(args);  //  Application Root
   ghView_anchor = &ghViewer;
   
-  ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
+  //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::SingleThreaded);  
+  //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
+  ghViewer.setThreadingModel(osgViewer::CompositeViewer::DrawThreadPerContext);
+
   /*
     SingleThreaded 	
     CullDrawThreadPerContext 	
@@ -304,13 +390,11 @@ ghMainLoop(osg::ArgumentParser args)
     ThreadPerCamera 	
     AutomaticSelection 
    */
+
+  /*   Unknown ???
   ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
-
-  ghWin_anchor = ghCreateNewWindow(GH_STRING_ROOT,0,0,ghScreenWidth,ghScreenHeight);
-  ghViewer.addView( ghWin_anchor->view );
-  /***  Set window name ***/
-  ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
-
+  ghViewer.setRealizeOperation(new osgEarth::GL3RealizeOperation()); //Wrong Win32
+  */
   /**   Load the earth file  **/
   ghNode3D = MapNodeHelper().load(args, &ghViewer);
     
@@ -320,7 +404,6 @@ ghMainLoop(osg::ArgumentParser args)
       auto ui = new ImGuiAppEngine(args);
 
       ui->add("File", new QuitGUI());
-
       ui->add("Tools", new NetworkMonitorGUI());
       ui->add("Tools", new AnnotationsGUI());
       ui->add("Tools", new PickerGUI());
@@ -329,12 +412,16 @@ ghMainLoop(osg::ArgumentParser args)
       ui->add("Tools", new SystemGUI());
       ui->add("Tools", new TerrainGUI());
 
+#ifdef _WINDOWS
+      // NOP
+#else
       /***  Use half of threads **/
       int available_threads = (int)std::thread::hardware_concurrency();
       available_threads = available_threads / 2.0;
       if ( available_threads < 1 ) available_threads = 1;
       jobs::get_pool("oe.rex.loadtile")->set_concurrency(available_threads);
-
+#endif
+      
       /***  map node  **/
       osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(ghNode3D);
       //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
@@ -359,7 +446,16 @@ ghMainLoop(osg::ArgumentParser args)
       {
 	ImGui::GetIO().FontAllowUserScaling = true;
       };
+
+      /***  Set window view ***/
+      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,ghScreenNum,64,48,0.5);
+      ghViewer.addView( ghWin_anchor->view );
+      //ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
+#ifdef _WINDOWS
+      ghWin_anchor->view->getEventHandlersMoveAddressPush(ui,0x00);
+#else
       ghWin_anchor->view->getEventHandlers().push_front(ui);
+#endif
       ghWin_anchor->view->setSceneData( ghNode3D );
 
       ghGui = new ghRailGUI();
@@ -372,6 +468,10 @@ ghMainLoop(osg::ArgumentParser args)
       double _elapsed_prev = 0.0f;    // Important
       double _elapsed_current = ghViewer.elapsedTime(); // Important
 
+      ///////////////////
+      //
+      //  Rendering Loop
+      //
       while (!ghViewer.done())
         {
 	  _elapsed_current = ghViewer.elapsedTime() ; // double [sec]
@@ -396,18 +496,19 @@ ghMainLoop(osg::ArgumentParser args)
 	    // Not Playing
 	  }
 
-	  if ( ghUpdateState ) {
-	    _elapsed_prev = _elapsed_current;
+	  _elapsed_prev = _elapsed_current;
 	  
-	    // Frame Update
-	    ghViewer.frame();
-	  }
+	  // Frame Update
+	  ghViewer.frame();
 
-        } // End of while loop ( rendering loop )
-	//
-	//
-	ghSock.join();
-	return 1;
+	  ghCheckPostExecute();
+	  
+        }
+      //
+      // End of while loop ( Rendering loop )
+      ////////////////////////
+      ghSock.join();
+      return 1;
     }
     else
     {
@@ -431,16 +532,11 @@ main(int argc, char** argv)
 
     osgEarth::initialize(arguments);
 
-    //
-    //Setup our main view that will show the loaded earth file.
-    //
-    osg::GraphicsContext::WindowingSystemInterface* wsi = osg::GraphicsContext::getWindowingSystemInterface();
-    if ( wsi )
-      wsi->getScreenResolution( osg::GraphicsContext::ScreenIdentifier(ghScreenNum), ghScreenWidth, ghScreenHeight );
-    //
-    ////////////////////////////////////////
-
+#ifdef _WINDOWS
+    // Nop signal
+#else    
     signal( SIGCHLD, ghSignalChild ) ;
+#endif    
     int	server_fd ;
     if ((server_fd = ghSocketInit(listen_port)) < 0)
     {
@@ -449,12 +545,26 @@ main(int argc, char** argv)
     }
     
     struct sockaddr_in	client_addr ;
+#ifdef _WINDOWS
+    int client_len = sizeof( client_addr ) ;
+#else    
     socklen_t client_len = sizeof( client_addr ) ;
-    int	proc_id ;		/*	Process Identifier	*/
-
+    int	proc_id ; /* Process Identifier */
+#endif
+    
     for (;;) 
     {
-	if ((client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len )) < 0)
+
+#ifdef _WINDOWS
+      //  Does not fork for Windows
+      client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len );
+      if (client_fd == INVALID_SOCKET )
+	{
+	  fprintf( stderr,"Cannot accept new socket\n" ) ;
+	  break ;
+	}
+#else      
+      if ((client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len )) < 0)
 	{
 	  fprintf( stderr,"Cannot accept new socket\n" ) ;
 	  break ;
@@ -487,9 +597,14 @@ main(int argc, char** argv)
 	    signal( SIGPIPE, ghSignalQuit ) ;
 	  close( server_fd ) ;
 
+#endif
 	  //////////////////
 	  ghMainLoop(arguments);
 	  //////////////////
+
+#ifdef _WINDOWS	  
+	  // NOP
+#else
 	  close( client_fd ) ;
 
 	  ghChildQuit( SIGQUIT ) ;
@@ -504,6 +619,9 @@ main(int argc, char** argv)
 	  sleep(1);
 
 	}
+
+#endif
+	
     } /* end of  for (;;) */
 }
 

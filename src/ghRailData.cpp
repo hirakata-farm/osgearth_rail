@@ -24,6 +24,11 @@
 
 # include "ghRailData.hpp"
 
+#ifdef _WINDOWS
+#include <windows.h>
+#include <algorithm>
+#endif
+
 using namespace std;
 using namespace cURLpp::Options;
 
@@ -248,8 +253,19 @@ ghRailModel::GetGltf()
   //std::cout << modelfile << std::endl;
   //locomotive/Amtrak17_car1.gltf
 
+#ifdef _WINDOWS  
+  std::string modelf = modelfile;
+  std::string::size_type pos2 = 0;
+  while ((pos2 = modelf.find("/", pos2)) != std::string::npos) {
+    modelf.replace(pos2, 1, "\\");
+    pos2 += 2;
+  }
+  modelfile = modelf;
+  //std::cout << modelf << std::endl;
+#endif
+
   //
-  //
+  // check for exists
   //
   FILE* fp = fopen(modelfile.c_str(), "r");
   if (fp == NULL) {

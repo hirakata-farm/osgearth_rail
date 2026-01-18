@@ -13,6 +13,7 @@
 *
 */
 
+# include "ghString.hpp"
 # include "ghRail.hpp"
 # include "ghRailCommand.hpp"
 
@@ -140,33 +141,6 @@ std::vector<std::string> GH_RESERVED_STRING =
 };
 
   
-////////////////////////////////////////////////
-
-std::vector<std::string>
-ghStringSplit(std::string str, char del) {
-    std::vector<std::string> result;
-    std::string subStr;
-
-    for (const char c : str) {
-        if (c == del) {
-	  if ( subStr.length() > 0 ) {
-            result.push_back(subStr);
-            subStr.clear();
-	  }
-        }else {
-	  if ( iscntrl(c) == 0 ) {
-	    subStr += c;
-	  } else {
-	    // NOP
-	  }
-        }
-    }
-
-    result.push_back(subStr);
-    return result;
-}
-
-
 ghCommandQueue *
 ghRailParseCommand(string str) {
 
@@ -188,6 +162,7 @@ ghRailParseCommand(string str) {
   cmd->argnum[1]  = 0.0;
   cmd->argnum[2]  = 0.0;
   cmd->isexecute = false;
+  cmd->result = GH_STRING_NOP;
 
   if ( command_size > 0 )  {
     if ( command[0] == GH_STRING_EXIT ) {
@@ -308,8 +283,8 @@ ghRailParseCommand(string str) {
 	  cmd->type = GH_COMMAND_CAMERA_SET_SCREEN;
 	  cmd->argstr[0] = command[2];  // Camera Name
 	  cmd->argstridx = 1;	  
-	  cmd->argnum[0] = std::stod(command[4]);  // screen x 
-	  cmd->argnum[1] = std::stod(command[5]);  // screen y
+	  cmd->argnum[0] = std::stod(command[4]);  // screen position x 
+	  cmd->argnum[1] = std::stod(command[5]);  // screen position y
 	  cmd->argnumidx = 2;
 	  if ( command_size == 7 ) {
 	    cmd->argnum[2] = std::stod(command[6]);  // screen num
@@ -360,13 +335,18 @@ ghRailParseCommand(string str) {
 	} else {
 	  // NOP
 	}
-      } else if ( command[1] == GH_STRING_ADD && command_size == 3 ) {
+      } else if ( command[1] == GH_STRING_ADD && command_size == 6 ) {
 	cmd->type = GH_COMMAND_CAMERA_ADD;
 	cmd->argstr[0] = command[2]; // Camera Name
 	cmd->argstridx = 1;	  	  	
-	//cmd->argnum[0] = std::stod(command[3]);
-	//cmd->argnum[1] = std::stod(command[4]);
-	//cmd->argnumidx = 2;	  	  	
+	cmd->argnum[0] = std::stod(command[3]);
+	if ( cmd->argnum[0] < 0.0 ) cmd->argnum[0] = 0.0;
+	cmd->argnum[1] = std::stod(command[4]);
+	if ( cmd->argnum[1] < 0.0 ) cmd->argnum[1] = 0.0;
+	cmd->argnum[2] = std::stod(command[5]);
+	if ( cmd->argnum[2] < 0.1 ) cmd->argnum[2] = 0.1;
+	if ( cmd->argnum[2] > 1.0 ) cmd->argnum[2] = 1.0;
+	cmd->argnumidx = 3;	  	  	
       } else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
 	cmd->type = GH_COMMAND_CAMERA_REMOVE;
 	cmd->argstr[0] = command[2]; // Camera Name
@@ -491,7 +471,6 @@ ghRailParseCommand(string str) {
 
 int
 ghRailExecuteCommand( ghCommandQueue *cmd,
-		      int socket,
 		      ghRail *rail,
 		      ghWindow* _win,
 		      osgEarth::SkyNode* _sky,
@@ -695,9 +674,10 @@ ghRailExecuteCommand( ghCommandQueue *cmd,
     }
   }
 
-  std::string result = ghRailReturnMessage(cmd,resultcode,&resultstring[0]);
-  const char* retmsg = result.c_str();
-  send(socket, retmsg, std::strlen(retmsg), 0);
+  cmd->result = ghRailReturnMessage(cmd,resultcode,&resultstring[0]);
+  //std::string result = ghRailReturnMessage(cmd,resultcode,&resultstring[0]);
+  //const char* retmsg = result.c_str();
+  //send(socket, retmsg, std::strlen(retmsg), 0);
   cmd->isexecute = true;    
 
   return retval;
@@ -1144,7 +1124,7 @@ ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow* _win) 
   if ( rail->IsTrainID(cmd->argstr[1]) ) {
     ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
     if ( tmp != NULL ) {
-      tmp->tracking = cmd->argstr[1];
+      tmp->tracking = ghString2CharPtr( cmd->argstr[1] );
       return GH_EXECUTE_SUCCESS;
     } else {
       return GH_EXECUTE_NOT_FOUND;
@@ -1382,7 +1362,11 @@ ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win,
   if ( _win != (ghWindow *)NULL ) {
     offset = 24 + ghCountWindow(_win);
   }
+#ifdef _WINDOWS
+  int shmkey = 86822723;
+#else  
   int shmkey = ftok(GH_SHM_PATH,shmtype+offset);
+#endif
   std::string ret = " ";
   if (shmkey < 0) {
     return GH_EXECUTE_CANNOT_GET;

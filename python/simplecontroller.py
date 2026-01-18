@@ -100,12 +100,15 @@ def setup_shm():
     global shm_camera
     global remote_polling_second
     shmmsg = remote_socket.send("shm set clock time\n")
-    shm_time = sysv_ipc.SharedMemory(int(shmmsg[3]))
+    if shmmsg[3].isnumeric():
+        shm_time = sysv_ipc.SharedMemory(int(shmmsg[3]))
     shmmsg = remote_socket.send("shm set train position\n")
-    shm_train = sysv_ipc.SharedMemory(int(shmmsg[3]))
-    shm_train_size_byte = int(shmmsg[4])
+    if shmmsg[3].isnumeric():
+        shm_train = sysv_ipc.SharedMemory(int(shmmsg[3]))
+        shm_train_size_byte = int(shmmsg[4])
     shmmsg = remote_socket.send("shm set camera root viewport\n")
-    shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[4]))
+    if shmmsg[4].isnumeric():
+        shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[4]))
     remote_polling_second = 1
     
 
@@ -570,19 +573,12 @@ def camera_add_dialog():
     defaultname = "CAMERA" + str(len(windows));
     txt.insert(0,defaultname)
 
-    # width Spinbox
-    w_spinbox = ttk.Spinbox(dialog, from_=320, to=1020, increment=10, wrap=True, width=8)
-    w_spinbox.set(640) # Initial value
-    w_spinbox.place(x=150, y=40)
-    w_label = ttk.Label(dialog, text="width")
-    w_label.place(x=50, y=40)
-
-    # height Spinbox
-    h_spinbox = ttk.Spinbox(dialog, from_=240, to=940, increment=10, wrap=True, width=8)
-    h_spinbox.set(480) # Initial value    
-    h_spinbox.place(x=150, y=70)
-    h_label = ttk.Label(dialog, text="height")
-    h_label.place(x=50, y=70)
+    # size ratio slider
+    s_scale_var = tkinter.DoubleVar()
+    s_scale = tkinter.Scale(dialog, from_=0.1, to_=1.0, length=200, resolution=0.1, orient=tkinter.HORIZONTAL, variable=s_scale_var , showvalue=True)
+    s_scale.place(x=150, y=40)
+    s_label = ttk.Label(dialog, text="size ratio")
+    s_label.place(x=50, y=40)
 
     # screenX Spinbox
     x_spinbox = ttk.Spinbox(dialog, from_=0, to=1920, increment=10, wrap=True, width=8)
@@ -600,22 +596,17 @@ def camera_add_dialog():
 
     def on_button_ok():
         cname = txt.get()
-        w = w_spinbox.get()
-        h = h_spinbox.get()
+        s = s_scale.get()
         x = x_spinbox.get()
         y = y_spinbox.get()
-        #message = "camera add " + cname + " " + w + " " + h + "\n"
-        message = "camera add " + cname + "\n"
+        message = "camera add " + cname + " " + str(x) + " " + str(y) + " " + str(s) + "\n"
         response = remote_socket.send(message);
-        message = "camera set " + cname + " window " + w + " " + h + "\n"
-        response = remote_socket.send(message);
-        message = "camera set " + cname + " screen " + x + " " + y + "\n"
-        response = remote_socket.send(message);
+        dialog.destroy()
+        time.sleep(5) # wait time for Setup 3D Viewer
         message = "shm set camera " + cname + " viewport\n"
         shmmsg = remote_socket.send(message)
         shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
         windows[cname] = "NONE";
-        dialog.destroy()
 
     def on_button_no():
         dialog.destroy()

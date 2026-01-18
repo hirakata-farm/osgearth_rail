@@ -14,6 +14,7 @@
 */
 
 
+# include "ghString.hpp"
 # include "ghRailUnit.hpp"
 
 
@@ -67,7 +68,7 @@ ghRailUnit::Setup( string id,
     tmpline = _split(token,",");
     if ( tmpline[0].compare(0, 1, "#") == 0 ) {
       // Comment Property
-      if ( idx > 0 ) {
+      if ( idx > 0 && tmpline.size() > 1 ) {
 	propline = _split(tmpline[1],":");
 	for (const auto& token2 : propline) {
 	  //  Check layer Property
@@ -219,7 +220,7 @@ ghRailUnit::GetLocomotiveModelSize() {
   return p_locomotive.GetVectorSize("model");
 }
 
-string
+void
 ghRailUnit::SetModelLabel(bool flag) {
   int coach = 0;
   if ( flag ) {
@@ -284,7 +285,21 @@ void
 ghRailUnit::CreateModelNode(int coach) {
 
   ////////////////////////////////////////////////
+#ifdef _WINDOWS
+  //std::string gltf(p_models[coach].GetGltf());
+  //char* cstr = new char[gltf.size() + 1]; // allocation memory
+  //std::strcpy(cstr, gltf.c_str());
+  //osg::Node* locomotive = osgDB::readNodeFileChar(cstr);
+  osg::Node* locomotive = osgDB::readNodeFileChar( ghString2CharPtr( p_models[coach].GetGltf() ) );
+  //
+  // include/osgDB/ReadFile
+  // src/osgDB/ReadFile.cpp string->char
+  // include/osgDB/Registry
+  // osgearth/osgEarthDriver/gltf/ReaderWriterGLTF.cpp
+  //
+#else
   osg::Node* locomotive = osgDB::readNodeFile( p_models[coach].GetGltf() );
+#endif  
   p_attitude[coach]->setPosition( osg::Vec3(0.0,0.0,0.0) );
   p_attitude[coach]->setScale( osg::Vec3(1.0,1.0,1.0) );
   p_attitude[coach]->addChild( locomotive );
@@ -522,12 +537,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 
 //
 //https://dexall.co.jp/articles/?p=2187
-// パフォーマンス改善版：予めvectorのサイズを確保
-vector<string>
-ghRailUnit::_split(string str, string delim = "\n") {
+vector<string> ghRailUnit::_split(string str, string delim) {
   
     vector<string> tokens;
-    // 区切り文字の出現回数から必要なサイズを予測
     size_t count = 1;
     for (size_t i = 0; i < str.length(); i++) {
         if (str.substr(i, delim.length()) == delim) {
@@ -556,7 +568,8 @@ ghRailUnit::_split(string str, string delim = "\n") {
 int
 ghRailUnit::_getStationIndex(string str,int num) {
   int samecount = 0;
-  for (int i = p_geometry.size()+1; i > -1 ; i--) {    
+  //for (int i = p_geometry.size()+1; i > -1 ; i--)  BUG
+  for (int i = p_geometry.size()-1; i > -1 ; i--) {    
     if ( p_geometrystation[i] == str  ) {
       samecount++;
     }
@@ -1353,15 +1366,14 @@ ghRailUnit::_createLabelNode(string text) {
 
   osgEarth::Style labelStyle;
   osgEarth::LabelNode *label = new osgEarth::LabelNode();
-  //p_modellabel = 
   
   labelStyle.getOrCreate<osgEarth::TextSymbol>()->alignment() = osgEarth::TextSymbol::ALIGN_CENTER_CENTER;
   labelStyle.getOrCreate<osgEarth::TextSymbol>()->fill().mutable_value().color() = osgEarth::Util::Color(GH_DEFAULT_LABEL_COLOR);
   labelStyle.getOrCreate<osgEarth::TextSymbol>()->halo() = osgEarth::Util::Color(GH_DEFAULT_LABEL_HALO);
   labelStyle.getOrCreate<osgEarth::TextSymbol>()->size() = GH_DEFAULT_LABEL_SIZE;
   labelStyle.getOrCreate<osgEarth::TextSymbol>()->pixelOffset() = osg::Vec2s(0.0, GH_DEFAULT_LABEL_SIZE*3.0);
-  label->setText(text);
   label->setStyle(labelStyle);
+  label->setText(text);
   return label;
   
 }

@@ -34,7 +34,11 @@ using namespace std;
 
 #define MAX_FILE_LENGTH 200000
 
+#ifdef _WINDOWS
+#define GEOGLYPH_MODEL_FILE_TEMPLATE "locomotive\\DSBIC3_car2.gltf"
+#else
 #define GEOGLYPH_MODEL_FILE_TEMPLATE "locomotive/DSBIC3_car2.gltf"
+#endif
 
 
 //#define GEOGLYPH_MIN_SIZE 8000
