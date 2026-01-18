@@ -24,7 +24,7 @@ find_package( curlpp REQUIRED )
 
 link_directories("/YOURPATH/OSG/dist/lib")
 
-add_executable(osgearth_rail src/ghRailTime.cpp src/ghRailUnit.cpp src/ghRailData.cpp src/ghRail.cpp src/ghRailCommand.cpp src/ghMain.cpp)
+add_executable(osgearth_rail src/ghString.cpp src/ghRailUnit.cpp src/ghRailData.cpp src/ghRail.cpp src/ghRailCommand.cpp src/ghMain.cpp)
 
 target_include_directories(osgearth_rail PUBLIC "/YOURPATH/OSG/dist/include")
 
