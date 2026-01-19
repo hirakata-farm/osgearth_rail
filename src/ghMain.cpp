@@ -38,8 +38,11 @@
 #include "ghRailCommand.hpp"
 
 #include <signal.h>
-#include <thread>
+//#include <thread>
 //#include <mutex>
+#include <OpenThreads/Thread>
+#include <OpenThreads/Mutex>
+
 #ifdef _WINDOWS
 #include <winsock2.h>
 #include <Ws2tcpip.h>
@@ -301,74 +304,83 @@ ghCheckPostExecute() {
   ghPostExecute = GH_POST_EXECUTE_DONE;
 }
 
-void
-ghSocketThread() {
+//
+//
+// Create a thread class by inheriting from OpenThreads::Thread
+class SocketThread : public OpenThreads::Thread {
+public:
+   SocketThread() : _running(true),buffer{0},cmdtmp(nullptr),recv_result(0) {}
 
-  char buffer[1024] = {0};
-  ghCommandQueue *cmdtmp = (ghCommandQueue *)NULL ;
-  bool isThread = true;
-  int recv_result;
-  
-  while (isThread)
-    {
-      // Wait for client receive message
+    // The run() method contains the code to be executed in the thread
+    virtual void run() {
+        while (_running) {
+	  //std::cout << "Thread  is running." << std::endl;
+	  // Sleep for 100 milliseconds
+	  //OpenThreads::Thread::microSleep(100000);
 #ifdef _WINDOWS
-      recv_result = recv(client_fd, buffer, 1024, 0);
+	  recv_result = recv(client_fd, buffer, 1024, 0);
 #else      
-      read(client_fd, buffer, 1024);
+	  read(client_fd, buffer, 1024);
 #endif
-      std::string command(buffer);
-      if ( command.size() > 3 ) {
-	cmdtmp = cmdqueue;
+	  std::string command(buffer);
+	  if ( command.size() > 3 ) {
+	    cmdtmp = cmdqueue;
 
-	// Parse Socket Command
-	cmdqueue = ghRailParseCommand(command);
-	if ( cmdqueue != NULL ) {
-	  cmdqueue->prev = cmdtmp;
+	    // Parse Socket Command
+	    cmdqueue = ghRailParseCommand(command);
+	    if ( cmdqueue != NULL ) {
+	      cmdqueue->prev = cmdtmp;
+	      memset(buffer, 0, sizeof(buffer));
+	    }
+	  } else {
+	    // Too short buffer
+	  }
 	  
-	  memset(buffer, 0, sizeof(buffer));
-	    
-	}
-      } else {
-	// Too short buffer
-      }
+	  if ( cmdqueue ) {
+	    if ( cmdqueue->isexecute == false ) {
+	      // Execute Socket Command
+	      ghPostExecute = ghRailExecuteCommand(cmdqueue,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
+	      if ( ghPostExecute == GH_POST_EXECUTE_EXIT ) {
+		_running = false;
+		ghPostExecute = GH_POST_EXECUTE_DONE;
+	      } else if ( ghPostExecute == GH_POST_EXECUTE_CLOSE ) {
+		_running = false;
+		ghPostExecute = GH_POST_EXECUTE_DONE;
+	      } else {
+		// NOP
+	      }
+	    }
 
-      if ( cmdqueue ) {
-	if ( cmdqueue->isexecute == false ) {
-	  // Execute Socket Command
-	  ghPostExecute = ghRailExecuteCommand(cmdqueue,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
-	  if ( ghPostExecute == GH_POST_EXECUTE_EXIT ) {
-	    isThread = false;
-	    ghPostExecute = GH_POST_EXECUTE_DONE;
-	  } else if ( ghPostExecute == GH_POST_EXECUTE_CLOSE ) {
-	    isThread = false;
-	    ghPostExecute = GH_POST_EXECUTE_DONE;
+	    if ( cmdqueue->isexecute == true && cmdqueue->result != GH_STRING_NOP ) {
+	      const char* retmsg = cmdqueue->result.c_str();
+	      send(client_fd, retmsg, std::strlen(retmsg), 0);
+	    }
 	  } else {
 	    // NOP
+	    //std::cout<<"CommandQueue NULL="<<command<<std::endl;
 	  }
 	}
+        //std::cout << "Thread stopped." << std::endl;
 
-	if ( cmdqueue->isexecute == true && cmdqueue->result != GH_STRING_NOP ) {
-	  const char* retmsg = cmdqueue->result.c_str();
-	  send(client_fd, retmsg, std::strlen(retmsg), 0);
-	}
-
-      } else {
+	ghRail3D.RemoveShm(0);
+	ghDisposeWindow( ghView_anchor, ghWin_anchor );
+#ifdef _WINDOWS
 	// NOP
-	//std::cout<<"CommandQueue NULL="<<command<<std::endl;
-      }
+#else
+	ghChildQuit( SIGQUIT ) ;
+#endif
     }
 
-  ghRail3D.RemoveShm(0);
-  ghDisposeWindow( ghView_anchor, ghWin_anchor );
-#ifdef _WINDOWS
-  // NOP
-#else
-  ghChildQuit( SIGQUIT ) ;
-#endif
+    void stop() { _running = false; }
 
-  //  End of client socket read loop
-}
+private:
+  //  int _id;
+  bool _running;
+  char buffer[1024];
+  ghCommandQueue *cmdtmp;
+  int recv_result;
+};
+///////////////////////////////////////////////////////
 
 int
 ghMainLoop(osg::ArgumentParser args)
@@ -462,8 +474,11 @@ ghMainLoop(osg::ArgumentParser args)
       ui->add("Clock", ghGui );
       ghRail3D.SetClockSpeed(1.0);
       ghRail3D.SetPlayPause(false);
-      std::thread ghSock(ghSocketThread);
-      /////////////////////////////////////////////  Socket LOOP
+
+      /////////////////////////
+      SocketThread* tsocket = new SocketThread();
+      tsocket->startThread();
+      /////////////////////////
     
       double _elapsed_prev = 0.0f;    // Important
       double _elapsed_current = ghViewer.elapsedTime(); // Important
@@ -506,8 +521,13 @@ ghMainLoop(osg::ArgumentParser args)
         }
       //
       // End of while loop ( Rendering loop )
+
       ////////////////////////
-      ghSock.join();
+      tsocket->stop();
+      tsocket->join();
+      delete tsocket;
+      ////////////////////////
+
       return 1;
     }
     else

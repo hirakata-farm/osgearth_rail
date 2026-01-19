@@ -29,6 +29,7 @@ add_executable(osgearth_rail src/ghString.cpp src/ghRailUnit.cpp src/ghRailData.
 target_include_directories(osgearth_rail PUBLIC "/YOURPATH/OSG/dist/include")
 
 target_link_libraries(osgearth_rail
+	OpenThreads
 	osgEarthImGui
 	osgEarth
 	osgViewer
