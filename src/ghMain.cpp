@@ -258,6 +258,7 @@ ghRailGUI *ghGui;                 // ImGui
 ghRail ghRail3D;                  // Simulation    Rail Class 
 osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
 osgEarth::SkyNode *ghSky;         // manipulate date-time
+osg::ArgumentParser *ghArgs;
 
 double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
@@ -388,6 +389,7 @@ ghMainLoop(osg::ArgumentParser args)
 
   osgViewer::CompositeViewer ghViewer(args);  //  Application Root
   ghView_anchor = &ghViewer;
+  ghArgs = &args;
   
   //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::SingleThreaded);  
   //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
@@ -460,7 +462,7 @@ ghMainLoop(osg::ArgumentParser args)
       };
 
       /***  Set window view ***/
-      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,ghScreenNum,64,48,0.5);
+      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,ghArgs,ghScreenNum,64,48,0.5);
       ghViewer.addView( ghWin_anchor->view );
       //ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 #ifdef _WINDOWS
@@ -538,7 +540,6 @@ ghMainLoop(osg::ArgumentParser args)
   
 }
 
- 
 int
 main(int argc, char** argv)
 {

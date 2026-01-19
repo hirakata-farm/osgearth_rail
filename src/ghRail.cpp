@@ -946,7 +946,7 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y,un
 
 
 ghWindow *
-ghCreateWindow(std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio) {
+ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio) {
   ghWindow *win;
   if ((win = (ghWindow *)calloc( (unsigned)1, (unsigned)sizeof( ghWindow ) )) == NULL)
     {
@@ -975,8 +975,10 @@ ghCreateWindow(std::string name,unsigned int screen,unsigned int x,unsigned int 
   //win->view->apply(new osgViewer::SingleWindow(x,y,width,height,0)); // ScreenNum=0
   //win->view->getCamera()->setViewport( 0, 0, width, height );
   //win->manipulator = new osgEarth::EarthManipulator(args);
-  win->manipulator = new osgEarth::EarthManipulator();
-  win->view->setCameraManipulator( win->manipulator );
+  win->args = args;
+  win->view->setCameraManipulator( new osgEarth::EarthManipulator((osg::ArgumentParser&)args) );
+
+  //win->view->setCameraManipulator( new osgEarth::EarthManipulator() );
   win->shm.key = -1;
   win->next = NULL;
   return win;
@@ -987,7 +989,7 @@ ghAddWindow( ghWindow *_win, std::string name,unsigned int screen,unsigned int x
   ghWindow *tmp = ghGetLastWindow(_win);
   ghWindow *newwin;
   if ( tmp != (ghWindow *)NULL ) {
-    newwin = ghCreateWindow(name,screen,x,y,screenratio);
+    newwin = ghCreateWindow(name,tmp->args,screen,x,y,screenratio);
     if ( newwin != (ghWindow *)NULL ) {
       tmp->next = newwin;
       return newwin;

@@ -2,7 +2,7 @@
 #
 #  simple osgearth_rail controller
 #
-#   Copyright (C) 2025 Yuki Osada
+#   Copyright (C) 2025-2026 Yuki Osada
 #  This software is released under the BSD License, see LICENSE.
 #
 #
@@ -41,6 +41,7 @@ remote_host = "localhost"
 remote_port = 57139
 socket_buffer_size = 4096
 field_isloaded = False
+shm_mode = False
 shm_time = None
 shm_train = None
 shm_train_size_byte = 0
@@ -196,6 +197,7 @@ def update_socket_viewport(data):
 def update_shm_clock():
     global shm_time
     global timelabel_var
+
     bytedata = shm_time.read()
     datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
     dhour = math.floor(datasec / 3600) ;
@@ -297,10 +299,12 @@ def timerproc_socket():
 def timerproc_shm():
     global field_isloaded
     global polling_timer
+    global shm_mode
     if field_isloaded:
-        update_shm_clock()
-        update_shm_train()
-        update_shm_viewport()
+        if shm_mode:
+            update_shm_clock()
+            update_shm_train()
+            update_shm_viewport()
 
         polling_timer=threading.Timer(remote_polling_second,timerproc_shm)
         polling_timer.start()
@@ -342,6 +346,7 @@ def server_connect_dialog():
         global trainid
         global field_isloaded
         global remote_host
+        global shm_mode
         remote_host = txt.get();
         response = remote_socket.connect(remote_host, remote_port)
         if response == False:
@@ -372,11 +377,12 @@ def server_connect_dialog():
         del trainid[0]  # train string
         #print (str(len(trainid)) + " trains")
         if remote_host == "localhost":
+            shm_mode = True
             setup_shm()
             print (" shared memory mode")
         else:
+            shm_mode = False
             print (" socket mode")
-            
         field_isloaded = True
         dialog.destroy()
 
@@ -561,6 +567,7 @@ def manual_input_dialog():
     no_button.place(x=200,y=70)
 
 def camera_add_dialog():
+    global shm_mode
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x300")
     dialog.title("New Camera add")
@@ -602,10 +609,11 @@ def camera_add_dialog():
         message = "camera add " + cname + " " + str(x) + " " + str(y) + " " + str(s) + "\n"
         response = remote_socket.send(message);
         dialog.destroy()
-        time.sleep(5) # wait time for Setup 3D Viewer
-        message = "shm set camera " + cname + " viewport\n"
-        shmmsg = remote_socket.send(message)
-        shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
+        if shm_mode:
+            time.sleep(5) # wait time for Setup 3D Viewer
+            message = "shm set camera " + cname + " viewport\n"
+            shmmsg = remote_socket.send(message)
+            shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
         windows[cname] = "NONE";
 
     def on_button_no():
@@ -667,12 +675,12 @@ def camera_tracking_dialog():
 
 
 def run_command():
-    global remote_host
+    global shm_mode
     response = remote_socket.send("run\n");
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
     #messagebox.showinfo("receive",response)
-    if remote_host == "localhost":
+    if shm_mode:
         t=threading.Thread(target=timerproc_shm)
     else:
         t=threading.Thread(target=timerproc_socket)

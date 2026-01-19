@@ -116,7 +116,8 @@ typedef struct
 typedef struct ghWindow
 {
   osgViewer::View* view;
-  osgEarth::EarthManipulator *manipulator;
+  //osgEarth::EarthManipulator *manipulator;
+  osg::ArgumentParser *args;
   char *name;
   char *tracking;
   ghSharedMemory shm;
@@ -124,7 +125,7 @@ typedef struct ghWindow
 } ghWindow;
 
 osgViewer::View* ghCreateView( std::string name ,int screenNum ,  unsigned int x,unsigned int y,unsigned int width,unsigned int height );
-ghWindow *ghCreateWindow(std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
+ghWindow *ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio);
 ghWindow *ghAddWindow(ghWindow *_win,std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
 void ghRemoveWindow( ghWindow *_win , std::string name);
 void ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win );
