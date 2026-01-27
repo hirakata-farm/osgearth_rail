@@ -250,8 +250,10 @@ show version
 //////////////////////////////////////////////////
 //#define GH_EXECUTE_BUFFER_SIZE 1024
 #define GH_EXECUTE_BUFFER_SIZE 4096
+#define GH_EXECUTE_INIT -1
 #define GH_EXECUTE_SUCCESS 0
 #define GH_EXECUTE_UNKNOWN 1
+#define GH_EXECUTE_DELAY   2
 #define GH_EXECUTE_NOT_LOADED 4
 #define GH_EXECUTE_CANNOT_LOAD 11
 #define GH_EXECUTE_SIZE_ERROR  13
@@ -261,7 +263,7 @@ show version
 #define GH_EXECUTE_CANNOT_GET  21
 #define GH_EXECUTE_CANNOT_ALLOCATE  23
 
-
+//////////////////////////////////////// Obsolete
 #define GH_POST_EXECUTE_NONE 0
 #define GH_POST_EXECUTE_DONE 1
 #define GH_POST_EXECUTE_EXIT 2
@@ -270,7 +272,15 @@ show version
 #define GH_POST_EXECUTE_SETCLOCK 9
 #define GH_POST_EXECUTE_CAMERA_ADD 12
 #define GH_POST_EXECUTE_CAMERA_REMOVE 14
+////////////////////////////////////////
 
+
+#define GH_QUEUE_STATE_INIT 0
+#define GH_QUEUE_STATE_RECEIVED 1
+#define GH_QUEUE_STATE_PARSED 2
+#define GH_QUEUE_STATE_PART_EXECUTED 3
+#define GH_QUEUE_STATE_EXECUTED 4
+#define GH_QUEUE_STATE_RESULT_SEND 9
 
 ////////////////////////////////////////////////
 
@@ -278,25 +288,31 @@ using namespace std;
 
 typedef struct ghCommandQueue
 {
-  int	count ;
   int	type ;
   int   argstridx;
   std::string argstr[2] ;
   int   argnumidx;
   double argnum[3];
-  bool isexecute;
+  //bool isexecute;
+  unsigned int state;
   std::string result;
   ghCommandQueue *prev;
 } ghCommandQueue ;
 
-ghCommandQueue *ghRailParseCommand(string str);
-int ghRailExecuteCommand(ghCommandQueue *cmd,
-			 ghRail *rail,
-			 ghWindow* _win,
-			 osgEarth::SkyNode *_sky,
-			 double simtime);
+ghCommandQueue *ghRailInitCommandQueue();
+
+void ghRailParseCommand(ghCommandQueue *cmd,string str);
+//int ghRailExecuteCommand(ghCommandQueue *cmd,
+//			 ghRail *rail,
+//			 ghWindow* _win,
+//			 osgEarth::SkyNode *_sky,
+//			 double simtime);
+void ghRailExecuteCommandData(ghCommandQueue *cmd, ghRail *rail, double simtime);
+void ghRailExecuteCommandOSG(ghCommandQueue *cmd,  ghRail *rail, ghWindow* _win, osgEarth::SkyNode *_sky);
+
 std::string ghRailReturnMessage(ghCommandQueue *cmd,int code, char *message);
 
+int ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
 int ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail, char *result);
 

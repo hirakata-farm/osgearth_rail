@@ -24,6 +24,7 @@
 # include "ghString.hpp"
 # include "ghRail.hpp"
 #define GH_STRING_ROOT  "root"
+#define GH_STRING_NONE  "NONE"
 
 using namespace std;
 using namespace cURLpp::Options;
@@ -32,7 +33,7 @@ bool
 ghRail::IsLoaded()
 {
   //std::cout << "conf:" << p_configure << std::endl;
-  if ( p_configure == "" ) {
+  if ( p_configure == GH_STRING_NONE ) {
     return false;
   } else {
     return true;
@@ -307,6 +308,28 @@ ghRail::IsTrainID(string trainid) {
     return true;
   }
 }
+
+void
+ghRail::Init()
+{
+  p_configure = GH_STRING_NONE;
+  p_previous_simulationTime = 0.0;
+  p_running = false;
+  p_clockspeed = 1.0;
+  p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
+  p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
+  p_altmode = GH_DEFAULT_ALTMODE;
+  p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
+  p_max_window = GH_DEFAULT_MAX_WINDOW;
+  p_min_window = GH_DEFAULT_MIN_WINDOW;
+  p_shm_clock.key = -1;
+  p_shm_train.key = -1;  
+
+  p_default_icon = GH_STRING_NONE;
+  p_numlines = 0;
+
+}
+
 
 int
 ghRail::Setup(string configname)
@@ -946,7 +969,7 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y,un
 
 
 ghWindow *
-ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio) {
+ghCreateWindow(std::string name, osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio) {
   ghWindow *win;
   if ((win = (ghWindow *)calloc( (unsigned)1, (unsigned)sizeof( ghWindow ) )) == NULL)
     {
@@ -975,10 +998,11 @@ ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,u
   //win->view->apply(new osgViewer::SingleWindow(x,y,width,height,0)); // ScreenNum=0
   //win->view->getCamera()->setViewport( 0, 0, width, height );
   //win->manipulator = new osgEarth::EarthManipulator(args);
+  //win->args = args;
+  //win->view->setCameraManipulator( new osgEarth::EarthManipulator(ghArgs) );
   win->args = args;
-  win->view->setCameraManipulator( new osgEarth::EarthManipulator((osg::ArgumentParser&)args) );
-
-  //win->view->setCameraManipulator( new osgEarth::EarthManipulator() );
+  //win->view->setCameraManipulator( new osgEarth::EarthManipulator((osg::ArgumentParser &)args) );
+  win->view->setCameraManipulator( new osgEarth::EarthManipulator() );
   win->shm.key = -1;
   win->next = NULL;
   return win;

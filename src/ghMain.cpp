@@ -38,8 +38,6 @@
 #include "ghRailCommand.hpp"
 
 #include <signal.h>
-//#include <thread>
-//#include <mutex>
 #include <OpenThreads/Thread>
 #include <OpenThreads/Mutex>
 
@@ -113,10 +111,10 @@ _calcElapsedTime(DateTime dt,double elapsesec) {
 //
 //  Network Variables
 //
-ghCommandQueue *cmdqueue = (ghCommandQueue *)NULL ;
-int client_fd;
+ghCommandQueue *ghQueue = (ghCommandQueue *)NULL ;
+int ghClient = 0;
 int listen_port = GH_DEFAULT_SOCKET_PORT;
-//std::mutex ghMutex;
+
 /////////////////////
 #ifndef _WINDOWS
 /*
@@ -252,148 +250,229 @@ ghSocketInit(int port)
 //
 //  Rendering Variables
 //
-osgViewer::CompositeViewer *ghView_anchor;  //  Application Root
+osgViewer::CompositeViewer *ghViewer;  //  Application Root
 ghWindow *ghWin_anchor;           // 3D window 
 ghRailGUI *ghGui;                 // ImGui 
-ghRail ghRail3D;                  // Simulation    Rail Class 
+ghRail *ghRail3D;                  // Simulation    Rail Class 
 osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
 osgEarth::SkyNode *ghSky;         // manipulate date-time
-osg::ArgumentParser *ghArgs;
+OpenThreads::Mutex ghMutex;
 
 double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
 unsigned int ghScreenNum = 0;
-int ghPostExecute = GH_POST_EXECUTE_NONE;
 
 void
-ghCheckPostExecute() {
-  bool prevState = false;
+ghCheckCommand() {
 
-  if ( ghPostExecute == GH_POST_EXECUTE_SETCLOCK ) {
-    ghElapsedSec = 0.0f;
-  } else if ( ghPostExecute == GH_POST_EXECUTE_TIMEZONE ) {
-    ghGui->setTimeZone( ghRail3D.GetTimeZoneMinutes() );
-  } else if ( ghPostExecute == GH_POST_EXECUTE_CAMERA_ADD ) {
-    ghWindow *nwin = ghAddWindow( ghWin_anchor,
-				  cmdqueue->argstr[0],
-				  ghScreenNum,
-				  (unsigned int)cmdqueue->argnum[0],
-				  (unsigned int)cmdqueue->argnum[1],
-				  cmdqueue->argnum[2]);
-    if ( nwin != NULL ) {
-      prevState = ghRail3D.IsPlaying();
-      if ( prevState ) ghRail3D.SetPlayPause(false);
-      ghView_anchor->addView( nwin->view );
-      nwin->view->setSceneData( ghNode3D );
-      //ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
-      if ( prevState ) ghRail3D.SetPlayPause(true);
+  if ( ghQueue == (ghCommandQueue *)NULL ) return;
+  if ( ghQueue->state == GH_QUEUE_STATE_RESULT_SEND ) return;
+  // All Command Already Finished
+
+  ghCommandQueue *cmdtmp = ghQueue;
+  ghCommandQueue *cmd = (ghCommandQueue *)NULL;
+
+  while (cmdtmp != (ghCommandQueue *)NULL)
+    {
+      if ( cmdtmp->state == GH_QUEUE_STATE_PARSED ) {
+	cmd = cmdtmp;
+	break;
+      }
+      cmdtmp = cmdtmp->prev ;
     }
-  } else if ( ghPostExecute == GH_POST_EXECUTE_CAMERA_REMOVE ) {
-    ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmdqueue->argstr[0]);
-    if ( rwin != NULL ) {
-      prevState = ghRail3D.IsPlaying();
-      if ( prevState ) ghRail3D.SetPlayPause(false);
-      // https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
-      rwin->view->getCamera()->setNodeMask(0x0);
-      ghView_anchor->removeView( rwin->view );
-      ghRemoveWindow( ghWin_anchor, cmdqueue->argstr[0] );
-      if ( prevState ) ghRail3D.SetPlayPause(true);
+
+  if ( cmd == (ghCommandQueue *)NULL ) return;
+
+  ghRailExecuteCommandOSG(cmd,ghRail3D,ghWin_anchor,ghSky);
+
+  if ( cmd->state == GH_QUEUE_STATE_PART_EXECUTED ) {
+    if ( cmd->type == GH_COMMAND_CLOCK_SET_TIME ) {
+      ghElapsedSec = 0.0f;
+      cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else if ( cmd->type == GH_COMMAND_FIELD_SET  ) {
+      ghSky->setDateTime( ghRail3D->GetBaseDatetime());
+      ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
+      cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else if ( cmd->type == GH_COMMAND_CAMERA_ADD  ) {
+      ghWindow *nwin = ghAddWindow( ghWin_anchor,
+				    cmd->argstr[0],
+				    ghScreenNum,
+				    (unsigned int)cmd->argnum[0],
+				    (unsigned int)cmd->argnum[1],
+				    cmd->argnum[2]);
+      if ( nwin != NULL ) {
+	ghViewer->addView( nwin->view );
+	nwin->view->setSceneData( ghNode3D );
+	//ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
+      } else {
+	// Error Message
+      }
+      cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else if ( cmd->type == GH_COMMAND_CAMERA_REMOVE  ) {
+      ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmd->argstr[0]);
+      if ( rwin != NULL ) {
+	// https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
+	rwin->view->getCamera()->setNodeMask(0x0);
+	ghViewer->removeView( rwin->view );
+	ghRemoveWindow( ghWin_anchor, cmd->argstr[0] );
+      } else {
+	// Error Message
+      }
+      cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else {
+      // NOP
     }
-  } else {
-    // NOP
   }
-  ghPostExecute = GH_POST_EXECUTE_DONE;
+
 }
 
 //
 //
 // Create a thread class by inheriting from OpenThreads::Thread
-class SocketThread : public OpenThreads::Thread {
+class SocketReceiveThread : public OpenThreads::Thread {
 public:
-   SocketThread() : _running(true),buffer{0},cmdtmp(nullptr),recv_result(0) {}
+  SocketReceiveThread(int fd) : _running(true),_buffer{0},_cmdtmp(nullptr),recv_result(0),_sock(fd) {}
 
-    // The run() method contains the code to be executed in the thread
-    virtual void run() {
-        while (_running) {
-	  //std::cout << "Thread  is running." << std::endl;
-	  // Sleep for 100 milliseconds
-	  //OpenThreads::Thread::microSleep(100000);
+  // The run() method contains the code to be executed in the thread
+  virtual void run() {
+    while (_running) {
+      //std::cout << "Thread  is running." << std::endl;
+      // Sleep for 100 milliseconds
+      //OpenThreads::Thread::microSleep(100000);
 #ifdef _WINDOWS
-	  recv_result = recv(client_fd, buffer, 1024, 0);
+      recv_result = recv(_sock, _buffer, 1024, 0);
 #else      
-	  read(client_fd, buffer, 1024);
+      read(_sock, _buffer, 1024);
 #endif
-	  std::string command(buffer);
-	  if ( command.size() > 3 ) {
-	    cmdtmp = cmdqueue;
-
-	    // Parse Socket Command
-	    cmdqueue = ghRailParseCommand(command);
-	    if ( cmdqueue != NULL ) {
-	      cmdqueue->prev = cmdtmp;
-	      memset(buffer, 0, sizeof(buffer));
-	    }
+      std::string command(_buffer);
+      if ( command.size() > 3 ) {
+	_cmdtmp = ghQueue;
+	ghQueue = ghRailInitCommandQueue();
+	if ( ghQueue != NULL ) {
+	  ghRailParseCommand(ghQueue,command);
+	  if ( ghQueue->type == GH_COMMAND_UNKNOWN ) {
+	    ghQueue->state = GH_QUEUE_STATE_RECEIVED;
 	  } else {
-	    // Too short buffer
+	    ghQueue->state = GH_QUEUE_STATE_PARSED;
+	    ghQueue->prev = _cmdtmp;
 	  }
+	  memset(_buffer, 0, sizeof(_buffer));
+	} else {
+	  ghQueue = _cmdtmp;
+	  // Error message ( cannot allocate command queue )
+	}
+      } else {
+	// Too short buffer
+      }
 	  
-	  if ( cmdqueue ) {
-	    if ( cmdqueue->isexecute == false ) {
-	      // Execute Socket Command
-	      ghPostExecute = ghRailExecuteCommand(cmdqueue,&ghRail3D,ghWin_anchor,ghSky,ghSimulationTime);
-	      if ( ghPostExecute == GH_POST_EXECUTE_EXIT ) {
-		_running = false;
-		ghPostExecute = GH_POST_EXECUTE_DONE;
-	      } else if ( ghPostExecute == GH_POST_EXECUTE_CLOSE ) {
-		_running = false;
-		ghPostExecute = GH_POST_EXECUTE_DONE;
-	      } else {
-		// NOP
-	      }
-	    }
-
-	    if ( cmdqueue->isexecute == true && cmdqueue->result != GH_STRING_NOP ) {
-	      const char* retmsg = cmdqueue->result.c_str();
-	      send(client_fd, retmsg, std::strlen(retmsg), 0);
-	    }
+      if ( ghQueue ) {
+	if ( ghQueue->state == GH_QUEUE_STATE_PARSED ) {
+	  // Execute Socket Command
+	  //ghMutex.lock();
+	  ghRailExecuteCommandData(ghQueue,ghRail3D,ghSimulationTime);
+	  if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
+	    _running = false;
 	  } else {
 	    // NOP
-	    //std::cout<<"CommandQueue NULL="<<command<<std::endl;
 	  }
+	  //ghMutex.unlock();
 	}
-        //std::cout << "Thread stopped." << std::endl;
 
-	ghRail3D.RemoveShm(0);
-	ghDisposeWindow( ghView_anchor, ghWin_anchor );
-#ifdef _WINDOWS
+      } else {
 	// NOP
-#else
-	ghChildQuit( SIGQUIT ) ;
-#endif
+	//std::cout<<"CommandQueue NULL="<<command<<std::endl;
+      }
     }
+    //std::cout << "Thread stopped." << std::endl;
 
-    void stop() { _running = false; }
+    ghRail3D->RemoveShm(0);
+    ghDisposeWindow( ghViewer, ghWin_anchor );
+    ghViewer->setDone(true);
+#ifdef _WINDOWS
+    // NOP
+#else
+    ghChildQuit( SIGQUIT ) ;
+#endif
+  }
+
+void stop() { _running = false; }
 
 private:
-  //  int _id;
   bool _running;
-  char buffer[1024];
-  ghCommandQueue *cmdtmp;
+  char _buffer[1024];
+  ghCommandQueue *_cmdtmp;
   int recv_result;
+  int _sock;
+};
+///////////////////////////////////////////////////////////////
+class SocketSendThread : public OpenThreads::Thread {
+public:
+  SocketSendThread(int fd,int msec) : _running(true),_waittime(msec),_sock(fd) {}
+
+  // The run() method contains the code to be executed in the thread
+  virtual void run() {
+    while (_running) {
+      //std::cout << "Thread  is running." << std::endl;
+      // Sleep for XX microseconds
+      OpenThreads::Thread::microSleep(_waittime);
+
+      ghCommandQueue *cmdtmp = ghQueue;
+      ghCommandQueue *cmd = (ghCommandQueue *)NULL;
+      while (cmdtmp != (ghCommandQueue *)NULL)
+	{
+	  if ( cmdtmp->state == GH_QUEUE_STATE_EXECUTED ) {
+	    cmd = cmdtmp;
+	  }
+	  cmdtmp = cmdtmp->prev ;
+	}
+      if ( cmd != (ghCommandQueue *)NULL ) {
+	if ( cmd->state == GH_QUEUE_STATE_EXECUTED && cmd->result != GH_STRING_NOP ) {
+	  const char* retmsg = cmd->result.c_str();
+	  send(_sock, retmsg, std::strlen(retmsg), 0);
+	  cmd->state = GH_QUEUE_STATE_RESULT_SEND;
+	} else {
+	  //  Unknown Error
+	  std::cout << "Unknown command cmd=" << cmd << std::endl;
+	  std::cout << cmd->argstr[0] << std::endl;
+	  std::cout << cmd->argstr[1] << std::endl;  
+	  std::cout << cmd->result << std::endl;    
+	  std::cout << "             type=" << cmd->type << std::endl;
+	  std::cout << "            state=" << cmd->state << std::endl;
+	}
+
+      }
+    }
+  }
+
+void stop() { _running = false; }
+
+private:
+  bool _running;
+  int _waittime;
+  int _sock;
 };
 ///////////////////////////////////////////////////////
 
 int
-ghMainLoop(osg::ArgumentParser args)
+ghMainRail(osg::ArgumentParser args)
 {
-
-  osgViewer::CompositeViewer ghViewer(args);  //  Application Root
-  ghView_anchor = &ghViewer;
-  ghArgs = &args;
   
-  //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::SingleThreaded);  
-  //  ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
-  ghViewer.setThreadingModel(osgViewer::CompositeViewer::DrawThreadPerContext);
+  osgEarth::initialize(args);
+
+  ghRail3D = new ghRail();
+  ghGui = new ghRailGUI();
+  ghRail3D->Init();
+  ghRail3D->SetClockSpeed(1.0);
+  ghRail3D->SetPlayPause(false);
+      
+  ghViewer = new osgViewer::CompositeViewer(args);  //  Application Root
+  
+  //ghViewer.setThreadingModel(ghViewer.SingleThreaded);
+  //ghViewer.setThreadingModel(ghViewer.ThreadPerCamera);
+  //ghViewer->setThreadingModel(osgViewer::CompositeViewer::SingleThreaded);  
+  ghViewer->setThreadingModel(osgViewer::CompositeViewer::ThreadPerCamera);
+  //ghViewer.setThreadingModel(osgViewer::CompositeViewer::DrawThreadPerContext);
+  //ghViewer.setThreadingModel(osgViewer::CompositeViewer::ThreadPerContext);
 
   /*
     SingleThreaded 	
@@ -404,27 +483,14 @@ ghMainLoop(osg::ArgumentParser args)
     ThreadPerCamera 	
     AutomaticSelection 
    */
+  //ghViewer->setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
 
-  /*   Unknown ???
-  ghViewer.setRealizeOperation(new ImGuiAppEngine::RealizeOperation);
-  ghViewer.setRealizeOperation(new osgEarth::GL3RealizeOperation()); //Wrong Win32
-  */
   /**   Load the earth file  **/
-  ghNode3D = MapNodeHelper().load(args, &ghViewer);
+  ghNode3D = MapNodeHelper().load(args, ghViewer);
     
+
   if (ghNode3D.valid())
     {
-      // Call this to add the GUI. 
-      auto ui = new ImGuiAppEngine(args);
-
-      ui->add("File", new QuitGUI());
-      ui->add("Tools", new NetworkMonitorGUI());
-      ui->add("Tools", new AnnotationsGUI());
-      ui->add("Tools", new PickerGUI());
-      ui->add("Tools", new RenderingGUI());
-      ui->add("Tools", new SceneGraphGUI());
-      ui->add("Tools", new SystemGUI());
-      ui->add("Tools", new TerrainGUI());
 
 #ifdef _WINDOWS
       // NOP
@@ -456,49 +522,62 @@ ghMainLoop(osg::ArgumentParser args)
       parent->removeChild(mapNode);
       /***  Sky and date time **/
 
+
+      // Call this to add the GUI. 
+      auto ui = new ImGuiAppEngine(args);
+      ui->add("File", new QuitGUI());
+      ui->add("Tools", new NetworkMonitorGUI());
+      ui->add("Tools", new AnnotationsGUI());
+      ui->add("Tools", new PickerGUI());
+      ui->add("Tools", new RenderingGUI());
+      ui->add("Tools", new SceneGraphGUI());
+      ui->add("Tools", new SystemGUI());
+      ui->add("Tools", new TerrainGUI());
+
+      ui->add("Clock", ghGui );
+
       ui->onStartup = []()
       {
 	ImGui::GetIO().FontAllowUserScaling = true;
       };
 
       /***  Set window view ***/
-      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,ghArgs,ghScreenNum,64,48,0.5);
-      ghViewer.addView( ghWin_anchor->view );
+      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,&args,ghScreenNum,64,48,0.5);
+      ghViewer->addView( ghWin_anchor->view );
       //ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 #ifdef _WINDOWS
+      // include/osgViewer/View src/osgViewer/View.cpp src/osgViewer/Viewer.cpp
       ghWin_anchor->view->getEventHandlersMoveAddressPush(ui,0x00);
 #else
       ghWin_anchor->view->getEventHandlers().push_front(ui);
 #endif
       ghWin_anchor->view->setSceneData( ghNode3D );
 
-      ghGui = new ghRailGUI();
-      ui->add("Clock", ghGui );
-      ghRail3D.SetClockSpeed(1.0);
-      ghRail3D.SetPlayPause(false);
+      double _elapsed_prev = 0.0f;    // Important
+      double _elapsed_current = ghViewer->elapsedTime(); // Important
+
 
       /////////////////////////
-      SocketThread* tsocket = new SocketThread();
-      tsocket->startThread();
+      SocketReceiveThread* rsock = new SocketReceiveThread(ghClient);
+      SocketSendThread* ssock = new SocketSendThread(ghClient,2000000); // 2 sec wait
+      rsock->start();
+      ssock->start();  
       /////////////////////////
-    
-      double _elapsed_prev = 0.0f;    // Important
-      double _elapsed_current = ghViewer.elapsedTime(); // Important
 
       ///////////////////
       //
       //  Rendering Loop
       //
-      while (!ghViewer.done())
+      while (!ghViewer->done())
         {
-	  _elapsed_current = ghViewer.elapsedTime() ; // double [sec]
-	  if ( ghRail3D.IsPlaying() ) {
-	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghRail3D.GetClockSpeed(); // duration seconds
+	  _elapsed_current = ghViewer->elapsedTime() ; // double [sec]
+	  if ( ghRail3D->IsPlaying() ) {
+	    double elapsed =  ( _elapsed_current - _elapsed_prev ) * ghRail3D->GetClockSpeed(); // duration seconds
 	    DateTime dt = ghSky->getDateTime();
-	    ghSimulationTime = _calcSimulationTime(dt,ghRail3D.GetBaseDatetime(), ghElapsedSec);
+	    ghSimulationTime = _calcSimulationTime(dt,ghRail3D->GetBaseDatetime(), ghElapsedSec);
 
 	    // Simulation Update
-	    ghRail3D.Update( ghSimulationTime, mapNode , ghWin_anchor);
+	    ghRail3D->Update( ghSimulationTime, mapNode , ghWin_anchor);
 
 	    if ( ghElapsedSec > GH_ELAPSED_THRESHOLD ) {
 	      // Change Date Time Dislpay
@@ -516,18 +595,23 @@ ghMainLoop(osg::ArgumentParser args)
 	  _elapsed_prev = _elapsed_current;
 	  
 	  // Frame Update
-	  ghViewer.frame();
+	  ghViewer->frame();
 
-	  ghCheckPostExecute();
+	  //ghMutex.lock();
+	  ghCheckCommand();
+	  //ghMutex.unlock();	  
 	  
         }
       //
       // End of while loop ( Rendering loop )
 
       ////////////////////////
-      tsocket->stop();
-      tsocket->join();
-      delete tsocket;
+      rsock->stop();
+      rsock->join();
+      delete rsock;
+      ssock->stop();
+      ssock->join();
+      delete ssock;
       ////////////////////////
 
       return 1;
@@ -550,9 +634,8 @@ main(int argc, char** argv)
     fprintf( stderr,"    %s\n", GH_WELCOME_MESSAGE ) ;
     fprintf( stderr,"    %s rev %s\n", GH_APP_NAME, GH_APP_REVISION ) ;
     fprintf( stderr,"--------------------------------------------\n" ) ;
-
-    osgEarth::initialize(arguments);
-
+    //ghArgs = new osg::ArgumentParser(&argc, argv);
+  
 #ifdef _WINDOWS
     // Nop signal
 #else    
@@ -578,14 +661,14 @@ main(int argc, char** argv)
 
 #ifdef _WINDOWS
       //  Does not fork for Windows
-      client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len );
-      if (client_fd == INVALID_SOCKET )
+      ghClient = accept( server_fd, (struct sockaddr *)&client_addr, &client_len );
+      if (ghClient == INVALID_SOCKET )
 	{
 	  fprintf( stderr,"Cannot accept new socket\n" ) ;
 	  break ;
 	}
 #else      
-      if ((client_fd = accept( server_fd, (struct sockaddr *)&client_addr, &client_len )) < 0)
+      if ((ghClient = accept( server_fd, (struct sockaddr *)&client_addr, &client_len )) < 0)
 	{
 	  fprintf( stderr,"Cannot accept new socket\n" ) ;
 	  break ;
@@ -620,13 +703,13 @@ main(int argc, char** argv)
 
 #endif
 	  //////////////////
-	  ghMainLoop(arguments);
+	  ghMainRail(arguments);
 	  //////////////////
 
 #ifdef _WINDOWS	  
 	  // NOP
 #else
-	  close( client_fd ) ;
+	  close( ghClient ) ;
 
 	  ghChildQuit( SIGQUIT ) ;
 	  
@@ -636,7 +719,7 @@ main(int argc, char** argv)
 	   *  fork Parent > 0
 	   */
 
-	  close( client_fd ) ;
+	  close( ghClient ) ;
 	  sleep(1);
 
 	}

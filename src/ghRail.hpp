@@ -48,7 +48,7 @@ using namespace std;
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.3.3"
+#define GH_APP_REVISION "0.4.1"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -116,7 +116,6 @@ typedef struct
 typedef struct ghWindow
 {
   osgViewer::View* view;
-  //osgEarth::EarthManipulator *manipulator;
   osg::ArgumentParser *args;
   char *name;
   char *tracking;
@@ -124,7 +123,7 @@ typedef struct ghWindow
   ghWindow *next;
 } ghWindow;
 
-osgViewer::View* ghCreateView( std::string name ,int screenNum ,  unsigned int x,unsigned int y,unsigned int width,unsigned int height );
+osgViewer::View* ghCreateView( std::string name , int screenNum ,  unsigned int x,unsigned int y,unsigned int width,unsigned int height );
 ghWindow *ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio);
 ghWindow *ghAddWindow(ghWindow *_win,std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
 void ghRemoveWindow( ghWindow *_win , std::string name);
@@ -145,6 +144,7 @@ int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 class ghRail
     {
     public:
+      void Init();
       int Setup(string fieldname);
       //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::Viewer* _view );
       //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::View* _view );

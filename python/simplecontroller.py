@@ -33,21 +33,50 @@ from tkinter import Menu,ttk,messagebox
 
 import math
 import struct
-import sysv_ipc
 
-#################################################################
+import importlib.util
+
+######################################################
+#
+#  Check for Shared Memory Library
+#
+
+def is_module_available(module_name: str) -> bool:
+    return importlib.util.find_spec(module_name) is not None
+
+shm_mode = False
+default_host = "localhost"
+if is_module_available("sysv_ipc"):
+    import sysv_ipc
+    shm_mode = True
+    default_host = "localhost"
+else:
+    shm_mode = False
+    default_host = socket.gethostbyname(socket.gethostname())
+    
+######################################################
+#
+#  Global Settings
+#
+
 remote_polling_second = 30
-remote_host = "localhost"
+remote_host = default_host
 remote_port = 57139
 socket_buffer_size = 4096
+show_socket_detail = True
+def about():
+    message = "simple osgearth_rail controller 0.4"
+    messagebox.showinfo("about",message)
+
+######################################################
+#
+#
 field_isloaded = False
-shm_mode = False
 shm_time = None
 shm_train = None
 shm_train_size_byte = 0
 shm_camera = { "root" : None }
 viewport_camera = {};
-#tracking_id = None
 
 class SocketClient():
 
@@ -85,14 +114,10 @@ class SocketClient():
             self.socket.close()
             self.socket = None
              
-remote_socket = SocketClient(socket_buffer_size,False)
+remote_socket = SocketClient(socket_buffer_size,show_socket_detail)
 
 ##################################################################
 
-
-def about():
-    message = "simple osgearth_rail controller 0.3"
-    messagebox.showinfo("about",message)
 
 def setup_shm():
     global shm_time
@@ -311,6 +336,7 @@ def timerproc_shm():
 
         
 def server_connect_dialog():
+    global remost_host
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x300")
     dialog.title("Connect setting")
@@ -320,7 +346,7 @@ def server_connect_dialog():
 
     txt = tkinter.Entry(dialog,width=20)
     txt.place(x=200, y=10)
-    txt.insert(0,"localhost")
+    txt.insert(0,remote_host)
     
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
 
@@ -370,8 +396,11 @@ def server_connect_dialog():
         menu1.entryconfig("manual input", state=tkinter.NORMAL)
         menu_button_2.config(state=tkinter.NORMAL)
         menu_button_3.config(state=tkinter.DISABLED)
+        time.sleep(3) # wait time for Setup 3D Viewer        
         response = remote_socket.send("clock set time 12:00\n")
+        time.sleep(3) # wait time for Setup 3D Viewer        
         response = remote_socket.send("config set altmode relative\n")
+        time.sleep(3) # wait time for Setup 3D Viewer                
         trainid = remote_socket.send("field get train\n")
         del trainid[0]  # Geoglyph header string
         del trainid[0]  # train string
