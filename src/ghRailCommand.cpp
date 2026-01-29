@@ -576,9 +576,8 @@ ghRailExecuteCommandOSG( ghCommandQueue *cmd, ghRail *rail , ghWindow* _win, osg
     default:
       executecode = GH_EXECUTE_UNKNOWN;
     }
+    cmd->result = ghRailReturnMessage(cmd,executecode,&resultmsg[0]);
   }
-
-  cmd->result = ghRailReturnMessage(cmd,executecode,&resultmsg[0]);
   
 }
 
@@ -1070,7 +1069,7 @@ ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail) {
   int res = -1;
   res = rail->Setup(cmd->argstr[0]);
   if (  res == GH_SETUP_RESULT_OK ) {
-    return GH_EXECUTE_SUCCESS;
+    return GH_EXECUTE_DELAY;
   } else {
     std::cout << "Error field code " << res << std::endl;
     return GH_EXECUTE_CANNOT_LOAD;

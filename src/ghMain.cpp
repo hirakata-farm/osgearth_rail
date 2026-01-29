@@ -266,7 +266,12 @@ void
 ghCheckCommand() {
 
   if ( ghQueue == (ghCommandQueue *)NULL ) return;
-  if ( ghQueue->state == GH_QUEUE_STATE_RESULT_SEND ) return;
+  if ( ghQueue->state == GH_QUEUE_STATE_RESULT_SEND ) {
+    if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
+      ghViewer->setDone(true);
+    }
+    return;
+  }
   // All Command Already Finished
 
   ghCommandQueue *cmdtmp = ghQueue;
@@ -384,15 +389,7 @@ public:
       }
     }
     //std::cout << "Thread stopped." << std::endl;
-
-    ghRail3D->RemoveShm(0);
-    ghDisposeWindow( ghViewer, ghWin_anchor );
-    ghViewer->setDone(true);
-#ifdef _WINDOWS
-    // NOP
-#else
-    ghChildQuit( SIGQUIT ) ;
-#endif
+    ghRail3D->SetPlayPause(false);
   }
 
 void stop() { _running = false; }
@@ -431,14 +428,17 @@ public:
 	  send(_sock, retmsg, std::strlen(retmsg), 0);
 	  cmd->state = GH_QUEUE_STATE_RESULT_SEND;
 	} else {
+	  std::cout << ".";
+	  // NOP
 	  //  Unknown Error
-	  std::cout << "Unknown command cmd=" << cmd << std::endl;
-	  std::cout << cmd->argstr[0] << std::endl;
-	  std::cout << cmd->argstr[1] << std::endl;  
-	  std::cout << cmd->result << std::endl;    
-	  std::cout << "             type=" << cmd->type << std::endl;
-	  std::cout << "            state=" << cmd->state << std::endl;
+	  //std::cout << "Unknown command cmd=" << cmd << std::endl;
+	  //std::cout << cmd->argstr[0] << std::endl;
+	  //std::cout << cmd->argstr[1] << std::endl;  
+	  //std::cout << cmd->result << std::endl;    
+	  //std::cout << "             type=" << cmd->type << std::endl;
+	  //std::cout << "            state=" << cmd->state << std::endl;
 	}
+
 
       }
     }
@@ -559,7 +559,7 @@ ghMainRail(osg::ArgumentParser args)
 
       /////////////////////////
       SocketReceiveThread* rsock = new SocketReceiveThread(ghClient);
-      SocketSendThread* ssock = new SocketSendThread(ghClient,2000000); // 2 sec wait
+      SocketSendThread* ssock = new SocketSendThread(ghClient,GH_SOCKET_SEND_WAIT); 
       rsock->start();
       ssock->start();  
       /////////////////////////
@@ -604,7 +604,8 @@ ghMainRail(osg::ArgumentParser args)
         }
       //
       // End of while loop ( Rendering loop )
-
+      ghRail3D->RemoveShm(0);
+      ghDisposeWindow( ghViewer, ghWin_anchor );
       ////////////////////////
       rsock->stop();
       rsock->join();
@@ -706,11 +707,11 @@ main(int argc, char** argv)
 	  ghMainRail(arguments);
 	  //////////////////
 
+	  close( ghClient ) ;
+
 #ifdef _WINDOWS	  
 	  // NOP
 #else
-	  close( ghClient ) ;
-
 	  ghChildQuit( SIGQUIT ) ;
 	  
 	} else {

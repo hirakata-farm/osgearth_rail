@@ -54,6 +54,7 @@ using namespace std;
 
 #define GH_DEFAULT_SOCKET_PORT 57139
 #define GH_MAX_SOCKET 3
+#define GH_SOCKET_SEND_WAIT 1000000 // 1 sec [microseconds]
 
 #define GH_ELAPSED_THRESHOLD 1.0
 #define GH_SUN_AMBIENT 0.03
