@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -57,7 +57,6 @@ ghRailUnit::Setup( string id,
   }
   
   p_geompath.resize(geompathrows, vector<double>(4));
-  //p_geomlayer.resize(geompathrows, vector<double>(3));
   p_geompathstation.resize(geompathrows);
   p_geompathstationtype.resize(geompathrows);
 
@@ -1006,16 +1005,6 @@ ghRailUnit::_createDistancePoint( vector<vector<double>> &geom,
 
       
     }
-
-  //  if ( point_id < 0 ) {
-  //    res[0] = (double)point_id;
-  //    res[1] = out_latRad;
-  //    res[2] = out_lonRad;
-  //    std::cout << "Station Search ERROR " << startidx << "  " << distance << "\n";
-  //    return res;
-  //  } else {
-  //    // NOP
-  //  };
 
   angle = osgEarth::GeoMath::bearing(deg2rad(geom[point_id][0]),deg2rad(geom[point_id][1]),
 				     deg2rad(geom[point_id+1][0]),deg2rad(geom[point_id+1][1]));

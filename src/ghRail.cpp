@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -32,7 +32,6 @@ using namespace cURLpp::Options;
 bool
 ghRail::IsLoaded()
 {
-  //std::cout << "conf:" << p_configure << std::endl;
   if ( p_configure == GH_STRING_NONE ) {
     return false;
   } else {
@@ -486,8 +485,6 @@ ghRail::Setup(string configname)
   p_configure = configname;
   p_running = false;
   p_clockspeed = 1.0;
-  //p_tracking = GH_COMMAND_CAMERA_UNTRACKING;
-  //p_prev_position_tracking = osg::Vec3d(0.0,0.0,0.0); 
   p_previous_simulationTime = 0.0;
   p_max_clockspeed = GH_DEFAULT_MAX_CLOCK_SPEED;
   p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
@@ -537,7 +534,6 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  ghWindow* _win
 
       point = p_units[key].GetControlPoint(simulationTime,i);
       position_centric = point.getPosition();
-      //if ( i == 0 && ! key.empty() ) {
       if ( i == 0 && ! key.empty() ) {
 	_updateShmTrainPosition(traincnt,key,position_centric);
 	//std::cout << "train count " << traincnt << std::endl;
@@ -994,12 +990,7 @@ ghCreateWindow(std::string name, osg::ArgumentParser *args, unsigned int screen,
     }
   win->name = ghString2CharPtr(name);
   win->tracking = ghString2CharPtr(GH_COMMAND_CAMERA_UNTRACKING);
-  /////win->view->setUpViewInWindow( x, y, width, height, 0 ); deprecated!
-  //win->view->apply(new osgViewer::SingleWindow(x,y,width,height,0)); // ScreenNum=0
-  //win->view->getCamera()->setViewport( 0, 0, width, height );
-  //win->manipulator = new osgEarth::EarthManipulator(args);
   //win->args = args;
-  //win->view->setCameraManipulator( new osgEarth::EarthManipulator(ghArgs) );
   win->args = args;
   //win->view->setCameraManipulator( new osgEarth::EarthManipulator((osg::ArgumentParser &)args) );
   win->view->setCameraManipulator( new osgEarth::EarthManipulator() );
@@ -1188,23 +1179,6 @@ ghGetConfigWindow( ghWindow* _win, std::string title, int *ret) {
 
   return;
 }
-
-
-//void
-//ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str) {
-//  osgViewer::Viewer::Windows windows;
-//  view->getWindows(windows);
-//  for(osgViewer::ViewerBase::Windows::iterator itr = windows.begin();	itr != windows.end(); ++itr)
-//    {
-//      osgViewer::GraphicsWindow* ww = *itr;
-//      string name = ww->getWindowName();
-//      if ( name.empty() ) {
-//	ww->setWindowName(str);
-//	break;
-//      }
-//    }
-//}
-
 
 
 int

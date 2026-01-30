@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -134,7 +134,6 @@ int ghCountWindow(ghWindow *_win);
 ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
 void ghSetConfigWindow(ghWindow* _win,std::string title,int x,int y,int width,int height);
 void ghGetConfigWindow(ghWindow* _win,std::string title,int *ret);
-//void ghSetWindowTitle(osgViewer::CompositeViewer* view, std::string str);
 int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
 
 //
@@ -147,8 +146,6 @@ class ghRail
     public:
       void Init();
       int Setup(string fieldname);
-      //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::Viewer* _view );
-      //void Update(double simulationTime, osgEarth::MapNode* _map, osgViewer::View* _view );
       void Update(double simulationTime, osgEarth::MapNode* _map, ghWindow* _win);
 
       string GetConfigure();
@@ -181,7 +178,6 @@ class ghRail
       int InitShmTrain(int shmkey);
       int RemoveShm(int shmkey);      
       
-      //string GetTrackingTrain();
       bool IsTrainID(string trainid);
 
       int GetTimeZoneMinutes();
@@ -191,9 +187,7 @@ class ghRail
       //vector<int> p_locomotives{-84,-60,-36,-12,12,36,60,84};   // 8 coaches Even obsolete
       //vector<int> p_locomotives{-96,-72,-48,-24,0,24,48,72,96};  // 9 coaches Odd obsolete
       string p_configure;
-      //string p_tracking;
       double p_previous_simulationTime;
-      //osg::Vec3d p_prev_position_tracking;
       std::map<std::string, osg::Vec3d> p_prev_position_tracking;
       bool p_running;
       double p_clockspeed;

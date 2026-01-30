@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -46,26 +46,3 @@ ghStringSplit(const std::string& str, char delimiter) {
   }
   return result;
 }
-//std::vector<std::string>
-//ghStringSplit(std::string str, char del) {
-//    std::vector<std::string> result;
-//    std::string subStr;
-//
-//    for (const char c : str) {
-//        if (c == del) {
-//	  if ( subStr.length() > 0 ) {
-//            result.push_back(subStr);
-//            subStr.clear();
-//	  }
-//        }else {
-//	  if ( iscntrl(c) == 0 ) {
-//	    subStr += c;
-//	  } else {
-//	    // NOP
-//	  }
-//        }
-//    }
-//    result.push_back(subStr);
-//    return result;
-//}
-

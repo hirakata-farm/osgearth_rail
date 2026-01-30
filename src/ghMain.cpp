@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -108,8 +108,6 @@ _calcElapsedTime(DateTime dt,double elapsesec) {
 }
 
 ///////////////////////////////////////////////////////////////////
-//
-//  Network Variables
 //
 ghCommandQueue *ghQueue = (ghCommandQueue *)NULL ;
 int ghClient = 0;
@@ -256,7 +254,7 @@ ghRailGUI *ghGui;                 // ImGui
 ghRail *ghRail3D;                  // Simulation    Rail Class 
 osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
 osgEarth::SkyNode *ghSky;         // manipulate date-time
-OpenThreads::Mutex ghMutex;
+//OpenThreads::Mutex ghMutex;
 
 double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
@@ -308,7 +306,6 @@ ghCheckCommand() {
       if ( nwin != NULL ) {
 	ghViewer->addView( nwin->view );
 	nwin->view->setSceneData( ghNode3D );
-	//ghSetWindowTitle(ghView_anchor,cmdqueue->argstr[0]);
       } else {
 	// Error Message
       }
@@ -332,8 +329,8 @@ ghCheckCommand() {
 }
 
 //
-//
 // Create a thread class by inheriting from OpenThreads::Thread
+//
 class SocketReceiveThread : public OpenThreads::Thread {
 public:
   SocketReceiveThread(int fd) : _running(true),_buffer{0},_cmdtmp(nullptr),recv_result(0),_sock(fd) {}
@@ -372,15 +369,12 @@ public:
 	  
       if ( ghQueue ) {
 	if ( ghQueue->state == GH_QUEUE_STATE_PARSED ) {
-	  // Execute Socket Command
-	  //ghMutex.lock();
 	  ghRailExecuteCommandData(ghQueue,ghRail3D,ghSimulationTime);
 	  if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
 	    _running = false;
 	  } else {
 	    // NOP
 	  }
-	  //ghMutex.unlock();
 	}
 
       } else {
@@ -438,8 +432,6 @@ public:
 	  //std::cout << "             type=" << cmd->type << std::endl;
 	  //std::cout << "            state=" << cmd->state << std::endl;
 	}
-
-
       }
     }
   }
@@ -544,7 +536,6 @@ ghMainRail(osg::ArgumentParser args)
       /***  Set window view ***/
       ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,&args,ghScreenNum,64,48,0.5);
       ghViewer->addView( ghWin_anchor->view );
-      //ghSetWindowTitle(&ghViewer,GH_WELCOME_MESSAGE);
 #ifdef _WINDOWS
       // include/osgViewer/View src/osgViewer/View.cpp src/osgViewer/Viewer.cpp
       ghWin_anchor->view->getEventHandlersMoveAddressPush(ui,0x00);
@@ -553,9 +544,8 @@ ghMainRail(osg::ArgumentParser args)
 #endif
       ghWin_anchor->view->setSceneData( ghNode3D );
 
-      double _elapsed_prev = 0.0f;    // Important
-      double _elapsed_current = ghViewer->elapsedTime(); // Important
-
+      double _elapsed_prev = 0.0f;
+      double _elapsed_current = ghViewer->elapsedTime();
 
       /////////////////////////
       SocketReceiveThread* rsock = new SocketReceiveThread(ghClient);
@@ -597,9 +587,7 @@ ghMainRail(osg::ArgumentParser args)
 	  // Frame Update
 	  ghViewer->frame();
 
-	  //ghMutex.lock();
 	  ghCheckCommand();
-	  //ghMutex.unlock();	  
 	  
         }
       //
@@ -707,11 +695,10 @@ main(int argc, char** argv)
 	  ghMainRail(arguments);
 	  //////////////////
 
-	  close( ghClient ) ;
-
 #ifdef _WINDOWS	  
-	  // NOP
+	  closesocket( ghClient );
 #else
+	  close( ghClient ) ;
 	  ghChildQuit( SIGQUIT ) ;
 	  
 	} else {

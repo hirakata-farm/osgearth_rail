@@ -7,7 +7,7 @@
 *              curlpp         ( https://www.curlpp.org )
 *              nlohmann       ( https://github.com/nlohmann/json )
 *
-*   Copyright (C) 2025 Yuki Osada
+*   Copyright (C) 2025,2026 Yuki Osada
 *  This software is released under the BSD License, see LICENSE.
 *
 *
@@ -302,11 +302,6 @@ typedef struct ghCommandQueue
 ghCommandQueue *ghRailInitCommandQueue();
 
 void ghRailParseCommand(ghCommandQueue *cmd,string str);
-//int ghRailExecuteCommand(ghCommandQueue *cmd,
-//			 ghRail *rail,
-//			 ghWindow* _win,
-//			 osgEarth::SkyNode *_sky,
-//			 double simtime);
 void ghRailExecuteCommandData(ghCommandQueue *cmd, ghRail *rail, double simtime);
 void ghRailExecuteCommandOSG(ghCommandQueue *cmd,  ghRail *rail, ghWindow* _win, osgEarth::SkyNode *_sky);
 
