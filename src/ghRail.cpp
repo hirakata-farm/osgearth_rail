@@ -979,9 +979,10 @@ ghCreateWindow(std::string name, osg::ArgumentParser *args, unsigned int screen,
 
   if ( x > screen_width ) x = screen_width;
   if ( y > screen_height ) y = screen_height;
+  
   screen_width = (unsigned int)floor(screen_width*screenratio);
-  screen_height = (unsigned int)floor(screen_height*screenratio);  
-  //win->view = new osgViewer::View();
+  screen_height = (unsigned int)floor(screen_height*screenratio);
+
   win->view = ghCreateView(name,screen,x,y,screen_width,screen_height);
   if ( win->view == NULL )
     {

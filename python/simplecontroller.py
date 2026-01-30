@@ -61,7 +61,6 @@ else:
 main_window_width = 1024
 main_window_height = 768
 
-polling_timer = None
 remote_polling_second = 30
 remote_host = default_host
 remote_port = 57139
@@ -80,6 +79,8 @@ shm_train = None
 shm_train_size_byte = 0
 shm_camera = { "root" : None }
 viewport_camera = {};
+polling_timer = None
+polling_timer_started = False
 
 class SocketClient():
 
@@ -171,7 +172,7 @@ def timetable_dialog(id, data):
 
     tree.pack(expand=True, fill="both")
 
-    ok_button = tkinter.Button(dialog, text="close", fg="blue", command=on_close_ok)
+    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
     ok_button.pack()
     
 def click_train_marker(marker):
@@ -391,6 +392,7 @@ def server_connect_dialog():
             messagebox.showinfo("Warning", "Field load error")
             return
         messagebox.showinfo("receive",message)
+        dialog.destroy()
         menu0.entryconfig("3D view open", state=tkinter.DISABLED)
         menu0.entryconfig("3D view close", state=tkinter.NORMAL)
         menu1.entryconfig("clock", state=tkinter.NORMAL)
@@ -416,7 +418,6 @@ def server_connect_dialog():
             shm_mode = False
             print (" socket mode")
         field_isloaded = True
-        dialog.destroy()
 
     ok_button = tkinter.Button(dialog, text="OK", fg="blue", command=on_server_ok)
     ok_button.place(x=30,y=250)
@@ -434,8 +435,10 @@ def server_exit_dialog():
     def on_exit_ok():
         global field_isloaded
         global polling_timer
-        if polling_timer.is_alive():
-            polling_timer.cancel()
+        global polling_timer_started
+        if polling_timer_started:
+            if polling_timer.is_alive():
+                polling_timer.cancel()
         response = remote_socket.send("exit\n");
         remote_socket.close()
         dialog.destroy()
@@ -651,8 +654,8 @@ def camera_add_dialog():
     def on_button_no():
         dialog.destroy()
     
-    ok_button = tkinter.Button(dialog, text=" Add ",  fg="blue", command=on_button_ok)
-    no_button = tkinter.Button(dialog, text="Close",  fg="red", command=on_button_no)    
+    ok_button = tkinter.Button(dialog, text="Add camera",  fg="blue", command=on_button_ok)
+    no_button = tkinter.Button(dialog, text="  Close   ",  fg="red", command=on_button_no)    
     ok_button.place(x=50,y=180)
     no_button.place(x=250,y=180)
 
@@ -717,6 +720,7 @@ def run_command():
     else:
         t=threading.Thread(target=timerproc_socket)
     t.start()
+    polling_timer_started = True
 
 def pause_command():
     global polling_timer
