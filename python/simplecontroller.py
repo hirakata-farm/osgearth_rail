@@ -58,7 +58,10 @@ else:
 #
 #  Global Settings
 #
+main_window_width = 1024
+main_window_height = 768
 
+polling_timer = None
 remote_polling_second = 30
 remote_host = default_host
 remote_port = 57139
@@ -168,7 +171,7 @@ def timetable_dialog(id, data):
 
     tree.pack(expand=True, fill="both")
 
-    ok_button = ttk.Button(dialog, text="close", command=on_close_ok)
+    ok_button = tkinter.Button(dialog, text="close", fg="blue", command=on_close_ok)
     ok_button.pack()
     
 def click_train_marker(marker):
@@ -415,7 +418,7 @@ def server_connect_dialog():
         field_isloaded = True
         dialog.destroy()
 
-    ok_button = ttk.Button(dialog, text="OK", command=on_server_ok)
+    ok_button = tkinter.Button(dialog, text="OK", fg="blue", command=on_server_ok)
     ok_button.place(x=30,y=250)
 
     dialog.grab_set() # modal dialog
@@ -425,13 +428,16 @@ def server_exit_dialog():
     global field_isloaded
     global polling_timer
     dialog = tkinter.Toplevel(root_tk)
-    dialog.geometry("400x200")
+    dialog.geometry("400x160")
     dialog.title("3D view close")
 
     def on_exit_ok():
         global field_isloaded
         global polling_timer
+        if polling_timer.is_alive():
+            polling_timer.cancel()
         response = remote_socket.send("exit\n");
+        remote_socket.close()
         dialog.destroy()
         #messagebox.showinfo("3D view", " closing process..")
         menu0.entryconfig("3D view open", state=tkinter.NORMAL)
@@ -441,10 +447,7 @@ def server_exit_dialog():
         menu1.entryconfig("camera", state=tkinter.DISABLED)
         menu_button_2.config(state=tkinter.DISABLED)
         menu_button_3.config(state=tkinter.DISABLED)
-        remote_socket.close()
         field_isloaded = False
-        if polling_timer.is_alive():
-            polling_timer.cancel()
         
     def on_exit_no():
         #messagebox.showinfo("3D view", " cancel close ")
@@ -453,8 +456,8 @@ def server_exit_dialog():
     msg_label = ttk.Label(dialog, text="Comfirmation 3D view close")
     msg_label.place(x=100,y=40)
 
-    ok_button = ttk.Button(dialog, text="OK", command=on_exit_ok)
-    no_button = ttk.Button(dialog, text="NO", command=on_exit_no)    
+    ok_button = tkinter.Button(dialog, text="Close", fg="blue", command=on_exit_ok)
+    no_button = tkinter.Button(dialog, text="NO", fg="red", command=on_exit_no)    
     ok_button.place(x=50,y=80)
     no_button.place(x=250,y=80)
 
@@ -498,9 +501,9 @@ def clock_dialog():
     minute_label.grid(row=0, column=3, padx=5, pady=5)
 
     # Get Time Button
-    ok_button = ttk.Button(dialog, text="Set Time", command=set_selected_time)
+    ok_button = tkinter.Button(dialog, text="Set Time", fg="blue", command=set_selected_time)
     ok_button.grid(row=1, column=0, columnspan=2, pady=10)
-    close_button = ttk.Button(dialog, text="Close", command=close_selected_time)
+    close_button = tkinter.Button(dialog, text="Close", fg="red", command=close_selected_time)
     close_button.grid(row=1, column=2, columnspan=2, pady=10)
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
@@ -508,7 +511,7 @@ def clock_dialog():
 def speed_dialog():
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
-    dialog.geometry("300x200")
+    dialog.geometry("300x180")
     dialog.title("Speed")
 
     speedstr = remote_socket.send("clock get speed\n");
@@ -557,16 +560,16 @@ def speed_dialog():
     scaleS = tkinter.Scale(dialog, from_=0.1, to_=1.0, length=200, resolution=0.1, orient=tkinter.HORIZONTAL, variable=scale_varS , showvalue=True)
     scaleS.grid(row=1, column=1, columnspan=2, padx=5, pady=5)
 
-    ok_button = ttk.Button(dialog, text="Set speed", command=set_selected_speed)
+    ok_button = tkinter.Button(dialog, text="Set speed", fg="blue", command=set_selected_speed)
     ok_button.grid(row=2, column=0, columnspan=2, pady=10)
-    close_button = ttk.Button(dialog, text="Close", command=close_selected_speed)
+    close_button = tkinter.Button(dialog, text="Close",  fg="red", command=close_selected_speed)
     close_button.grid(row=2, column=2, columnspan=2, pady=10)
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
 def manual_input_dialog():
     dialog = tkinter.Toplevel(root_tk)
-    dialog.geometry("600x200")
+    dialog.geometry("500x120")
     dialog.title("Command manual input")
 
     cmdlbl = tkinter.Label(dialog,text='Command')
@@ -575,10 +578,10 @@ def manual_input_dialog():
     cmdlbl = tkinter.Label(dialog,text='Result')
     cmdlbl.place(x=30, y=40)
 
-    cmdtxt = tkinter.Entry(dialog,width=80)
+    cmdtxt = tkinter.Entry(dialog,width=40)
     cmdtxt.place(x=100, y=10)
     
-    cmdret = tkinter.Entry(dialog,width=80)
+    cmdret = tkinter.Entry(dialog,width=40)
     cmdret.place(x=100, y=40)
     
     def on_button_ok():
@@ -590,15 +593,15 @@ def manual_input_dialog():
     def on_button_no():
         dialog.destroy()
     
-    ok_button = tkinter.Button(dialog, text="  OK  ", command=on_button_ok)
-    no_button = tkinter.Button(dialog, text="Close", command=on_button_no)    
+    ok_button = tkinter.Button(dialog, text="  OK  ",  fg="blue", command=on_button_ok)
+    no_button = tkinter.Button(dialog, text="Close",  fg="red", command=on_button_no)    
     ok_button.place(x=50,y=70)
     no_button.place(x=200,y=70)
 
 def camera_add_dialog():
     global shm_mode
     dialog = tkinter.Toplevel(root_tk)
-    dialog.geometry("400x300")
+    dialog.geometry("400x260")
     dialog.title("New Camera add")
 
     lbl = tkinter.Label(dialog,text='Name')
@@ -648,8 +651,8 @@ def camera_add_dialog():
     def on_button_no():
         dialog.destroy()
     
-    ok_button = tkinter.Button(dialog, text="  OK  ", command=on_button_ok)
-    no_button = tkinter.Button(dialog, text="Close", command=on_button_no)    
+    ok_button = tkinter.Button(dialog, text=" Add ",  fg="blue", command=on_button_ok)
+    no_button = tkinter.Button(dialog, text="Close",  fg="red", command=on_button_no)    
     ok_button.place(x=50,y=180)
     no_button.place(x=250,y=180)
 
@@ -695,9 +698,9 @@ def camera_tracking_dialog():
     tcombo = ttk.Combobox ( dialog , values = t_options , textvariable = tracking_ver , height = 5)
     tcombo.grid(row=1, column=1, columnspan=2, pady=5)
 
-    ok_button = ttk.Button(dialog, text="Camera Tracking ", command=set_camera_tracking)
+    ok_button = tkinter.Button(dialog, text="Camera Tracking ", fg="blue", command=set_camera_tracking)
     ok_button.grid(row=3, column=1, pady=10)
-    close_button = ttk.Button(dialog, text="Close ", command=close_camera_tracking)
+    close_button = tkinter.Button(dialog, text="Close ", fg="red", command=close_camera_tracking)
     close_button.grid(row=3, column=3, pady=10)
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
@@ -729,6 +732,7 @@ def pause_command():
 #    Widget
 #
 ################################################################################    
+    
 # create tkinter window
 root_tk = tkinter.Tk()
 root_tk.geometry(f"{1000}x{700}")
@@ -797,7 +801,7 @@ speedlabel.pack(side="left", padx=10)
 #
 # create map widget
 #
-map_widget = tkintermapview.TkinterMapView(root_tk, width=1000, height=700, corner_radius=0)
+map_widget = tkintermapview.TkinterMapView(root_tk, width=main_window_width, height=main_window_height, corner_radius=0)
 map_widget.pack(fill="both", expand=True)
 
 map_widget.set_zoom(2)
