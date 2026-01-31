@@ -142,6 +142,7 @@ ghSignalQuit( int sig )
     signal( SIGHUP, SIG_IGN ) ;
     signal( SIGTERM, SIG_IGN ) ;
 }
+#endif
 
 /*
  * Child process quit routine
@@ -155,7 +156,6 @@ ghChildQuit( int sig )
     exit( 0 ) ;
 
 }
-#endif
 
 #ifdef _WINDOWS
 /**  Windows Socket   **/
@@ -697,6 +697,7 @@ main(int argc, char** argv)
 
 #ifdef _WINDOWS	  
 	  closesocket( ghClient );
+	  ghChildQuit( 0 ) ;
 #else
 	  close( ghClient ) ;
 	  ghChildQuit( SIGQUIT ) ;
