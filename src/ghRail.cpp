@@ -940,14 +940,8 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y,un
   traits->doubleBuffer = true;
   //traits->sharedContext = 0;  // Need NOT
   if ( name == GH_STRING_ROOT ) name = GH_WELCOME_MESSAGE;  
-#ifdef _WINDOWS
-  char* cstr = new char[name.size() + 1]; // allocation memory
-  std::strcpy(cstr, name.c_str());
-  osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContextSetArgs( traits.get(), x, y ,width, height , cstr);
-#else
   traits->windowName = name;
   osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContext( traits.get() );
-#endif  
   if ( !gc ) return NULL;
   osg::ref_ptr<osg::Camera> camera = new osg::Camera;
   camera->setGraphicsContext( gc.get() );
@@ -1120,7 +1114,6 @@ void
 ghSetConfigWindow( ghWindow* _win, std::string title,int x,int y,int width,int height) {
 
   osgViewer::Viewer::Windows windows;
-  //ghWindow *w = ghGetWindowByName(_win,name);
   int current[4];
   memset(&current[0], 0, sizeof(int)*4);
 
@@ -1164,7 +1157,6 @@ void
 ghGetConfigWindow( ghWindow* _win, std::string title, int *ret) {
 
   osgViewer::Viewer::Windows windows;
-  //ghWindow *w = ghGetWindowByName(_win,name);
 
   if ( title == GH_STRING_ROOT ) title = GH_WELCOME_MESSAGE;
 

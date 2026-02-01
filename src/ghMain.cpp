@@ -536,12 +536,7 @@ ghMainRail(osg::ArgumentParser args)
       /***  Set window view ***/
       ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,&args,ghScreenNum,64,48,0.5);
       ghViewer->addView( ghWin_anchor->view );
-#ifdef _WINDOWS
-      // include/osgViewer/View src/osgViewer/View.cpp src/osgViewer/Viewer.cpp
-      ghWin_anchor->view->getEventHandlersMoveAddressPush(ui,0x00);
-#else
       ghWin_anchor->view->getEventHandlers().push_front(ui);
-#endif
       ghWin_anchor->view->setSceneData( ghNode3D );
 
       double _elapsed_prev = 0.0f;
