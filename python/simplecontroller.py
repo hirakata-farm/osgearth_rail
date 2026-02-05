@@ -67,7 +67,7 @@ remote_port = 57139
 socket_buffer_size = 4096
 show_socket_detail = True
 def about():
-    message = "simple osgearth_rail controller 0.4"
+    message = "simple osgearth_rail controller 0.5"
     messagebox.showinfo("about",message)
 
 ######################################################
@@ -358,7 +358,7 @@ def server_connect_dialog():
     option2_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option3_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
     option4_radio = ttk.Radiobutton(dialog, text="ACELA (USA)", value="G174087320ACELA", variable=selected_option)
-    option5_radio = ttk.Radiobutton(dialog, text="London area (UK)", value="G175517100LONDON", variable=selected_option)
+    option5_radio = ttk.Radiobutton(dialog, text="England (UK)", value="G177028100ENGLAND", variable=selected_option)
     option6_radio = ttk.Radiobutton(dialog, text="Zurich (CH)", value="G175581101ZURICH", variable=selected_option)
     option7_radio = ttk.Radiobutton(dialog, text="Ireland (IRE)", value="G175656102IRELAND", variable=selected_option)
     option8_radio = ttk.Radiobutton(dialog, text="Netherland (NS)", value="G175930105DUTCH", variable=selected_option)        
@@ -459,7 +459,7 @@ def server_exit_dialog():
     msg_label = ttk.Label(dialog, text="Comfirmation 3D view close")
     msg_label.place(x=100,y=40)
 
-    ok_button = tkinter.Button(dialog, text="Close", fg="blue", command=on_exit_ok)
+    ok_button = tkinter.Button(dialog, text="3D view Close", fg="blue", command=on_exit_ok)
     no_button = tkinter.Button(dialog, text="NO", fg="red", command=on_exit_no)    
     ok_button.place(x=50,y=80)
     no_button.place(x=250,y=80)
@@ -644,12 +644,13 @@ def camera_add_dialog():
         message = "camera add " + cname + " " + str(x) + " " + str(y) + " " + str(s) + "\n"
         response = remote_socket.send(message);
         dialog.destroy()
-        if shm_mode:
-            time.sleep(5) # wait time for Setup 3D Viewer
-            message = "shm set camera " + cname + " viewport\n"
-            shmmsg = remote_socket.send(message)
-            shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
-        windows[cname] = "NONE";
+        if response[3] != "cannot" and response[3] != "already":
+            if shm_mode:
+                time.sleep(5) # wait time for Setup 3D Viewer
+                message = "shm set camera " + cname + " viewport\n"
+                shmmsg = remote_socket.send(message)
+                shm_camera[cname] = sysv_ipc.SharedMemory(int(shmmsg[4]))
+            windows[cname] = "NONE"
 
     def on_button_no():
         dialog.destroy()
@@ -739,6 +740,10 @@ def pause_command():
     
 # create tkinter window
 root_tk = tkinter.Tk()
+screen_width = root_tk.winfo_screenwidth()
+screen_height = root_tk.winfo_screenheight()
+print(f"Resolution: {screen_width}x{screen_height}")
+
 root_tk.geometry(f"{1000}x{700}")
 root_tk.title("simple osgearth_rail controller")
 

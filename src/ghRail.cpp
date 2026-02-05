@@ -374,6 +374,7 @@ ghRail::Setup(string configname)
     if ( res ) {
 	// NOP
     } else {
+      std::cout << "Error field line " << lineid << std::endl;
       return GH_SETUP_RESULT_WRONG_LINE;
     }
     
@@ -938,7 +939,6 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y,un
   traits->height = height;
   traits->windowDecoration = true;
   traits->doubleBuffer = true;
-  //traits->sharedContext = 0;  // Need NOT
   if ( name == GH_STRING_ROOT ) name = GH_WELCOME_MESSAGE;  
   traits->windowName = name;
   osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContext( traits.get() );
@@ -985,7 +985,6 @@ ghCreateWindow(std::string name, osg::ArgumentParser *args, unsigned int screen,
     }
   win->name = ghString2CharPtr(name);
   win->tracking = ghString2CharPtr(GH_COMMAND_CAMERA_UNTRACKING);
-  //win->args = args;
   win->args = args;
   //win->view->setCameraManipulator( new osgEarth::EarthManipulator((osg::ArgumentParser &)args) );
   win->view->setCameraManipulator( new osgEarth::EarthManipulator() );

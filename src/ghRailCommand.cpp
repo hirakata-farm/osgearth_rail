@@ -555,11 +555,19 @@ ghRailExecuteCommandOSG( ghCommandQueue *cmd, ghRail *rail , ghWindow* _win, osg
       break;
     case GH_COMMAND_CAMERA_ADD:
       executecode = ghRailCommandCameraAdd(cmd,rail,_win);
-      cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      if ( executecode == GH_EXECUTE_SUCCESS ) {
+	cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      } else {
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      }
       break;
     case GH_COMMAND_CAMERA_REMOVE:
       executecode = ghRailCommandCameraRemove(cmd,_win);
-      cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      if ( executecode == GH_EXECUTE_SUCCESS ) {
+	cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      } else {
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      }
       break;
     case GH_COMMAND_CAMERA_GET:
       executecode = ghRailCommandCameraGet(cmd,_win,&resultmsg[0]);

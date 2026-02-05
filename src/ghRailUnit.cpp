@@ -283,22 +283,7 @@ ghRailUnit::SetModelStatus(int coach,int status) {
 void
 ghRailUnit::CreateModelNode(int coach) {
 
-  ////////////////////////////////////////////////
-#ifdef _WINDOWS
-  //std::string gltf(p_models[coach].GetGltf());
-  //char* cstr = new char[gltf.size() + 1]; // allocation memory
-  //std::strcpy(cstr, gltf.c_str());
-  //osg::Node* locomotive = osgDB::readNodeFileChar(cstr);
-  osg::Node* locomotive = osgDB::readNodeFileChar( ghString2CharPtr( p_models[coach].GetGltf() ) );
-  //
-  // include/osgDB/ReadFile
-  // src/osgDB/ReadFile.cpp string->char
-  // include/osgDB/Registry
-  // osgearth/osgEarthDriver/gltf/ReaderWriterGLTF.cpp
-  //
-#else
   osg::Node* locomotive = osgDB::readNodeFile( p_models[coach].GetGltf() );
-#endif  
   p_attitude[coach]->setPosition( osg::Vec3(0.0,0.0,0.0) );
   p_attitude[coach]->setScale( osg::Vec3(1.0,1.0,1.0) );
   p_attitude[coach]->addChild( locomotive );
