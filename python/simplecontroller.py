@@ -33,7 +33,7 @@ from tkinter import Menu,ttk,messagebox
 
 import math
 import struct
-
+import random
 import importlib.util
 
 ######################################################
@@ -61,26 +61,33 @@ else:
 main_window_width = 1024
 main_window_height = 768
 
-remote_polling_second = 30
 remote_host = default_host
 remote_port = 57139
-socket_buffer_size = 4096
+socket_buffer_size = 8192
 show_socket_detail = True
 def about():
-    message = "simple osgearth_rail controller 0.5"
+    message = "simple osgearth_rail controller 0.5.1"
     messagebox.showinfo("about",message)
 
 ######################################################
 #
 #
 field_isloaded = False
+field_isrunning = False
 shm_time = None
 shm_train = None
 shm_train_size_byte = 0
 shm_camera = { "root" : None }
 viewport_camera = {};
-polling_timer = None
-polling_timer_started = False
+polling_thread = None
+polling_socket_wait_second = 28
+polling_shm_wait_second = 1
+
+#############
+custom_auto_tracking = False
+custom_auto_tracking_count = 2
+custom_auto_tracking_times = 4
+#############
 
 class SocketClient():
 
@@ -181,9 +188,19 @@ def click_train_marker(marker):
     train_id = response[2]
     train_timetable = " ".join(response[3:])
     timetable_dialog( train_id, train_timetable.rstrip(',') )
-        
+
+def get_random_train_id():
+    global trainid
+    length = len(trainid)
+    while True:
+        idx = int(random.uniform(0, length-1))
+        if trainid[idx] in markers:
+            return trainid[idx]
+    
 def update_socket_marker(data):
     #global tracking_id
+    global trainid
+    
     markerlist = data.split(",")
     for item in trainid:
         existflag = False
@@ -309,38 +326,49 @@ def update_map_center(lat,lng):
     if mapredraw:
         map_widget.set_position(lat,lng)        
         
-def timerproc_socket():
+def update_thread_socket():
     global field_isloaded
-    global polling_timer
+    global field_isrunning
+    global polling_socket_wait_second
+    
+    while True:
+        if field_isloaded:
+            if field_isrunning:
+                timestr = remote_socket.send("clock get time\n");
+                if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
+                    timelabel_var.set(timestr[3])
+                response = remote_socket.send("train position all\n");
+                update_socket_marker(" ".join(response[3:]))
+                response = remote_socket.send("camera get root viewport\n");
+                update_socket_viewport(" ".join(response[4:]))
+                custom_auto_tracking_camera()
+                time.sleep(polling_socket_wait_second)
+            else:
+                time.sleep(1)
+        else:
+            break
 
-    if field_isloaded:
-        timestr = remote_socket.send("clock get time\n");
-        if len(timestr) > 3 and timestr[0] == "Geoglyph:clock":
-            timelabel_var.set(timestr[3])
-        response = remote_socket.send("train position all\n");
-        update_socket_marker(" ".join(response[3:]))
-        response = remote_socket.send("camera get root viewport\n");
-        update_socket_viewport(" ".join(response[4:]))
-        polling_timer=threading.Timer(remote_polling_second,timerproc_socket)
-        polling_timer.start()
-
-
-def timerproc_shm():
+def update_thread_shm():
     global field_isloaded
-    global polling_timer
-    global shm_mode
-    if field_isloaded:
-        if shm_mode:
-            update_shm_clock()
-            update_shm_train()
-            update_shm_viewport()
+    global field_isrunning
+    global polling_shm_wait_second
 
-        polling_timer=threading.Timer(remote_polling_second,timerproc_shm)
-        polling_timer.start()
+    while True:
+        if field_isloaded:
+            if field_isrunning:
+                update_shm_clock()
+                update_shm_train()
+                update_shm_viewport()
+                time.sleep(polling_shm_wait_second)
+            else:
+                time.sleep(1)
+        else:
+            break
 
         
 def server_connect_dialog():
     global remost_host
+
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x300")
     dialog.title("Connect setting")
@@ -377,6 +405,7 @@ def server_connect_dialog():
         global field_isloaded
         global remote_host
         global shm_mode
+        global polling_thread
         remote_host = txt.get();
         response = remote_socket.connect(remote_host, remote_port)
         if response == False:
@@ -413,12 +442,16 @@ def server_connect_dialog():
         if remote_host == "localhost":
             shm_mode = True
             setup_shm()
+            polling_thread = threading.Thread(target=update_thread_shm)
             print (" shared memory mode")
         else:
             shm_mode = False
+            polling_thread = threading.Thread(target=update_thread_socket)
             print (" socket mode")
         field_isloaded = True
+        polling_thread.start()
 
+        
     ok_button = tkinter.Button(dialog, text="OK", fg="blue", command=on_server_ok)
     ok_button.place(x=30,y=250)
 
@@ -427,18 +460,13 @@ def server_connect_dialog():
 
 def server_exit_dialog():
     global field_isloaded
-    global polling_timer
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x160")
     dialog.title("3D view close")
 
     def on_exit_ok():
         global field_isloaded
-        global polling_timer
-        global polling_timer_started
-        if polling_timer_started:
-            if polling_timer.is_alive():
-                polling_timer.cancel()
+        field_isloaded = False
         response = remote_socket.send("exit\n");
         remote_socket.close()
         dialog.destroy()
@@ -450,7 +478,7 @@ def server_exit_dialog():
         menu1.entryconfig("camera", state=tkinter.DISABLED)
         menu_button_2.config(state=tkinter.DISABLED)
         menu_button_3.config(state=tkinter.DISABLED)
-        field_isloaded = False
+
         
     def on_exit_no():
         #messagebox.showinfo("3D view", " cancel close ")
@@ -711,27 +739,99 @@ def camera_tracking_dialog():
 
 
 def run_command():
-    global shm_mode
+    global field_isrunning
+    field_isrunning = True
     response = remote_socket.send("run\n");
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
     #messagebox.showinfo("receive",response)
-    if shm_mode:
-        t=threading.Thread(target=timerproc_shm)
-    else:
-        t=threading.Thread(target=timerproc_socket)
-    t.start()
-    polling_timer_started = True
+
 
 def pause_command():
-    global polling_timer
+    global field_isrunning
+    field_isrunning = False
     response = remote_socket.send("pause\n");
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
     #messagebox.showinfo("receive",response)
-    if polling_timer.is_alive():
-        polling_timer.cancel()
+    
+def app_quit():
+    global field_isloaded
+    field_isloaded = False
+    polling_thread.join()
+    root_tk.quit
+    exit()
 
+################################################################################
+#
+#
+#  Custom command
+#
+def custom_auto_tracking_camera():
+    global field_isloaded
+    global field_isrunning
+    global custom_auto_tracking
+    global custom_auto_tracking_count
+    global custom_auto_tracking_times
+    if field_isloaded:
+        if field_isrunning:
+            if custom_auto_tracking:
+                if custom_auto_tracking_count > custom_auto_tracking_times:
+                    message = "camera set root tracking " + get_random_train_id() + "\n"
+                    response = remote_socket.send(message);
+                    time.sleep(2)
+                    message = "camera set camera1 tracking " + get_random_train_id() + "\n"
+                    response = remote_socket.send(message);
+                    time.sleep(2)
+                    message = "camera set camera2 tracking " + get_random_train_id() + "\n"
+                    response = remote_socket.send(message);
+                    time.sleep(2)
+                    message = "camera set camera3 tracking " + get_random_train_id() + "\n"
+                    response = remote_socket.send(message);
+                    time.sleep(2)
+                    message = "camera set camera4 tracking " + get_random_train_id() + "\n"
+                    response = remote_socket.send(message);
+                    custom_auto_tracking_count = 0
+                else:
+                    custom_auto_tracking_count += 1
+
+            
+def sequence_script():
+    global custom_auto_tracking
+    response = remote_socket.send("clock set time 9:10\n")
+    time.sleep(2)
+    response = remote_socket.send("clock set speed 0.1\n")
+    time.sleep(2)
+    message = "camera add camera1 1280 720 0.3\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera set camera1 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera add camera2 2560 720 0.3\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera set camera2 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera add camera3 0 1440 0.3\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera set camera3 window 2560 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera add camera4 2560 1440 0.3\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera set camera4 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    run_command()
+    custom_auto_tracking = True
+    menu1.entryconfig("SequenceScript", state=tkinter.DISABLED)    
+
+    
+    
 ################################################################################
 #
 #    Widget
@@ -743,8 +843,7 @@ root_tk = tkinter.Tk()
 screen_width = root_tk.winfo_screenwidth()
 screen_height = root_tk.winfo_screenheight()
 print(f"Resolution: {screen_width}x{screen_height}")
-
-root_tk.geometry(f"{1000}x{700}")
+#root_tk.geometry(f"{1000}x{700}")
 root_tk.title("simple osgearth_rail controller")
 
 # Custom Menubar
@@ -761,7 +860,7 @@ menu0.add_command(label="3D view open", command=server_connect_dialog)
 menu0.add_command(label="3D view close", command=server_exit_dialog)
 menu0.add_separator()
 menu0.add_command(label="About", command=about)
-menu0.add_command(label="Exit", command=root_tk.quit)
+menu0.add_command(label="Exit", command=app_quit)
 menu_button_0.config(menu=menu0)
 menu0.entryconfig("3D view close", state=tkinter.DISABLED)
 
@@ -776,6 +875,7 @@ menu1.add_command(label="clock", command=clock_dialog)
 menu1.add_command(label="speed", command=speed_dialog)
 menu1.add_cascade(label="camera", menu=camera_menu)
 menu1.add_command(label="manual input", command=manual_input_dialog)
+menu1.add_command(label="SequenceScript", command=sequence_script)
 
 camera_menu.add_command(label="tracking", command=camera_tracking_dialog)
 camera_menu.add_command(label="New(add)", command=camera_add_dialog)

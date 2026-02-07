@@ -17,11 +17,16 @@
 
    Command List
 
+1. Control Command
+
 exit
+start
+run
+stop
+pause
+show (status|version)
 
-start | run
-stop | pause
-
+2. Clock Command
 
 clock [set|get] [time|speed] (number)
 
@@ -31,31 +36,34 @@ clock set speed 12 ( 0.1 - 12 )
 clock get time
 clock get speed
 
-camera [set|get] [camera name] [position|lookat|upvec] (number) (number) (number)
 
-[camera name] IS default [root]
+3. Camera Command , [camera name] = default [root]
 
-camera set root position 35.2 53.2 32 ( lng[deg], lat[deg], alt[m] )
-camera set root lookat 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
-camera set root upvec 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
-camera set root tracking 1241 ( train_number or NONE )
-camera set root screen 100 200 ( screen_position_x, screen_position_y )
-camera set root window 640 480 ( window_width, window_height ) 
-camera add ( camera name ) 0 0 0.2 ( screen_position_x screen_position_y window_size_ratio_from_ScreenSize )
-camera remove ( camera name )
+camera (set|get) [camera name] (position|lookat|upvec|tracking|screen|window) (number) (number) (number)
 
-camera get root position
-camera get root lookat
-camera get root upvec
-camera get root tracking
-camera get root viewport
-camera get root screen
-camera get root window
+camera set [ camera name ] position 35.2 53.2 32 ( lng[deg], lat[deg], alt[m] )
+camera set [ camera name ] lookat 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
+camera set [ camera name ] upvec 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
+camera set [ camera name ] tracking 1241 ( train_number or NONE )
+camera set [ camera name ] screen 100 200 ( screen_position_x, screen_position_y )
+camera set [ camera name ] window 640 480 ( window_width, window_height ) 
+camera add [ camera name ] 0 0 0.2 ( screen_position_x screen_position_y window_size_ratio_from_ScreenSize )
+camera remove [ camera name ]
+
+camera get [ camera name ] position
+camera get [ camera name ] lookat
+camera get [ camera name ] upvec
+camera get [ camera name ] tracking
+camera get [ camera name ] viewport
+camera get [ camera name ] screen
+camera get [ camera name ] window
 camera get
 
-field [set|get] (specific ID)
 
-field [set|get] (text)
+4. Field Command
+
+field (set|get) [configuration specific ID]
+
 field set G012142123
 
 field get
@@ -64,13 +72,22 @@ field get line
 field get timezone
 field get description
 
-train label {on|off} (train id)  
-train position (train id) 
-train timetable (train id)
-train icon (train id) 
-train line (train id)
-train distance (train id)
 
+5. Train Command
+
+field (label|position|timetable|icon|line|distance) [train id]
+
+
+train label [on|off] [train id]  
+train position [train id] 
+train timetable [train id]
+train icon [train id]
+train line [train id]
+train distance [train id]
+
+6. Configure Command
+
+config (set|get) (maxclockspeed|altmode|displaydistance|maxwindow) (number)
 
 config set maxclockspeed 30.0 ( default 12.0 )
 config set altmode clamp ( clamp(default), absolute, relative )
@@ -81,16 +98,15 @@ config get altmode
 config get displaydistance
 config get maxwindow
 
+
+7. Shared Memory Command ( linux Only yet )
+
+shm (set|remove) (clock|train|camera) (time|position|viewport)
+
 shm set clock time
 shm set train position
 shm set camera [camera name] viewport
-shm remove ( shm key )
-
-show [status|version]
-
-show status
-show version
-
+shm remove [ shm key ]
 
 
 
@@ -249,7 +265,7 @@ show version
 
 //////////////////////////////////////////////////
 //#define GH_EXECUTE_BUFFER_SIZE 1024
-#define GH_EXECUTE_BUFFER_SIZE 4096
+#define GH_EXECUTE_BUFFER_SIZE 8192
 #define GH_EXECUTE_INIT -1
 #define GH_EXECUTE_SUCCESS 0
 #define GH_EXECUTE_UNKNOWN 1
