@@ -28,12 +28,13 @@ import threading
 import tkinter
 import tkintermapview
 from urllib.request import urlopen
-from PIL import ImageTk
+from PIL import Image, ImageTk
 from tkinter import Menu,ttk,messagebox
 
 import math
 import struct
 import random
+import io
 import importlib.util
 
 ######################################################
@@ -60,7 +61,8 @@ else:
 #
 main_window_width = 1024
 main_window_height = 768
-
+icon_width = 16
+icon_height = 16
 remote_host = default_host
 remote_port = 57139
 socket_buffer_size = 8192
@@ -218,7 +220,10 @@ def update_socket_marker(data):
                         msgstr = remote_socket.send(message)
                         if msgstr[2] != "not":
                             imagedata = urlopen(msgstr[3])
-                            image = ImageTk.PhotoImage(data=imagedata.read())
+                            imageobject = Image.open(io.BytesIO(imagedata.read()))
+                            resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
+                            #image = ImageTk.PhotoImage(data=imagedata.read())
+                            image = ImageTk.PhotoImage(resized_image)
                             markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
                 existflag = True
                 break
@@ -290,7 +295,10 @@ def update_shm_train():
                         msgstr = remote_socket.send(message)
                         if msgstr[2] != "not":
                             imagedata = urlopen(msgstr[3])
-                            image = ImageTk.PhotoImage(data=imagedata.read())
+                            imageobject = Image.open(io.BytesIO(imagedata.read()))
+                            resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
+                            #image = ImageTk.PhotoImage(data=imagedata.read())
+                            image = ImageTk.PhotoImage(resized_image)
                             markers[trainname] = map_widget.set_marker( lat, lng, text=trainname, icon=image, command=click_train_marker )
             offset = offset+48
         else:
@@ -758,7 +766,10 @@ def pause_command():
 def app_quit():
     global field_isloaded
     field_isloaded = False
-    polling_thread.join()
+    if polling_thread == None:
+        print(threading.active_count())
+    else:
+        polling_thread.join()
     root_tk.quit
     exit()
 

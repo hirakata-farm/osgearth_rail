@@ -26,6 +26,12 @@
 #define GH_STRING_ROOT  "root"
 #define GH_STRING_NONE  "NONE"
 
+#ifdef _WINDOWS  
+// NOP
+#else
+# include <errno.h>
+#endif
+
 using namespace std;
 using namespace cURLpp::Options;
 
@@ -675,10 +681,12 @@ ghRail::InitShmClock(int shmkey) {
 #else  
   if ((p_shm_clock.shmid = shmget(p_shm_clock.key, p_shm_clock.size, IPC_CREAT | 0666)) < 0) {
     p_shm_clock.key = -1;
+    printf("Clock shared memory get Error: %s\n", strerror(errno));
     return -1;
   }
   // Attached shared memory
   if ((p_shm_clock.addr = (char *)shmat(p_shm_clock.shmid, (void *)0, 0)) == (char *) -1) {
+    printf("Clock shared memory attach Error: %s\n", strerror(errno));
     p_shm_clock.key = -1;
     return -1;
   }
@@ -706,10 +714,12 @@ ghRail::InitShmTrain(int shmkey) {
   // NOP
 #else  
   if ((p_shm_train.shmid = shmget(p_shm_train.key, p_shm_train.size, IPC_CREAT | 0666)) < 0) {
+    printf("Train shared memory get Error: %s\n", strerror(errno));
     p_shm_train.key = -1;
     return -1;
   }
   if ((p_shm_train.addr = (char *)shmat(p_shm_train.shmid, (void *)0, 0)) == (char *) -1) {
+    printf("Train shared memory attach Error: %s\n", strerror(errno));
     p_shm_train.key = -1;
     return -1;
   }
@@ -1190,11 +1200,13 @@ ghInitShmWindow(int shmkey,ghWindow *_win,std::string name) {
   // NOP
 #else  
   if ((tmp->shm.shmid = shmget(tmp->shm.key, tmp->shm.size, IPC_CREAT | 0666)) < 0) {
+    printf("Window shared memory get Error: %s\n", strerror(errno));
     tmp->shm.key = -1;
     return -1;
   }
   // Attached shared memory
   if ((tmp->shm.addr = (char *)shmat(tmp->shm.shmid, (void *)0, 0)) == (char *) -1) {
+    printf("Window shared memory attach Error: %s\n", strerror(errno));
     tmp->shm.key = -1;
     return -1;
   }
