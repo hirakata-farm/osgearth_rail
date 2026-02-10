@@ -421,7 +421,7 @@ def server_connect_dialog():
             messagebox.showinfo("Warning", "3D viewer Error")
             return
 
-        time.sleep(5) # wait time for Setup 3D Viewer
+        time.sleep(3) # wait time for Setup 3D Viewer
         message = "field set " + selected_option.get() + "\n"
         fieldresult = remote_socket.send(message);
         if len(fieldresult) > 3:
@@ -767,7 +767,8 @@ def app_quit():
     global field_isloaded
     field_isloaded = False
     if polling_thread == None:
-        print(threading.active_count())
+        #print(threading.active_count())
+        print("exited")
     else:
         polling_thread.join()
     root_tk.quit
