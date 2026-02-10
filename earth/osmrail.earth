@@ -1,9 +1,5 @@
 <!--
-
-
 osgEarth Sample - OpenStreetMap
-
-
 -->
 <map name="Worldwide OSM feature data">
 
@@ -116,25 +112,26 @@ osgEarth Sample - OpenStreetMap
             </script>
         </styles>
     </TiledFeatureModel>
-
+<!--  
     <XYZImage name="OSM Imagery">
         <url>https://[abc].tile.openstreetmap.org/{z}/{x}/{y}.png</url>
         <profile>spherical-mercator</profile>
         <cache_policy usage="none"/>
         <attribution>&#169;OpenStreetMap contributors</attribution>
     </XYZImage>
-<!--  
-    <ArcGISServerImage name="ArcGIS Demo">
+-->
+    <ArcGISServerImage name="Arc GIS Imagery">
         <url>http://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/</url>
     </ArcGISServerImage>
--->
 
+    <TMSElevation name="ReadyMap 90m Elevation" open="true">
+          <url>https://readymap.org/readymap/tiles/1.0.0/116/</url>
+	  <vdatum>egm96</vdatum>
+    </TMSElevation>
 
-    <xi:include href="readymap_elevation.xml"/>
-
-    <!--   <xi:include href="osm_roads_rasterized.xml"/> -->
-
-    <gdaldem name="hillshade" multidirectional="true" opacity="0.2" max_range="100000" attenuation_range="100000"/>
+    <!--  <xi:include href="readymap_elevation.xml"/> -->
+    <!--  <xi:include href="osm_roads_rasterized.xml"/> -->
+    <!--  <gdaldem name="hillshade" multidirectional="true" opacity="0.2" max_range="100000" attenuation_range="100000"/> -->
     
     <options>
         <screen_space_error>125</screen_space_error>
