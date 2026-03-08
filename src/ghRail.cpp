@@ -210,6 +210,7 @@ ghRail::GetTrainPosition(string trainid, double simtime)
   int coach = 0;
 
   if ( trainid.empty() ) {
+    bool isfirst = true;
     for (auto it = p_units.begin(); it != p_units.end(); ++it) {
       std::string key = it->first;    
       point = p_units[key].GetControlPoint(simtime,coach);
@@ -219,7 +220,11 @@ ghRail::GetTrainPosition(string trainid, double simtime)
 	//ret += std::to_string(simtime);
       } else {
 	position_lnglat = WGS84.geocentricToGeodetic(position_centric);
-	ret += ",";
+	if ( isfirst ) {
+	  isfirst = false;
+	} else {
+	  ret += ",";
+	}
 	ret += key;
 	ret += " ";
 	ret += std::to_string(position_lnglat.x());
@@ -731,6 +736,8 @@ ghRail::InitShmTrain(int shmkey) {
 int 
 ghRail::RemoveShm(int shmkey) {
 
+
+  ////////////////////////////////
   if ( p_shm_clock.key = shmkey || shmkey == 0 ) {
       // Detach shmkey
 #ifdef _WINDOWS    
@@ -743,6 +750,8 @@ ghRail::RemoveShm(int shmkey) {
   } else {
     // NOP
   }
+  
+  ////////////////////////////////
   if ( p_shm_train.key = shmkey || shmkey == 0 ) {
       // Detach shmkey
 #ifdef _WINDOWS
@@ -756,6 +765,7 @@ ghRail::RemoveShm(int shmkey) {
     // NOP
   }
 
+  
   return -1;
 }
 

@@ -137,6 +137,9 @@ shm remove [ shm key ]
 #include <osgViewer/Viewer>
 
 ////////////////////////////////////////////////////////////////
+#define GH_SOCKET_BUFFER_SIZE 16384
+#define GH_COMMAND_MIN_SIZE  2
+
 #define GH_COMMAND_UNKNOWN  -1
 #define GH_COMMAND_EXIT   0
 #define GH_COMMAND_CLOSE  1
@@ -196,13 +199,12 @@ shm remove [ shm key ]
 #define GH_COMMAND_SHM_CAMERA_VIEW 49
 #define GH_COMMAND_SHM_REMOVE      50
 
-#define GH_NUMBER_OF_COMMANDS      51 //  count for above commands
-
 ////////////////////////////////////////////////////
 //
 //   Command Reserved Keywords
 //
 //
+#define GH_STRING_COMMAND_PREFIX "Geoglyph: "
 
 #define GH_STRING_SET "set"
 #define GH_STRING_GET "get"
@@ -263,9 +265,8 @@ shm remove [ shm key ]
 
 #define GH_STRING_OK "OK"
 
+
 //////////////////////////////////////////////////
-//#define GH_EXECUTE_BUFFER_SIZE 1024
-#define GH_EXECUTE_BUFFER_SIZE 8192
 #define GH_EXECUTE_INIT -1
 #define GH_EXECUTE_SUCCESS 0
 #define GH_EXECUTE_UNKNOWN 1
@@ -275,21 +276,10 @@ shm remove [ shm key ]
 #define GH_EXECUTE_SIZE_ERROR  13
 #define GH_EXECUTE_NOT_FOUND   15
 #define GH_EXECUTE_ALREADY_EXIST 17
+#define GH_EXECUTE_ALREADY_LOADED 18
 #define GH_EXECUTE_RESERVED  19
 #define GH_EXECUTE_CANNOT_GET  21
 #define GH_EXECUTE_CANNOT_ALLOCATE  23
-
-//////////////////////////////////////// Obsolete
-#define GH_POST_EXECUTE_NONE 0
-#define GH_POST_EXECUTE_DONE 1
-#define GH_POST_EXECUTE_EXIT 2
-#define GH_POST_EXECUTE_CLOSE 4
-#define GH_POST_EXECUTE_TIMEZONE 8
-#define GH_POST_EXECUTE_SETCLOCK 9
-#define GH_POST_EXECUTE_CAMERA_ADD 12
-#define GH_POST_EXECUTE_CAMERA_REMOVE 14
-////////////////////////////////////////
-
 
 #define GH_QUEUE_STATE_INIT 0
 #define GH_QUEUE_STATE_RECEIVED 1
@@ -305,76 +295,78 @@ using namespace std;
 typedef struct ghCommandQueue
 {
   int	type ;
+  std::string recv;
   int   argstridx;
   std::string argstr[2] ;
   int   argnumidx;
   double argnum[3];
-  //bool isexecute;
+  int executecode;
+  std::string resultmessage;
   unsigned int state;
-  std::string result;
   ghCommandQueue *prev;
 } ghCommandQueue ;
 
-ghCommandQueue *ghRailInitCommandQueue();
+ghCommandQueue *ghRailInitCommandQueue(string buffer);
 
-void ghRailParseCommand(ghCommandQueue *cmd,string str);
-void ghRailExecuteCommandData(ghCommandQueue *cmd, ghRail *rail, double simtime);
-void ghRailExecuteCommandOSG(ghCommandQueue *cmd,  ghRail *rail, ghWindow* _win, osgEarth::SkyNode *_sky);
+void ghRailParseCommand(ghCommandQueue *cmd);
+void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime, ghWindow* _win, osgEarth::SkyNode *_sky);
+//void ghRailExecuteCommandData(ghCommandQueue *cmd, ghRail *rail, double simtime);
+//void ghRailExecuteCommandScene(ghCommandQueue *cmd,  ghRail *rail, ghWindow* _win, osgEarth::SkyNode *_sky);
 
-std::string ghRailReturnMessage(ghCommandQueue *cmd,int code, char *message);
+void ghRailCreateResultMessage(ghCommandQueue *cmd);
 
 int ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
-int ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail);
 
-int ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandFieldLine(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandFieldLine(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail);
 
 int ghRailCommandClockSetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
-int ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky, char *result);
+int ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
 int ghRailCommandClockSetSpeed(ghCommandQueue *cmd, ghRail *rail);
-int ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail);
 
 int ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail,bool flag);
-int ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime, char *result);
-int ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail, char *result);
-int ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime);
+int ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail);
+int ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail);
 
 int ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow* _win, char *result);
+int ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow* _win, char *result);
+int ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow* _win);
 int ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow* _win, char *result);
+int ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow* _win);
 int ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow* _win);
-int ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win, char *result);
-int ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow* _win, char *result);
+int ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win);
+int ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow* _win);
 int ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win, char *result);
+int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win, char *result);
+int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win);
 int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
 int ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGet(ghCommandQueue *cmd, ghWindow* _win, char *result);
+int ghRailCommandCameraGet(ghCommandQueue *cmd, ghWindow* _win);
 
 int ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
-int ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigSetAltmode(ghCommandQueue *cmd, ghRail *rail);
-int ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandConfigGetAltmode(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigSetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
-int ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigSetMaxwindow(ghCommandQueue *cmd, ghRail *rail);
-int ghRailCommandConfigGetMaxwindow(ghCommandQueue *cmd, ghRail *rail, char *result);
+int ghRailCommandConfigGetMaxwindow(ghCommandQueue *cmd, ghRail *rail);
 
-int ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win, char *result);
+int ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win);
 int ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail);
 
-int ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win, char *result);
-int ghRailCommandShowVersion(char *result);
+int ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
+int ghRailCommandShowVersion(ghCommandQueue *cmd);
 
 
 #endif

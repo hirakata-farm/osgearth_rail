@@ -51,6 +51,8 @@
 #include <sys/wait.h>
 #endif
 
+#define GH_SOCKET_RECEIVE_BUFFER_SIZE 1024
+
 #define LC "[imgui] "
 
 using namespace osgEarth;
@@ -254,7 +256,7 @@ ghRailGUI *ghGui;                 // ImGui
 ghRail *ghRail3D;                  // Simulation    Rail Class 
 osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
 osgEarth::SkyNode *ghSky;         // manipulate date-time
-//OpenThreads::Mutex ghMutex;
+OpenThreads::Mutex ghMutex;
 
 double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
@@ -277,7 +279,7 @@ ghCheckCommand() {
 
   while (cmdtmp != (ghCommandQueue *)NULL)
     {
-      if ( cmdtmp->state == GH_QUEUE_STATE_PARSED ) {
+      if ( cmdtmp->state == GH_QUEUE_STATE_PART_EXECUTED ) {
 	cmd = cmdtmp;
 	break;
       }
@@ -285,8 +287,6 @@ ghCheckCommand() {
     }
 
   if ( cmd == (ghCommandQueue *)NULL ) return;
-
-  ghRailExecuteCommandOSG(cmd,ghRail3D,ghWin_anchor,ghSky);
 
   if ( cmd->state == GH_QUEUE_STATE_PART_EXECUTED ) {
     if ( cmd->type == GH_COMMAND_CLOCK_SET_TIME ) {
@@ -342,45 +342,47 @@ public:
       // Sleep for 100 milliseconds
       //OpenThreads::Thread::microSleep(100000);
 #ifdef _WINDOWS
-      recv_result = recv(_sock, _buffer, 1024, 0);
+      recv_result = recv(_sock, _buffer, GH_SOCKET_RECEIVE_BUFFER_SIZE, 0);
 #else      
-      read(_sock, _buffer, 1024);
+      read(_sock, _buffer, GH_SOCKET_RECEIVE_BUFFER_SIZE);
 #endif
+      
       std::string command(_buffer);
-      if ( command.size() > 3 ) {
+      ghMutex.lock();      
+      if ( command.size() > GH_COMMAND_MIN_SIZE ) {
 	_cmdtmp = ghQueue;
-	ghQueue = ghRailInitCommandQueue();
+	ghQueue = ghRailInitCommandQueue(command);
 	if ( ghQueue != NULL ) {
-	  ghRailParseCommand(ghQueue,command);
-	  if ( ghQueue->type == GH_COMMAND_UNKNOWN ) {
-	    ghQueue->state = GH_QUEUE_STATE_RECEIVED;
-	  } else {
-	    ghQueue->state = GH_QUEUE_STATE_PARSED;
+	  ghRailParseCommand(ghQueue);
+	  if ( ghQueue->type != GH_COMMAND_UNKNOWN ) {
 	    ghQueue->prev = _cmdtmp;
+	  } else {
+	    // NOP
 	  }
-	  memset(_buffer, 0, sizeof(_buffer));
+	  //memset(_buffer, 0, sizeof(_buffer));
 	} else {
 	  ghQueue = _cmdtmp;
+	  //std::cout<<"Cannot allocate command queue"<<std::endl;
 	  // Error message ( cannot allocate command queue )
 	}
       } else {
-	// Too short buffer
+	// Too short buffer Noise?
       }
-	  
       if ( ghQueue ) {
 	if ( ghQueue->state == GH_QUEUE_STATE_PARSED ) {
-	  ghRailExecuteCommandData(ghQueue,ghRail3D,ghSimulationTime);
+	  ghRailExecuteCommand(ghQueue,ghRail3D,ghSimulationTime,ghWin_anchor,ghSky);
 	  if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
 	    _running = false;
 	  } else {
 	    // NOP
 	  }
 	}
-
       } else {
 	// NOP
 	//std::cout<<"CommandQueue NULL="<<command<<std::endl;
       }
+      ghMutex.unlock();
+      memset(_buffer, 0, sizeof(_buffer));
     }
     //std::cout << "Thread stopped." << std::endl;
     ghRail3D->SetPlayPause(false);
@@ -390,7 +392,7 @@ void stop() { _running = false; }
 
 private:
   bool _running;
-  char _buffer[1024];
+  char _buffer[GH_SOCKET_RECEIVE_BUFFER_SIZE];
   ghCommandQueue *_cmdtmp;
   int recv_result;
   int _sock;
@@ -417,8 +419,10 @@ public:
 	  cmdtmp = cmdtmp->prev ;
 	}
       if ( cmd != (ghCommandQueue *)NULL ) {
-	if ( cmd->state == GH_QUEUE_STATE_EXECUTED && cmd->result != GH_STRING_NOP ) {
-	  const char* retmsg = cmd->result.c_str();
+	ghMutex.lock();
+	if ( cmd->state == GH_QUEUE_STATE_EXECUTED ) {
+	  ghRailCreateResultMessage(cmd);
+	  const char* retmsg = cmd->resultmessage.c_str();
 	  send(_sock, retmsg, std::strlen(retmsg), 0);
 	  cmd->state = GH_QUEUE_STATE_RESULT_SEND;
 	} else {
@@ -432,6 +436,7 @@ public:
 	  //std::cout << "             type=" << cmd->type << std::endl;
 	  //std::cout << "            state=" << cmd->state << std::endl;
 	}
+	ghMutex.unlock();
       }
     }
   }
