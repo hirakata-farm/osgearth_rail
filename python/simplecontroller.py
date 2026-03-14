@@ -438,6 +438,7 @@ def server_initialize(fieldid):
     response = remote_socket.send("config set altmode relative\n")
     time.sleep(3) # wait time for Setup 3D Viewer                
     trainid = remote_socket.send("field get train\n")
+    time.sleep(2) # wait time for Setup 3D Viewer                
     if trainid[1] == "Accept":
         del trainid[0:4]  # remove Geoglyph header string
     else:
@@ -456,7 +457,7 @@ def server_initialize(fieldid):
     polling_thread.start()
     return True
 
-def server_multiview_script():
+def server_multiview_script_5views():
     global custom_auto_tracking
     response = remote_socket.send("clock set time 9:10\n")
     time.sleep(2)
@@ -488,6 +489,37 @@ def server_multiview_script():
     windows["camera4"] = "NONE"
     time.sleep(2)
     message = "camera set camera4 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    run_command()
+    custom_auto_tracking = True
+    menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
+
+def server_multiview_script():
+    global custom_auto_tracking
+    response = remote_socket.send("clock set time 9:10\n")
+    time.sleep(2)
+    response = remote_socket.send("clock set speed 0.0625\n") # 1/16
+    time.sleep(2)
+    message = "camera add camera1 0 1440 0.3\n"
+    response = remote_socket.send(message);
+    windows["camera1"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera1 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera add camera2 1280 1440 0.3\n"
+    response = remote_socket.send(message);
+    windows["camera2"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera2 window 1280 710\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    message = "camera add camera3 2560 1440 0.3\n"
+    response = remote_socket.send(message);
+    windows["camera3"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera3 window 1280 710\n"
     response = remote_socket.send(message);
     time.sleep(2)
     run_command()
@@ -825,7 +857,6 @@ def calculate_bearing(pointA, pointB):
     return compass_bearing
 
 def set_camera_tracking_position(cameraid,trainid,distance,height):
-    global field_isrunning
 
     message = "camera get " + cameraid + " position\n"
     cameraret = remote_socket.send(message);
@@ -841,18 +872,16 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
         train_alt = float(trainret[7])
     else:
         return
-    
-    tmp_flag = field_isrunning
-    if tmp_flag:
-        pause_command()
     bearing = calculate_bearing(train_point,camera_point)
     distance_km = distance / 1000
     camera_alt = train_alt + height
     destination = geodesic(kilometers=distance_km).destination((train_point[0], train_point[1]), bearing )
     message = "camera set " + cameraid + " position " + str(destination.longitude) + " " + str(destination.latitude) + " " + str(camera_alt) + "\n"
-    result = remote_socket.send(message); 
-    if tmp_flag:
-        run_command()
+    result = remote_socket.send(message);
+    time.sleep(1) #
+    message = "camera set " + cameraid + " tracking " + trainid + "\n"
+    response = remote_socket.send(message);
+    
     
 def camera_tracking_dialog():
     global tracking_ver
@@ -867,11 +896,14 @@ def camera_tracking_dialog():
     def set_camera_tracking():
         c_id = ccombo.get()
         t_id = tcombo.get()
-        message = "camera set " + c_id + " tracking " + t_id + "\n"
+        message = "camera set " + c_id + " tracking none\n"
         response = remote_socket.send(message)
         if response[1] == "Accept":
-            set_camera_tracking_position(c_id,t_id,tracking_distance,tracking_height)
-            windows[c_id] = t_id
+            if t_id == "none":
+                return
+            else:
+                set_camera_tracking_position(c_id,t_id,tracking_distance,tracking_height)
+                windows[c_id] = t_id
         dialog.destroy()        
     def close_camera_tracking():
         dialog.destroy()        
@@ -894,7 +926,7 @@ def camera_tracking_dialog():
         if item != "sample":
             t_options.append( item )
         else:
-            t_options.append("NONE")
+            t_options.append("none")
     tracking_ver = tkinter.StringVar()
     tcombo = ttk.Combobox ( dialog , values = t_options , textvariable = tracking_ver , height = 5)
     tcombo.grid(row=1, column=1, columnspan=2, pady=5)
@@ -960,7 +992,7 @@ def custom_auto_tracking_camera():
                             if is_same_tracking_id_in_windows(newid):
                                 time.sleep(1)
                             else:
-                                message = "camera set " + item + " tracking " + newid + "\n"
+                                message = "camera set " + item + " tracking none\n"
                                 response = remote_socket.send(message);
                                 if response[1] == "Accept":
                                     set_camera_tracking_position(item,newid,tracking_distance,tracking_height)

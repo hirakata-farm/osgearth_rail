@@ -44,7 +44,7 @@ camera (set|get) [camera name] (position|lookat|upvec|tracking|screen|window) (n
 camera set [ camera name ] position 35.2 53.2 32 ( lng[deg], lat[deg], alt[m] )
 camera set [ camera name ] lookat 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
 camera set [ camera name ] upvec 35.2 53.2 32   ( lng[deg], lat[deg], alt[m] )
-camera set [ camera name ] tracking 1241 ( train_number or NONE )
+camera set [ camera name ] tracking 1241 ( train_number or none )
 camera set [ camera name ] screen 100 200 ( screen_position_x, screen_position_y )
 camera set [ camera name ] window 640 480 ( window_width, window_height ) 
 camera add [ camera name ] 0 0 0.2 ( screen_position_x screen_position_y window_size_ratio_from_ScreenSize )
@@ -310,8 +310,6 @@ ghCommandQueue *ghRailInitCommandQueue(string buffer);
 
 void ghRailParseCommand(ghCommandQueue *cmd);
 void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime, ghWindow* _win, osgEarth::SkyNode *_sky);
-//void ghRailExecuteCommandData(ghCommandQueue *cmd, ghRail *rail, double simtime);
-//void ghRailExecuteCommandScene(ghCommandQueue *cmd,  ghRail *rail, ghWindow* _win, osgEarth::SkyNode *_sky);
 
 void ghRailCreateResultMessage(ghCommandQueue *cmd);
 
