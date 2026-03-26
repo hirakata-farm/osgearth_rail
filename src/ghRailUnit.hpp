@@ -94,9 +94,6 @@
 ////////////////////////////////////////////////////////
 
 
-using namespace std;
-
-
 ////////////////////////////////////////////////////////
 
 
@@ -108,14 +105,14 @@ class ghRailUnit
     {
     public:
       //void Setup(string id, vector<int> locomotivesize,vector<string> locomotivemodel,nlohmann::json data,string geom);
-      void Setup(string id, string marker, ghRailJSON locomotive, string direction , nlohmann::json data,string geom);      
+      void Setup(std::string id, std::string marker, ghRailJSON locomotive, std::string direction , nlohmann::json data,std::string geom);      
       //bool SimulatePath(int coaches, ghRailTime *railtime );
       bool SimulatePath( ghRailTime *railtime );
       osg::AnimationPath::ControlPoint GetControlPoint(double seconds,int coach);
       osg::Vec3d GetControlPointVector(double seconds,int coach);
-      string GetModelUri(int coach);
+      std::string GetModelUri(int coach);
       void SetModelLabel(bool flag);
-      string GetTimetable();
+      std::string GetTimetable();
       void CreateModelNode(int coach);
       int GetLocomotiveModelSize();
       osg::Switch *GetModelSwitch(int coach);
@@ -123,47 +120,47 @@ class ghRailUnit
       osg::PositionAttitudeTransform *GetModelAttitude(int coach);      
       int GetModelStatus(int coach);
       void SetModelStatus(int coach,int status);
-      string GetMarkerUri();
-      string GetLineInfo();
-      string GetDistanceInfo();
+      std::string GetMarkerUri();
+      std::string GetLineInfo();
+      std::string GetDistanceInfo();
     private:
-      string p_trainid;
-      string p_lineid;
-      string p_routeid;
-      string p_direction;
+      std::string p_trainid;
+      std::string p_lineid;
+      std::string p_routeid;
+      std::string p_direction;
       bool p_islabel;
       ghRailJSON p_locomotive;
-      string p_marker;
-      vector<int> p_locomotives;
+      std::string p_marker;
+      std::vector<int> p_locomotives;
       osgEarth::LabelNode *p_modellabel;
       nlohmann::json p_jsondata;
-      vector<ghRailModel> p_models;
-      vector<osg::Switch *> p_switch;
-      vector<osgEarth::GeoTransform *> p_transform;
-      vector<osg::PositionAttitudeTransform *> p_attitude;
+      std::vector<ghRailModel> p_models;
+      std::vector<osg::Switch *> p_switch;
+      std::vector<osgEarth::GeoTransform *> p_transform;
+      std::vector<osg::PositionAttitudeTransform *> p_attitude;
 
-      vector<vector<double>> p_geompath;   // row geometry from CSV
-      vector<vector<double>> p_geomlayer;   // row geometry property layer from CSV      
-      vector<string> p_geompathstation;
-      vector<int> p_geompathstationtype;
+      std::vector<std::vector<double>> p_geompath;   // row geometry from CSV
+      std::vector<std::vector<double>> p_geomlayer;   // row geometry property layer from CSV      
+      std::vector<std::string> p_geompathstation;
+      std::vector<int> p_geompathstationtype;
       
       int p_geometry_count ;
-      vector<vector<double>> p_geometry;   // formatted geometry
-      vector<string> p_geometrystation;
-      vector<int> p_geometrystationtype;
+      std::vector<std::vector<double>> p_geometry;   // formatted geometry
+      std::vector<std::string> p_geometrystation;
+      std::vector<int> p_geometrystationtype;
 
-      vector<osg::AnimationPath*> p_sim; // each coachs
-      vector<osg::AnimationPath*> p_simlayer; // each coachs for OSM layer property
+      std::vector<osg::AnimationPath*> p_sim; // each coachs
+      std::vector<osg::AnimationPath*> p_simlayer; // each coachs for OSM layer property
 
-      void _geompath2geometry(vector<int> ranges);
-      void _appendGeometryData(double lat,double lon,double alt,string name,int type,int type1, int type2);
-      vector<vector<double>> _extendNewPointsForStation(int startidx,int direction,int extend);
-      vector<string> _split(string str, string delim);
+      void _geompath2geometry(std::vector<int> ranges);
+      void _appendGeometryData(double lat,double lon,double alt,std::string name,int type,int type1, int type2);
+      std::vector<std::vector<double>> _extendNewPointsForStation(int startidx,int direction,int extend);
+      std::vector<std::string> _split(std::string str, std::string delim);
       double _calcObtuseAngle(double angle01, double angle12);
-      vector<double> _createStationRangePoints(vector<vector<double>> &geom,int startidx, vector<int> ranges);
-      vector<double> _createDistancePoint(vector<vector<double>> &geom,int startidx, int distance);
+      std::vector<double> _createStationRangePoints(std::vector<std::vector<double>> &geom,int startidx, std::vector<int> ranges);
+      std::vector<double> _createDistancePoint(std::vector<std::vector<double>> &geom,int startidx, int distance);
 
-      int _getStationIndex(string str,int num);
+      int _getStationIndex(std::string str,int num);
 
       bool _simulateCoach(int coachid, ghRailTime *railtime );
       
@@ -171,15 +168,15 @@ class ghRailUnit
       osg::Vec3d _calcCartesian3FromDegrees(double lat, double lng, double alt);
       osg::Quat _calcQuatanion( int currentid );
 
-      vector<double> _simulateStationToStation(int startidx,int stopidx,double distance, double sec, double startsec);
-      vector<double> _simulateStationToPassing(int startidx,int stopidx,double distance, double sec, double startsec);
-      vector<double> _simulatePassingToStation(int startidx,int stopidx,double distance, double sec, double startsec);
-      vector<double> _simulatePassingToPassing(int startidx,int stopidx,double distance, double sec, double startsec);            
+      std::vector<double> _simulateStationToStation(int startidx,int stopidx,double distance, double sec, double startsec);
+      std::vector<double> _simulateStationToPassing(int startidx,int stopidx,double distance, double sec, double startsec);
+      std::vector<double> _simulatePassingToStation(int startidx,int stopidx,double distance, double sec, double startsec);
+      std::vector<double> _simulatePassingToPassing(int startidx,int stopidx,double distance, double sec, double startsec);            
 
       double __simulateTwoPoints(double x,double t, double d,double v);
-      void _initLocomotiveArray( vector<int>  lsize );
-      void _initLocomotiveModel(vector<string>  locomotive );
-      osgEarth::LabelNode *_createLabelNode(string text);
+      void _initLocomotiveArray( std::vector<int>  lsize );
+      void _initLocomotiveModel(std::vector<std::string>  locomotive );
+      osgEarth::LabelNode *_createLabelNode(std::string text);
 
       osg::AnimationPath::ControlPoint _calcControlPointGeomLayers(double lat, double lng, osg::Quat quat);
       

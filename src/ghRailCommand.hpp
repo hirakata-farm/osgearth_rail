@@ -280,6 +280,7 @@ shm remove [ shm key ]
 #define GH_EXECUTE_RESERVED  19
 #define GH_EXECUTE_CANNOT_GET  21
 #define GH_EXECUTE_CANNOT_ALLOCATE  23
+#define GH_EXECUTE_UNDER_TRACKING  24
 
 #define GH_QUEUE_STATE_INIT 0
 #define GH_QUEUE_STATE_RECEIVED 1
@@ -289,8 +290,6 @@ shm remove [ shm key ]
 #define GH_QUEUE_STATE_RESULT_SEND 9
 
 ////////////////////////////////////////////////
-
-using namespace std;
 
 typedef struct ghCommandQueue
 {
@@ -306,10 +305,11 @@ typedef struct ghCommandQueue
   ghCommandQueue *prev;
 } ghCommandQueue ;
 
-ghCommandQueue *ghRailInitCommandQueue(string buffer);
+ghCommandQueue *ghRailInitCommandQueue(std::string buffer);
 
 void ghRailParseCommand(ghCommandQueue *cmd);
-void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime, ghWindow* _win, osgEarth::SkyNode *_sky);
+//void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime, ghWindow* _win, osgEarth::SkyNode *_sky);
+void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime,osgEarth::SkyNode *_sky,std::map<std::string, ghWindow>& _wins);
 
 void ghRailCreateResultMessage(ghCommandQueue *cmd);
 
@@ -334,22 +334,22 @@ int ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail);
 
-int ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow* _win);
-int ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow* _win);
-int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
-int ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow* _win);
-int ghRailCommandCameraGet(ghCommandQueue *cmd, ghWindow* _win);
+int ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow _win);
+int ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow _win);
+int ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, int cameracount);
+int ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow _win);
+int ghRailCommandCameraGet(ghCommandQueue *cmd, std::map<std::string, ghWindow>& _wins);
 
 int ghRailCommandConfigSetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail);
@@ -360,10 +360,11 @@ int ghRailCommandConfigGetDisplaydistance(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigSetMaxwindow(ghCommandQueue *cmd, ghRail *rail);
 int ghRailCommandConfigGetMaxwindow(ghCommandQueue *cmd, ghRail *rail);
 
-int ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail,ghWindow* _win);
+int ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail, std::map<std::string, ghWindow>& _wins);
 int ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail);
 
-int ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
+//int ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, ghWindow* _win);
+int ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, std::map<std::string, ghWindow>& _wins);
 int ghRailCommandShowVersion(ghCommandQueue *cmd);
 
 

@@ -19,12 +19,12 @@
 
 
 void
-ghRailUnit::Setup( string id,
-		   string marker,
+ghRailUnit::Setup( std::string id,
+		   std::string marker,
 		   ghRailJSON locomotive,
-		   string direction,
+		   std::string direction,
 		   nlohmann::json data,
-		   string geom ) 
+		   std::string geom ) 
 {
   p_trainid = id;
   p_jsondata = data;
@@ -38,7 +38,7 @@ ghRailUnit::Setup( string id,
   //
   int geompathrows;  // path lines
   std::vector<std::string> geomline;
-  vector<string> geomstation;
+  std::vector<std::string> geomstation;
   
   geomline = _split(geom,"\n");
 
@@ -56,7 +56,7 @@ ghRailUnit::Setup( string id,
     }
   }
   
-  p_geompath.resize(geompathrows, vector<double>(4));
+  p_geompath.resize(geompathrows, std::vector<double>(4));
   p_geompathstation.resize(geompathrows);
   p_geompathstationtype.resize(geompathrows);
 
@@ -72,7 +72,7 @@ ghRailUnit::Setup( string id,
 	for (const auto& token2 : propline) {
 	  //  Check layer Property
 	  if ( token2.compare(0, 3, "ly=") == 0 ) {
-	    p_geomlayer.resize(p_geomlayer.size()+1, vector<double>(3));
+	    p_geomlayer.resize(p_geomlayer.size()+1, std::vector<double>(3));
 	    p_geomlayer[idxlayer][0] = p_geompath[idx-1][0];        // Latitude
 	    p_geomlayer[idxlayer][1] = p_geompath[idx-1][1];        // Longitude
 	    p_geomlayer[idxlayer][2] = stod( token2.substr(3) );
@@ -108,14 +108,14 @@ ghRailUnit::Setup( string id,
     }
   }
 
-  string unit_marker = data["marker"];
+  std::string unit_marker = data["marker"];
   if ( unit_marker == "default" ) {
     p_marker = marker;
   } else {
     p_marker = unit_marker;
   }
 
-  string unit_locomotive = data["locomotive"];
+  std::string unit_locomotive = data["locomotive"];
   if ( unit_locomotive == "default" ) {
     p_locomotive = locomotive;
   } else {
@@ -126,8 +126,8 @@ ghRailUnit::Setup( string id,
       return;
     }
   }
-  vector<int> locomotivesize = p_locomotive.GetVectorInt("interval");
-  vector<string> locomotivemodel = p_locomotive.GetVectorString("model");
+  std::vector<int> locomotivesize = p_locomotive.GetVectorInt("interval");
+  std::vector<std::string> locomotivemodel = p_locomotive.GetVectorString("model");
 
   //
   //  Expand geompath vector ( station edge )
@@ -209,7 +209,7 @@ ghRailUnit::SimulatePath( ghRailTime *railtime )
   
 }
 
-string
+std::string
 ghRailUnit::GetModelUri(int coach) {
   return p_models[coach].GetUrl();
 }
@@ -249,7 +249,7 @@ ghRailUnit::SetModelLabel(bool flag) {
   p_islabel = flag;
 }
 
-string
+std::string
 ghRailUnit::GetTimetable() {
   std::string ret = " ";
   nlohmann::json timetable = p_jsondata["timetable"];
@@ -366,7 +366,7 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
   double current_time;
   double diff_time;
   int simidx = 0;
-  vector<double> simulationarray;
+  std::vector<double> simulationarray;
     
   nlohmann::json timetable = p_jsondata["timetable"];
   int timetable_size = timetable.size();
@@ -521,9 +521,9 @@ ghRailUnit::_simulateCoach( int coachid , ghRailTime *railtime )
 
 //
 //https://dexall.co.jp/articles/?p=2187
-vector<string> ghRailUnit::_split(string str, string delim) {
+std::vector<std::string> ghRailUnit::_split(std::string str, std::string delim) {
   
-    vector<string> tokens;
+    std::vector<std::string> tokens;
     size_t count = 1;
     for (size_t i = 0; i < str.length(); i++) {
         if (str.substr(i, delim.length()) == delim) {
@@ -533,7 +533,7 @@ vector<string> ghRailUnit::_split(string str, string delim) {
     }
     tokens.reserve(count);
     size_t prev = 0, pos = 0;
-    while ((pos = str.find(delim, prev)) != string::npos) {
+    while ((pos = str.find(delim, prev)) != std::string::npos) {
         if (pos > prev) {
             tokens.push_back(str.substr(prev, pos - prev));
         }
@@ -550,7 +550,7 @@ vector<string> ghRailUnit::_split(string str, string delim) {
 //   for variable change
 //
 int
-ghRailUnit::_getStationIndex(string str,int num) {
+ghRailUnit::_getStationIndex(std::string str,int num) {
   int samecount = 0;
   //for (int i = p_geometry.size()+1; i > -1 ; i--)  BUG
   for (int i = p_geometry.size()-1; i > -1 ; i--) {    
@@ -570,10 +570,10 @@ ghRailUnit::_getStationIndex(string str,int num) {
 }
 
 
-vector<vector<double>>
+std::vector<std::vector<double>>
 ghRailUnit::_extendNewPointsForStation(int startidx,int direction,int extend) {
 
-  vector<vector<double>> tmp;
+  std::vector<std::vector<double>> tmp;
   int i;
   int ilength = p_geompath.size();
   int nextpathidx = 0;
@@ -581,7 +581,7 @@ ghRailUnit::_extendNewPointsForStation(int startidx,int direction,int extend) {
   double out_lonRad = 0.0;
   double angle = 0;
   int distance = 0;
-  tmp.resize(1,vector<double>(2));
+  tmp.resize(1,std::vector<double>(2));
  
   // Search Next Station
   if ( direction > 0 ) {
@@ -648,7 +648,7 @@ ghRailUnit::_extendNewPointsForStation(int startidx,int direction,int extend) {
 }
 
 void
-ghRailUnit::_geompath2geometry( vector<int> ranges )
+ghRailUnit::_geompath2geometry( std::vector<int> ranges )
 {
   //
   //let d_geometry = [];
@@ -659,8 +659,8 @@ ghRailUnit::_geompath2geometry( vector<int> ranges )
   //
 
   int size = p_geompath.size();
-  vector<vector<double>> extend ;
-  vector<vector<double>> tgeometry;   // template geometry
+  std::vector<std::vector<double>> extend ;
+  std::vector<std::vector<double>> tgeometry;   // template geometry
   std::map<std::string, int> stationname;
   int tgeomidx = 0;
   
@@ -764,7 +764,7 @@ ghRailUnit::_geompath2geometry( vector<int> ranges )
   //////////////////////////////////////////////////////////////
 
   nlohmann::json timetable = p_jsondata["timetable"];
-  vector<double> rangepoints ;
+  std::vector<double> rangepoints ;
   
   //  "timetable":["0T16:56:00","Brussels Midi",4,"0T17:34:00","Lille Europe",2,"0T17:35:00","Lille Europe",4,"0T18:34:00","Ashford Intl",2,"0T18:35:00","Ashford Intl",4,"0T18:55:00","Ebbsfleet Intl",2,"0T18:56:00","Ebbsfleet Intl",4,"0T19:15:00","London St. Pancras Intl",2]
   //size = timetable.size();  // timetable size
@@ -775,7 +775,7 @@ ghRailUnit::_geompath2geometry( vector<int> ranges )
   //
   //   First Station
   //
-  rangepoints = _createStationRangePoints( (vector<vector<double>> &) tgeometry,                  //  Base Geometry array vector 
+  rangepoints = _createStationRangePoints( (std::vector<std::vector<double>> &) tgeometry,                  //  Base Geometry array vector 
 					   stationname[ timetable[timetableid+1].get<std::string>() ],           //  Station id in Geometry array vector 
 					   ranges );                                                 //   Create points distance from station point
   //
@@ -821,7 +821,7 @@ ghRailUnit::_geompath2geometry( vector<int> ranges )
       
     } else {
 
-      rangepoints = _createStationRangePoints( (vector<vector<double>> &) tgeometry,
+      rangepoints = _createStationRangePoints( (std::vector<std::vector<double>> &) tgeometry,
 					       stationname[ timetable[timetableid+1].get<std::string>() ],
 					       ranges );
 
@@ -896,13 +896,13 @@ ghRailUnit::_calcObtuseAngle( double angle01,
 }
 
 
-vector<double>
-ghRailUnit::_createStationRangePoints( vector<vector<double>>& geom,
+std::vector<double>
+ghRailUnit::_createStationRangePoints( std::vector<std::vector<double>>& geom,
 				       int stationidx,
-				       vector<int> unit_distance ) {
+				       std::vector<int> unit_distance ) {
 
 
-  vector<double> result;
+  std::vector<double> result;
   //int search_count = 50; // search point max;
   //  vector<int> unit_distance;
   //
@@ -917,7 +917,7 @@ ghRailUnit::_createStationRangePoints( vector<vector<double>>& geom,
   sort(unit_distance.begin(), unit_distance.end());  // Sort  -2,-1,0.1,2
   size_t unit_distance_size = unit_distance.size();
   int i = 0;
-  vector<double> tpoint;
+  std::vector<double> tpoint;
   for ( i=0; i < unit_distance_size ; i++ ) {
     //std::cout << "-R- " << i << " -- " << unit_distance[i]  << "\n";
     tpoint = _createDistancePoint( geom,
@@ -930,14 +930,14 @@ ghRailUnit::_createStationRangePoints( vector<vector<double>>& geom,
   return result;
 }
 
-vector<double>
-ghRailUnit::_createDistancePoint( vector<vector<double>> &geom,
+std::vector<double>
+ghRailUnit::_createDistancePoint( std::vector<std::vector<double>> &geom,
 				  int startidx,
 				  int distance  )
 {
 
 
-  vector<double> res(3) ;
+  std::vector<double> res(3) ;
   int search_count = 50; // search point max;
   int searchmax = startidx;
   int point_id = -1;
@@ -1011,7 +1011,7 @@ void
 ghRailUnit::_appendGeometryData( double lat,
 				 double lon,
 				 double alt,
-				 string name,
+				 std::string name,
 				 int type, int type1, int type2)
 {
   double distance = 0.0;
@@ -1111,7 +1111,7 @@ ghRailUnit::_calcQuatanion( int currentid )
 
 }
 
-vector<double>
+std::vector<double>
 ghRailUnit::_simulateStationToStation( int startidx,
 				       int stopidx,
 				       double distance,
@@ -1119,7 +1119,7 @@ ghRailUnit::_simulateStationToStation( int startidx,
 				       double startsec )
 {
 
-  vector<double> res ;
+  std::vector<double> res ;
 
   double x = 0;
   double y = 0;
@@ -1162,7 +1162,7 @@ ghRailUnit::_simulateStationToStation( int startidx,
   
 }
 
-vector<double>
+std::vector<double>
 ghRailUnit::_simulateStationToPassing( int startidx,
 				       int stopidx,
 				       double distance,
@@ -1170,7 +1170,7 @@ ghRailUnit::_simulateStationToPassing( int startidx,
 				       double startsec )
 {
 
-  vector<double> res ;
+  std::vector<double> res ;
   double x = 0;
   double y = 0;
   double vel = 2 * distance / ( ( 2 - GH_ACCL_RATIO_A ) * sec );
@@ -1202,7 +1202,7 @@ ghRailUnit::_simulateStationToPassing( int startidx,
   
 }
 
-vector<double>
+std::vector<double>
 ghRailUnit::_simulatePassingToStation( int startidx,
 				       int stopidx,
 				       double distance,
@@ -1210,7 +1210,7 @@ ghRailUnit::_simulatePassingToStation( int startidx,
 				       double startsec )
 {
 
-  vector<double> res ;
+  std::vector<double> res ;
   double x = 0;
   double y = 0;
   double vel = 2 * distance / ( ( 2 - GH_ACCL_RATIO_D ) * sec );
@@ -1243,7 +1243,7 @@ ghRailUnit::_simulatePassingToStation( int startidx,
   
 }
 
-vector<double>
+std::vector<double>
 ghRailUnit::_simulatePassingToPassing( int startidx,
 				       int stopidx,
 				       double distance,
@@ -1251,7 +1251,7 @@ ghRailUnit::_simulatePassingToPassing( int startidx,
 				       double startsec )
 {
 
-  vector<double> res ;
+  std::vector<double> res ;
   double x = 0;
   double y = 0;
   double vel = distance / sec;
@@ -1296,7 +1296,7 @@ ghRailUnit::__simulateTwoPoints(double x,double t, double d,double v) {
 }
 
 void
-ghRailUnit::_initLocomotiveArray(vector<int>  lsize) {
+ghRailUnit::_initLocomotiveArray(std::vector<int>  lsize) {
 
   int locomotivesumlength = 0;
   for (const int& snumber : lsize ) {
@@ -1314,14 +1314,14 @@ ghRailUnit::_initLocomotiveArray(vector<int>  lsize) {
 }
   
 void
-ghRailUnit::_initLocomotiveModel(vector<string>  locomotive) {
+ghRailUnit::_initLocomotiveModel(std::vector<std::string>  locomotive) {
 
   p_models.reserve( (int)locomotive.size() );
   p_transform.reserve( (int)locomotive.size() );
   p_switch.reserve( (int)locomotive.size() );
   p_attitude.reserve( (int)locomotive.size() );
   
-  for (const string& uri : locomotive ) {
+  for (const std::string& uri : locomotive ) {
     ghRailModel loco;
     loco.Setup(GEOGLYPH_ROOT_URI,uri);
 
@@ -1336,7 +1336,7 @@ ghRailUnit::_initLocomotiveModel(vector<string>  locomotive) {
 
   
 osgEarth::LabelNode *
-ghRailUnit::_createLabelNode(string text) {
+ghRailUnit::_createLabelNode(std::string text) {
 
   osgEarth::Style labelStyle;
   osgEarth::LabelNode *label = new osgEarth::LabelNode();
@@ -1384,8 +1384,8 @@ ghRailUnit::_calcControlPointGeomLayers(double lat, double lng, osg::Quat quat)
 
 std::string
 ghRailUnit::GetMarkerUri() {
-  string uri = GEOGLYPH_ROOT_URI;
-  string path = GEOGLYPH_RSC_ICON_PATH;
+  std::string uri = GEOGLYPH_ROOT_URI;
+  std::string path = GEOGLYPH_RSC_ICON_PATH;
   return uri + path + p_marker;
 }
 

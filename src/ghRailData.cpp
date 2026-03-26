@@ -29,32 +29,31 @@
 #include <algorithm>
 #endif
 
-using namespace std;
 using namespace cURLpp::Options;
 
 void
-ghRailJSON::SetConfigUri(string host, string url)
+ghRailJSON::SetConfigUri(std::string host, std::string url)
 {
   p_host = host;
   p_url = host + GEOGLYPH_CONF_PATH + url + GEOGLYPH_CONF_EXT;
 }
 
 void
-ghRailJSON::SetFieldUri(string host, string url)
+ghRailJSON::SetFieldUri(std::string host, std::string url)
 {
   p_host = host;
   p_url = host + GEOGLYPH_RSC_FIELD_PATH + url;
 }
 
 void
-ghRailJSON::SetLineUri(string host, string line)
+ghRailJSON::SetLineUri(std::string host, std::string line)
 {
   p_host = host;
   p_url = host + GEOGLYPH_RSC_PATH + line;
 }
 
 void
-ghRailJSON::SetLocomotiveUri(string host, string locomotive)
+ghRailJSON::SetLocomotiveUri(std::string host, std::string locomotive)
 {
   p_host = host;
   p_url = host + GEOGLYPH_3DMODEL_PATH + locomotive;
@@ -102,31 +101,31 @@ ghRailJSON::GetJson()
 }
 
 nlohmann::json
-ghRailJSON::GetJsonObject( string str0 )
+ghRailJSON::GetJsonObject( std::string str0 )
 {
   return p_json[str0];
 }
 
 nlohmann::json
-ghRailJSON::GetJsonObject( string str0, string str1 )
+ghRailJSON::GetJsonObject( std::string str0, std::string str1 )
 {
   return p_json[str0][str1];
 }
 
 std::string
-ghRailJSON::GetJsonString( string str0 )
+ghRailJSON::GetJsonString( std::string str0 )
 {
   return p_json[str0].get<std::string>();
 }
 
 std::string
-ghRailJSON::GetJsonString( string str0, string str1 )
+ghRailJSON::GetJsonString( std::string str0, std::string str1 )
 {
   return p_json[str0][str1].get<std::string>();
 }
 
 int
-ghRailJSON::GetVectorSize( string str )
+ghRailJSON::GetVectorSize( std::string str )
 {
   size_t count = 0;
   nlohmann::json json = GetJsonObject( str );
@@ -136,11 +135,11 @@ ghRailJSON::GetVectorSize( string str )
   return count;
 }
 
-vector<int>
-ghRailJSON::GetVectorInt( string str )
+std::vector<int>
+ghRailJSON::GetVectorInt( std::string str )
 {
 
-  vector<int> p_array;
+  std::vector<int> p_array;
   nlohmann::json json = GetJsonObject( str );
   p_array.reserve( GetVectorSize(str) );
   for (nlohmann::json::iterator itss = json.begin(); itss != json.end(); ++itss) {
@@ -149,10 +148,10 @@ ghRailJSON::GetVectorInt( string str )
   return p_array;
 }
 
-vector<string>
-ghRailJSON::GetVectorString( string str )
+std::vector<std::string>
+ghRailJSON::GetVectorString( std::string str )
 {
-  vector<string> p_array;
+  std::vector<std::string> p_array;
   nlohmann::json json = GetJsonObject( str );
   p_array.reserve( GetVectorSize(str) );
   for (nlohmann::json::iterator itss = json.begin(); itss != json.end(); ++itss) {
@@ -171,7 +170,7 @@ ghRailJSON::GetUrl()
 /////////////////////////
 
 void
-ghRailCSV::SetCsvUrl(string host, string base, string file)
+ghRailCSV::SetCsvUrl(std::string host, std::string base, std::string file)
 {
   p_host = host;
   p_url = host + GEOGLYPH_RSC_PATH + base + file;
@@ -208,7 +207,7 @@ ghRailCSV::GetContent()
   return true;
 }
 
-string
+std::string
 ghRailCSV::GetCsv()
 {
   return p_csv;
@@ -220,7 +219,7 @@ ghRailCSV::GetCsv()
 
 
 void
-ghRailModel::Setup(string host, string locomotive)
+ghRailModel::Setup(std::string host, std::string locomotive)
 {
   p_host = host;
   p_url = host + GEOGLYPH_3DMODEL_PATH + locomotive;

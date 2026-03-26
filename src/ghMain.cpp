@@ -251,7 +251,7 @@ ghSocketInit(int port)
 //  Rendering Variables
 //
 osgViewer::CompositeViewer *ghViewer;  //  Application Root
-ghWindow *ghWin_anchor;           // 3D window 
+std::map<std::string, ghWindow> ghWindows; // 3D window
 ghRailGUI *ghGui;                 // ImGui 
 ghRail *ghRail3D;                  // Simulation    Rail Class 
 osg::ref_ptr<osg::Node> ghNode3D; // osgearth root node
@@ -297,30 +297,42 @@ ghCheckCommand() {
       ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
       cmd->state = GH_QUEUE_STATE_EXECUTED;
     } else if ( cmd->type == GH_COMMAND_CAMERA_ADD  ) {
-      ghWindow *nwin = ghAddWindow( ghWin_anchor,
-				    cmd->argstr[0],
-				    ghScreenNum,
-				    (unsigned int)cmd->argnum[0],
-				    (unsigned int)cmd->argnum[1],
-				    cmd->argnum[2]);
-      if ( nwin != NULL ) {
-	ghViewer->addView( nwin->view );
-	nwin->view->setSceneData( ghNode3D );
-      } else {
+      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
 	// Error Message
+	// Same Window name
+	std::cout << "Same window name already exist "<<cmd->argstr[0]<<" list=";
+	for (const auto& [key, value] : ghWindows) {
+	  std::cout << key << " ";
+	}
+	std::cout << "."<<std::endl;
+      } else {
+	osgViewer::View* vtmp = ghCreateView(cmd->argstr[0],
+					     ghScreenNum,
+					     (unsigned int)cmd->argnum[0],
+					     (unsigned int)cmd->argnum[1],
+					     cmd->argnum[2] );
+	ghWindows.emplace(cmd->argstr[0],
+			  ghWindow{
+			    vtmp,
+			      GH_COMMAND_CAMERA_UNTRACKING,
+			      ghSharedMemory{-1,GH_SHM_TYPE_NONE,0,0,NULL}
+			  });
+	ghViewer->addView( vtmp );
+	vtmp->setSceneData( ghNode3D );
       }
       cmd->state = GH_QUEUE_STATE_EXECUTED;
+
     } else if ( cmd->type == GH_COMMAND_CAMERA_REMOVE  ) {
-      ghWindow *rwin = ghGetWindowByName(ghWin_anchor, cmd->argstr[0]);
-      if ( rwin != NULL ) {
+      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
 	// https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
-	rwin->view->getCamera()->setNodeMask(0x0);
-	ghViewer->removeView( rwin->view );
-	ghRemoveWindow( ghWin_anchor, cmd->argstr[0] );
+	ghWindows[cmd->argstr[0]].view->getCamera()->setNodeMask(0x0);
+	ghViewer->removeView( ghWindows[cmd->argstr[0]].view );
+	ghWindows.erase(cmd->argstr[0]);
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
       } else {
 	// Error Message
+	// Window name Not exist
       }
-      cmd->state = GH_QUEUE_STATE_EXECUTED;
     } else {
       // NOP
     }
@@ -370,11 +382,15 @@ public:
       }
       if ( ghQueue ) {
 	if ( ghQueue->state == GH_QUEUE_STATE_PARSED ) {
-	  ghRailExecuteCommand(ghQueue,ghRail3D,ghSimulationTime,ghWin_anchor,ghSky);
+	  ghRailExecuteCommand(ghQueue,ghRail3D,ghSimulationTime,ghSky,ghWindows);
 	  if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
 	    _running = false;
 	  } else {
 	    // NOP
+	    // debug check
+	    //for (auto& [key2, value2] : ghWindows ) {
+	    //  // Some check ..
+	    //}
 	  }
 	}
       } else {
@@ -519,7 +535,6 @@ ghMainRail(osg::ArgumentParser args)
       parent->removeChild(mapNode);
       /***  Sky and date time **/
 
-
       // Call this to add the GUI. 
       auto ui = new ImGuiAppEngine(args);
       ui->add("File", new QuitGUI());
@@ -539,10 +554,15 @@ ghMainRail(osg::ArgumentParser args)
       };
 
       /***  Set window view ***/
-      ghWin_anchor = ghCreateWindow(GH_STRING_ROOT,&args,ghScreenNum,64,48,0.5);
-      ghViewer->addView( ghWin_anchor->view );
-      ghWin_anchor->view->getEventHandlers().push_front(ui);
-      ghWin_anchor->view->setSceneData( ghNode3D );
+      ghWindows.emplace(GH_STRING_ROOT,
+			ghWindow{
+			  ghCreateView(GH_STRING_ROOT,ghScreenNum,64,48,0.5),
+			  GH_COMMAND_CAMERA_UNTRACKING,
+			  ghSharedMemory{-1,GH_SHM_TYPE_NONE,0,0,NULL}
+			});
+      ghViewer->addView( ghWindows[GH_STRING_ROOT].view );
+      ghWindows[GH_STRING_ROOT].view->getEventHandlers().push_front(ui);
+      ghWindows[GH_STRING_ROOT].view->setSceneData( ghNode3D );
 
       double _elapsed_prev = 0.0f;
       double _elapsed_current = ghViewer->elapsedTime();
@@ -567,7 +587,7 @@ ghMainRail(osg::ArgumentParser args)
 	    ghSimulationTime = _calcSimulationTime(dt,ghRail3D->GetBaseDatetime(), ghElapsedSec);
 
 	    // Simulation Update
-	    ghRail3D->Update( ghSimulationTime, mapNode , ghWin_anchor);
+	    ghRail3D->Update( ghSimulationTime, mapNode , ghWindows );
 
 	    if ( ghElapsedSec > GH_ELAPSED_THRESHOLD ) {
 	      // Change Date Time Dislpay
@@ -593,7 +613,18 @@ ghMainRail(osg::ArgumentParser args)
       //
       // End of while loop ( Rendering loop )
       ghRail3D->RemoveShm(0);
-      ghDisposeWindow( ghViewer, ghWin_anchor );
+      for (const auto& [key, value] : ghWindows) {
+	ghViewer->removeView(value.view);
+	if ( value.shm.key > 0 ) {
+#ifdef _WINDOWS
+	  // NOP
+#else      
+	  shmdt( value.shm.addr );
+	  shmctl( value.shm.shmid, IPC_RMID, NULL);
+#endif      
+	}
+      }
+
       ////////////////////////
       rsock->stop();
       rsock->join();

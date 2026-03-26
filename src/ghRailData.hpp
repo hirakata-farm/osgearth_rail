@@ -22,8 +22,6 @@
 
 # include <nlohmann/json.hpp>
 
-using namespace std;
-
 #define GEOGLYPH_ROOT_URI "https://earth.geoglyph.info/rail/"
 #define GEOGLYPH_RSC_FIELD_PATH "RSC/fields/"
 #define GEOGLYPH_RSC_PATH "RSC/"
@@ -49,52 +47,52 @@ using namespace std;
 class ghRailJSON
     {
     public:
-      void SetConfigUri(string host, string conf);
-      void SetFieldUri(string host, string field);
-      void SetLineUri(string host, string line);
-      void SetLocomotiveUri(string host, string locomotive);
+      void SetConfigUri(std::string host, std::string conf);
+      void SetFieldUri(std::string host, std::string field);
+      void SetLineUri(std::string host, std::string line);
+      void SetLocomotiveUri(std::string host, std::string locomotive);
       bool GetContent();
       nlohmann::json GetJson();
-      nlohmann::json GetJsonObject( string str0 );
-      nlohmann::json GetJsonObject( string str0 , string str1 );
-      string GetJsonString( string str0 );
-      string GetJsonString( string str0 , string str1 );
-      vector<int> GetVectorInt( string str );
-      vector<string> GetVectorString( string str );
-      int GetVectorSize( string str );
-      string GetUrl();
+      nlohmann::json GetJsonObject( std::string str0 );
+      nlohmann::json GetJsonObject( std::string str0 , std::string str1 );
+      std::string GetJsonString( std::string str0 );
+      std::string GetJsonString( std::string str0 , std::string str1 );
+      std::vector<int> GetVectorInt( std::string str );
+      std::vector<std::string> GetVectorString( std::string str );
+      int GetVectorSize( std::string str );
+      std::string GetUrl();
     private:
-      string p_url;
-      string p_host;
+      std::string p_url;
+      std::string p_host;
       nlohmann::json p_json;
     };
 
 class ghRailCSV
     {
     public:
-      void SetCsvUrl(string host, string base, string file);
+      void SetCsvUrl(std::string host, std::string base, std::string file);
       bool GetContent();
-      string GetCsv();
-      string GetUrl();
+      std::string GetCsv();
+      std::string GetUrl();
     private:
-      string p_url;
-      string p_host;
-      string p_csv;
+      std::string p_url;
+      std::string p_host;
+      std::string p_csv;
     };
 
 class ghRailModel
     {
     public:
-      void Setup(string host, string locomotive);
-      string GetUrl();
-      string GetModel();
-      string GetGltf();
+      void Setup(std::string host, std::string locomotive);
+      std::string GetUrl();
+      std::string GetModel();
+      std::string GetGltf();
       void SetStatus(int status);
       int GetStatus();
     private:
-      string p_url;
-      string p_host;
-      string p_model;
+      std::string p_url;
+      std::string p_host;
+      std::string p_model;
       int p_status;
     };
 

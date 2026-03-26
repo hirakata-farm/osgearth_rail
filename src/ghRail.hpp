@@ -22,7 +22,9 @@
 # include <cstdlib>
 # include <cstring>
 #ifdef _WINDOWS
+//
 // NOP
+//
 #else
 # include <sys/types.h>
 # include <sys/ipc.h>
@@ -42,13 +44,11 @@
 
 # include <nlohmann/json.hpp>
 
-using namespace std;
-
 #include "ghRailData.hpp"
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.5.3"
+#define GH_APP_REVISION "0.6.1"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -94,13 +94,15 @@ using namespace std;
 
 //////////////////////////////////////////////////////////
 #define GH_SHM_PATH  "/tmp/geoglyph3d"
+#define GH_SHM_TYPE_NONE           -1 // int 4 byte :  [sec]
 #define GH_SHM_TYPE_CLOCK_TIME      0 // int 4 byte :  [sec]
 #define GH_SHM_TYPE_TRAIN_POSITION  1 // (char[32],double[2])x(numoftrains)  48xn byte : [id,lat,lng]
 #define GH_SHM_TYPE_CAMERA_VIEWPORT 2 // (double[2])x12  192 byte : [lat,lng]
 // sizeof double 8
 // sizeof int    4
 // sizeof char   1
-typedef struct
+
+typedef struct ghSharedMemory
 {
   int	key ;
   int	type ;
@@ -115,27 +117,28 @@ typedef struct
   double position[2];
 } ghShmTrainPosition;
 
-typedef struct ghWindow
+//typedef struct ghWindow
+//{
+//  osgViewer::View* view;
+//  osg::ArgumentParser *args;
+//  string name;
+//  string tracking;
+//  ghSharedMemory shm;
+//  ghWindow *next;
+//} ghWindow;
+
+struct ghWindow
 {
   osgViewer::View* view;
-  osg::ArgumentParser *args;
-  char *name;
-  char *tracking;
+  std::string tracking;
   ghSharedMemory shm;
-  ghWindow *next;
-} ghWindow;
+};
 
-osgViewer::View* ghCreateView( std::string name , int screenNum ,  unsigned int x,unsigned int y,unsigned int width,unsigned int height );
-ghWindow *ghCreateWindow(std::string name,osg::ArgumentParser *args, unsigned int screen,unsigned int x,unsigned int y,double screenratio);
-ghWindow *ghAddWindow(ghWindow *_win,std::string name,unsigned int screen,unsigned int x,unsigned int y,double screenratio);
-void ghRemoveWindow( ghWindow *_win , std::string name);
-void ghDisposeWindow( osgViewer::CompositeViewer* view, ghWindow *_win );
-ghWindow *ghGetLastWindow(ghWindow *_win);
-int ghCountWindow(ghWindow *_win);
-ghWindow *ghGetWindowByName(ghWindow *_win,std::string name);
-void ghSetConfigWindow(ghWindow* _win,std::string title,int x,int y,int width,int height);
-void ghGetConfigWindow(ghWindow* _win,std::string title,int *ret);
-int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
+osgViewer::View* ghCreateView( std::string name , int screenNum , unsigned int x,unsigned int y ,double sizeratio );
+void ghSetConfigWindow(ghWindow _win,std::string title,int x,int y,int width,int height);
+void ghGetConfigWindow(ghWindow _win,std::string title,int *ret);
+//int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
+int ghInitShmWindow(int shmkey,ghWindow _win);
 
 //
 //
@@ -146,10 +149,11 @@ class ghRail
     {
     public:
       void Init();
-      int Setup(string fieldname);
-      void Update(double simulationTime, osgEarth::MapNode* _map, ghWindow* _win);
+      int Setup(std::string fieldname);
+      //void Update(double simulationTime, osgEarth::MapNode* _map, ghWindow* _win);
+      void Update(double simulationTime, osgEarth::MapNode* _map, const std::map<std::string, ghWindow>& _wins);
 
-      string GetConfigure();
+      std::string GetConfigure();
 
       double GetClockSpeed();
       void SetClockSpeed(double sp);
@@ -162,16 +166,16 @@ class ghRail
       void SetMaxWindow(int wins);
       int  GetMaxWindow();
 
-      string GetUnits();
-      string GetLines();
-      string GetTimezoneStr();
-      string GetDescription();
-      bool SetTrainLabel(string trainid, bool flag);
-      string GetTrainPosition(string trainid, double simtime);
-      string GetTrainTimetable(string trainid);
-      string GetTrainIcon(string trainid);
-      string GetTrainLine(string trainid);
-      string GetTrainDistance(string trainid);      
+      std::string GetUnits();
+      std::string GetLines();
+      std::string GetTimezoneStr();
+      std::string GetDescription();
+      bool SetTrainLabel(std::string trainid, bool flag);
+      std::string GetTrainPosition(std::string trainid, double simtime);
+      std::string GetTrainTimetable(std::string trainid);
+      std::string GetTrainIcon(std::string trainid);
+      std::string GetTrainLine(std::string trainid);
+      std::string GetTrainDistance(std::string trainid);      
       bool IsLoaded();
       bool IsPlaying();
       void SetPlayPause(bool flag);
@@ -179,7 +183,7 @@ class ghRail
       int InitShmTrain(int shmkey);
       int RemoveShm(int shmkey);      
       
-      bool IsTrainID(string trainid);
+      bool IsTrainID(std::string trainid);
 
       int GetTimeZoneMinutes();
       osgEarth::DateTime GetBaseDatetime();
@@ -187,8 +191,9 @@ class ghRail
     private:
       //vector<int> p_locomotives{-84,-60,-36,-12,12,36,60,84};   // 8 coaches Even obsolete
       //vector<int> p_locomotives{-96,-72,-48,-24,0,24,48,72,96};  // 9 coaches Odd obsolete
-      string p_configure;
+      std::string p_configure;
       double p_previous_simulationTime;
+      std::map<std::string, osg::Vec3d> p_position_tracking;
       std::map<std::string, osg::Vec3d> p_prev_position_tracking;
       bool p_running;
       double p_clockspeed;
@@ -204,7 +209,7 @@ class ghRail
       ghRailJSON p_config;
       ghRailJSON p_field;
       ghRailJSON p_default_locomotive;
-      string p_default_icon;
+      std::string p_default_icon;
       std::map<std::string, ghRailJSON> p_line;
       std::map<std::string, std::string> p_route;
       std::map<std::string, nlohmann::json> p_station;
@@ -217,7 +222,7 @@ class ghRail
       void _updateShmClockTime(double stime);
       void _updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position);
       void _updateShmCameraViewport(osgViewer::View* _view,ghSharedMemory shm);
-      double _getMinimumDistanceFromCamera(ghWindow *_win,osg::Vec3d position);
+      double _getMinimumDistanceFromCamera(const std::map<std::string, ghWindow>& _wins,osg::Vec3d position);
     };
 
 

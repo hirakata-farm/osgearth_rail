@@ -15,7 +15,6 @@
 
 # include "ghRailTime.hpp"
 
-using namespace std;
 
 void
 ghRailTime::Init() 
@@ -83,18 +82,18 @@ ghRailTime::GetTimeZoneMin() {
 }
 
 double
-ghRailTime::StrToDurationSeconds(string largetime,string smalltime) 
+ghRailTime::StrToDurationSeconds(std::string largetime,std::string smalltime) 
 {
 
-  chrono::system_clock::time_point current = _str2timepoint(largetime);
-  chrono::system_clock::time_point prev = _str2timepoint(smalltime);
+  std::chrono::system_clock::time_point current = _str2timepoint(largetime);
+  std::chrono::system_clock::time_point prev = _str2timepoint(smalltime);
   std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(current - prev);
   return (double)sec.count();
 }
 double
-ghRailTime::StrToDurationSecondsFromBasetime(string largetime) 
+ghRailTime::StrToDurationSecondsFromBasetime(std::string largetime) 
 {
-  chrono::system_clock::time_point current = _str2timepoint(largetime);
+  std::chrono::system_clock::time_point current = _str2timepoint(largetime);
   std::chrono::seconds sec = std::chrono::duration_cast<std::chrono::seconds>(current - p_basetimepoint);
   return (double)sec.count();
 }
@@ -114,8 +113,8 @@ ghRailTime::StrToDurationSecondsFromBasetime(string largetime)
 //};
 
 
-chrono::system_clock::time_point
-ghRailTime::_str2timepoint(string str)
+std::chrono::system_clock::time_point
+ghRailTime::_str2timepoint(std::string str)
 {
   int dday = 0;
   int dhour = 0;
@@ -134,7 +133,7 @@ ghRailTime::_str2timepoint(string str)
 
   std::chrono::seconds diffsec( daysec );
 
-  chrono::system_clock::time_point new_time_point = p_basetimepoint + diffsec;
+  std::chrono::system_clock::time_point new_time_point = p_basetimepoint + diffsec;
 
   return new_time_point;
 }
