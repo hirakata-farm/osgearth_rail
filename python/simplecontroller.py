@@ -96,8 +96,8 @@ polling_socket_wait_second = 28
 polling_shm_wait_second = 1
 #############
 custom_auto_tracking = False
-custom_auto_tracking_count = 5
-custom_auto_tracking_times = 6
+custom_auto_tracking_count = 11
+custom_auto_tracking_times = 12
 #############
 
 class SocketClient():
@@ -140,6 +140,13 @@ remote_socket = SocketClient(socket_buffer_size,show_socket_detail)
 
 ##################################################################
 
+def isfloat(s):
+    try:
+        float(s)
+    except ValueError:
+        return False
+    else:
+        return True
 
 def setup_shm():
     global shm_time
@@ -275,6 +282,7 @@ def update_socket_train():
                 del markers[item]
 
 def update_socket_viewport():
+    global viewport_camera
 
     map_widget.delete_all_polygon()
     for item in windows:
@@ -291,7 +299,7 @@ def update_socket_viewport():
                     lat = float(pointdata[1])
                     positionlist.append((lat,lng))
             if len(positionlist) > 3:
-                viewport = map_widget.set_polygon(positionlist,fill_color=None,border_width=2)
+                viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
 
 
 def update_shm_clock():
@@ -860,14 +868,14 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
 
     message = "camera get " + cameraid + " position\n"
     cameraret = remote_socket.send(message);
-    if cameraret[1] == "Accept":
+    if cameraret[1] == "Accept" and isfloat(cameraret[6]):
         camera_point = ( float(cameraret[7]), float(cameraret[6]) )
         camera_alt = float(cameraret[8])
     else:
         return
     message = "train position " + trainid + "\n"
     trainret = remote_socket.send(message);
-    if trainret[1] == "Accept":
+    if trainret[1] == "Accept" and isfloat(trainret[5]):
         train_point = ( float(trainret[6]), float(trainret[5]) )
         train_alt = float(trainret[7])
     else:
@@ -878,7 +886,6 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
     destination = geodesic(kilometers=distance_km).destination((train_point[0], train_point[1]), bearing )
     message = "camera set " + cameraid + " position " + str(destination.longitude) + " " + str(destination.latitude) + " " + str(camera_alt) + "\n"
     result = remote_socket.send(message);
-    time.sleep(1) #
     message = "camera set " + cameraid + " tracking " + trainid + "\n"
     response = remote_socket.send(message);
     
@@ -989,9 +996,7 @@ def custom_auto_tracking_camera():
                         loopcount = 0
                         while True:
                             newid = get_random_train_id()
-                            if is_same_tracking_id_in_windows(newid):
-                                time.sleep(1)
-                            else:
+                            if not is_same_tracking_id_in_windows(newid):
                                 message = "camera set " + item + " tracking none\n"
                                 response = remote_socket.send(message);
                                 if response[1] == "Accept":
@@ -1001,7 +1006,7 @@ def custom_auto_tracking_camera():
                             if loopcount > len(trainid):
                                 break
                             loopcount += 1
-                        time.sleep(2)
+                        time.sleep(1)
                     custom_auto_tracking_count = 0
                 else:
                     custom_auto_tracking_count += 1

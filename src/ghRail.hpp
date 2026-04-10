@@ -48,7 +48,7 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.6.1"
+#define GH_APP_REVISION "0.6.2"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -85,6 +85,10 @@
 #define GH_ALTMODE_ABSOLUTE 2
 #define GH_DEFAULT_ALTMODE 0
 #define GH_ALTMODE_LAYER_UNIT 9.0
+
+
+#define GH_TRACKING_SAMPLING_POINTS 3
+
 
 #define GH_THRESHOLD_TIME_BACK_SEC -1.0 // [sec]
 // 60fps = 0.016666 [sec / frame]
@@ -219,6 +223,8 @@ class ghRail
       ghSharedMemory p_shm_train;
       
       osgEarth::GeoPoint _calcGeoPoint(const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach);
+      osg::Matrixd _calcTrackingCameraMatrix( osg::Vec3d eye,osg::Vec3d center,osg::Vec3d up,std::string winkey,osgEarth::MapNode* _map);
+
       void _updateShmClockTime(double stime);
       void _updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position);
       void _updateShmCameraViewport(osgViewer::View* _view,ghSharedMemory shm);

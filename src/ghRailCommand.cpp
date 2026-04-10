@@ -528,7 +528,12 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       } else {
 	cmd->executecode = GH_EXECUTE_NOT_FOUND;
       }
-      cmd->state = GH_QUEUE_STATE_EXECUTED;
+      if ( cmd->executecode == GH_EXECUTE_SUCCESS ) {
+	cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      } else {
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      }
+      //cmd->state = GH_QUEUE_STATE_EXECUTED;
       break;
     case GH_COMMAND_CAMERA_GET_POS:
       if ( _wins.count(cmd->argstr[0]) > 0 ) {
@@ -544,7 +549,12 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       } else {
 	cmd->executecode = GH_EXECUTE_NOT_FOUND;
       }
-      cmd->state = GH_QUEUE_STATE_EXECUTED;            
+      if ( cmd->executecode == GH_EXECUTE_SUCCESS ) {
+	cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      } else {
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      }
+      //cmd->state = GH_QUEUE_STATE_EXECUTED;            
       break;
     case GH_COMMAND_CAMERA_GET_LOOK:
       if ( _wins.count(cmd->argstr[0]) > 0 ) {
@@ -560,7 +570,12 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       } else {
 	cmd->executecode = GH_EXECUTE_NOT_FOUND;
       }
-      cmd->state = GH_QUEUE_STATE_EXECUTED;            
+      if ( cmd->executecode == GH_EXECUTE_SUCCESS ) {
+	cmd->state = GH_QUEUE_STATE_PART_EXECUTED;
+      } else {
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      }
+      //cmd->state = GH_QUEUE_STATE_EXECUTED;            
       break;
     case GH_COMMAND_CAMERA_GET_UP:
       if ( _wins.count(cmd->argstr[0]) > 0 ) {
@@ -847,7 +862,6 @@ ghRailCreateResultMessage(ghCommandQueue *cmd){
   result += "\n";
   
   cmd->resultmessage = result;
-  //return result;
 }
 
 
@@ -890,7 +904,6 @@ ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "field get ";
   ret += rail->GetConfigure();
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -903,7 +916,6 @@ ghRailCommandFieldTrain(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "field get train ";
   ret += rail->GetUnits();
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -915,7 +927,6 @@ ghRailCommandFieldLine(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "field get line ";
   ret += rail->GetLines();
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -927,7 +938,6 @@ ghRailCommandFieldTimezone(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "field get timezone ";
   ret += rail->GetTimezoneStr();
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -939,7 +949,6 @@ ghRailCommandFieldDescription(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "field get description ";  
   ret += rail->GetDescription();
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1019,7 +1028,6 @@ ghRailCommandClockGetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *
   ret += ":";
   ret += std::to_string(mins);
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1034,7 +1042,6 @@ ghRailCommandClockSetSpeed(ghCommandQueue *cmd, ghRail *rail) {
   ret += std::to_string(cmd->argnum[0]);
   rail->SetClockSpeed(cmd->argnum[0]);
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1048,7 +1055,6 @@ ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail) {
   std::string ret = "clock get speed ";
   ret += std::to_string(speed);
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1100,7 +1106,6 @@ ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime) {
     }
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1120,7 +1125,6 @@ ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail) {
     return GH_EXECUTE_NOT_FOUND;
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1139,7 +1143,6 @@ ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail) {
     return GH_EXECUTE_NOT_FOUND;
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1158,7 +1161,6 @@ ghRailCommandTrainLine(ghCommandQueue *cmd, ghRail *rail) {
     return GH_EXECUTE_NOT_FOUND;
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1177,7 +1179,6 @@ ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail) {
     return GH_EXECUTE_NOT_FOUND;
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1188,26 +1189,22 @@ ghRailCommandTrainDistance(ghCommandQueue *cmd, ghRail *rail) {
 
 int
 ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow _win) {
-  osgEarth::Ellipsoid WGS84;
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //}
   if ( _win.tracking == GH_STRING_NONE ) {
     // NOP process continue
     // camera set position , when tracking is none ONLY
   } else {
     return GH_EXECUTE_UNDER_TRACKING;
   }
-  
-  osg::Vec3d eye, up, center;
-  osg::Camera *cam = _win.view->getCamera();
-  cam->getViewMatrixAsLookAt( eye, center, up );
-  osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  osg::Matrixd mat ;
-  mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-  _win.view->getCameraManipulator()->setByInverseMatrix(mat);
+
+  // move to ghMain.cpp
+  //  osg::Vec3d eye, up, center;
+  //  osg::Camera *cam = _win.view->getCamera();
+  //  cam->getViewMatrixAsLookAt( eye, center, up );
+  //  osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+  //  osg::Matrixd mat ;
+  //  mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
+  //  _win.view->getCameraManipulator()->setByInverseMatrix(mat);
   
   ret += cmd->argstr[0];
   ret += " position ";
@@ -1229,10 +1226,6 @@ int
 ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow _win) {
   osgEarth::Ellipsoid WGS84;
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //  }
   osg::Vec3d eye, up, center;
   osg::Camera *cam = _win.view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
@@ -1246,7 +1239,6 @@ ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow _win) {
   ret += std::to_string(position.z());
 
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1257,20 +1249,15 @@ ghRailCommandCameraGetPosition(ghCommandQueue *cmd,ghWindow _win) {
 int
 ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow _win) {
 
-  osgEarth::Ellipsoid WGS84;
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //  }
-  osg::Vec3d eye, up, center;
-  osg::Camera *cam = _win.view->getCamera();
-  cam->getViewMatrixAsLookAt( eye, center, up );
+  //osg::Vec3d eye, up, center;
+  //osg::Camera *cam = _win.view->getCamera();
+  //cam->getViewMatrixAsLookAt( eye, center, up );
 
-  osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  osg::Matrixd mat ;
-  mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-  _win.view->getCameraManipulator()->setByInverseMatrix(mat);
+  //osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+  //osg::Matrixd mat ;
+  //mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
+  //_win.view->getCameraManipulator()->setByInverseMatrix(mat);
 
   ret += cmd->argstr[0];
   ret += " lookat ";
@@ -1292,10 +1279,6 @@ ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow _win) {
 
   osgEarth::Ellipsoid WGS84;
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //  }
   osg::Vec3d eye, up, center;
   osg::Camera *cam = _win.view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
@@ -1309,7 +1292,6 @@ ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow _win) {
   ret += " ";
   ret += std::to_string(center2.z());
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1320,20 +1302,15 @@ ghRailCommandCameraGetLookat(ghCommandQueue *cmd, ghWindow _win) {
 int
 ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow _win) {
 
-  osgEarth::Ellipsoid WGS84;
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //  }
-  osg::Vec3d eye, up, center;
-  osg::Camera *cam = _win.view->getCamera();
-  cam->getViewMatrixAsLookAt( eye, center, up );
+  //osg::Vec3d eye, up, center;
+  //osg::Camera *cam = _win.view->getCamera();
+  //cam->getViewMatrixAsLookAt( eye, center, up );
 
-  osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  osg::Matrixd mat ;
-  mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
-  _win.view->getCameraManipulator()->setByInverseMatrix(mat);
+  //osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+  //osg::Matrixd mat ;
+  //mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
+  //_win.view->getCameraManipulator()->setByInverseMatrix(mat);
 
   ret += cmd->argstr[0];
   ret += " upvec ";
@@ -1354,10 +1331,6 @@ int
 ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow _win) {
   osgEarth::Ellipsoid WGS84;
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //    return GH_EXECUTE_NOT_FOUND;
-  //  }
   osg::Vec3d eye, up, center;
   osg::Camera *cam = _win.view->getCamera();
   cam->getViewMatrixAsLookAt( eye, center, up );
@@ -1371,7 +1344,6 @@ ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow _win) {
   ret += " ";
   ret += std::to_string(up2.z());
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1382,36 +1354,19 @@ ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow _win) {
 int
 ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow _win) {
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //char *trackname = NULL;
-  //  if ( tmp == NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   if ( cmd->argstr[1] == GH_STRING_NONE ) {
     ret += cmd->argstr[0];
     ret += " tracking ";
     ret += GH_STRING_NONE; 
-    //if ( tmp->tracking != (char *)NULL ) {
-    //  free(tmp->tracking);
-    //}
-    //trackname = ghString2CharPtr( GH_STRING_NONE );
     _win.tracking = GH_STRING_NONE;
   } else if ( rail->IsTrainID(cmd->argstr[1]) ) {
     ret += cmd->argstr[0];
     ret += " tracking ";
     ret += cmd->argstr[1];
-    //if ( tmp->tracking != (char *)NULL ) {
-    //  free(tmp->tracking);
-    //}
-    //trackname = ghString2CharPtr( cmd->argstr[1] );
     _win.tracking = cmd->argstr[1];
   } else {
     return GH_EXECUTE_NOT_FOUND;
   }
-  //if ( trackname != (char *)NULL) {
-  //    free(trackname);
-  //  }
-  
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
@@ -1425,17 +1380,12 @@ int
 ghRailCommandCameraGetTracking(ghCommandQueue *cmd,ghWindow _win) {
 
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
 
   ret += cmd->argstr[0];
   ret += " tracking ";
   ret += _win.tracking;
   
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1447,10 +1397,6 @@ int
 ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow _win) {
 
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   std::vector<osg::Vec3d> points = _calcCameraViewpoints(_win.view);
   ret += cmd->argstr[0];
   ret += " viewport ";
@@ -1464,7 +1410,6 @@ ghRailCommandCameraGetViewport(ghCommandQueue *cmd, ghWindow _win) {
     //ret += std::to_string(points[i].z());
   }
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1477,10 +1422,6 @@ int
 ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow _win) {
 
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   ret += cmd->argstr[0];
   ret += " screen ";
   ret += std::to_string(cmd->argnum[0]);
@@ -1490,7 +1431,6 @@ ghRailCommandCameraSetScreen(ghCommandQueue *cmd,ghWindow _win) {
   ghSetConfigWindow(_win,cmd->argstr[0],cmd->argnum[0],cmd->argnum[1],-1,-1);
 
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1504,10 +1444,6 @@ int
 ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow _win) {
   int current[4];
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   ret += cmd->argstr[0];
   ret += " screen ";
   ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
@@ -1515,7 +1451,6 @@ ghRailCommandCameraGetScreen(ghCommandQueue *cmd,ghWindow _win) {
   ret += " ";
   ret += std::to_string(current[1]);
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1528,10 +1463,6 @@ int
 ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow _win) {
 
   std::string ret = "camera set ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   ret += cmd->argstr[0];
   ret += " window ";
   ret += std::to_string(cmd->argnum[0]);
@@ -1541,7 +1472,6 @@ ghRailCommandCameraSetWindow(ghCommandQueue *cmd,ghWindow _win) {
   ghSetConfigWindow(_win,cmd->argstr[0],-1,-1,cmd->argnum[0],cmd->argnum[1]);
 
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1555,10 +1485,6 @@ int
 ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow _win) {
   int current[4];
   std::string ret = "camera get ";
-  //  ghWindow *tmp = ghGetWindowByName(_win,cmd->argstr[0]);
-  //  if ( tmp == (ghWindow *)NULL ) {
-  //      return GH_EXECUTE_NOT_FOUND;
-  //  }
   ret += cmd->argstr[0];
   ret += " window ";
   ghGetConfigWindow(_win,cmd->argstr[0],&current[0]);
@@ -1566,7 +1492,6 @@ ghRailCommandCameraGetWindow(ghCommandQueue *cmd,ghWindow _win) {
   ret += " ";
   ret += std::to_string(current[3]);
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1583,18 +1508,11 @@ ghRailCommandCameraAdd(ghCommandQueue *cmd, ghRail *rail, int cameracount) {
   std::string cname = cmd->argstr[0];
   ret += cname;
   ret += " ";
-  //  ghWindow *tmp = _win;
   for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
     if ( GH_RESERVED_STRING[i] == cname ) {
       return GH_EXECUTE_RESERVED;
     }
   }
-  //  while (tmp != (ghWindow *)NULL) {
-  //    if ( tmp->name == cname ) {
-  //      return GH_EXECUTE_ALREADY_EXIST;
-  //    }
-  //    tmp = tmp->next ;
-  //  }
   int maxwin = rail->GetMaxWindow();
   if ( cameracount > maxwin ) {
     return GH_EXECUTE_SIZE_ERROR;
@@ -1619,25 +1537,11 @@ int
 ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow _win) {
   std::string ret = "camera remove ";
   std::string cname = cmd->argstr[0];
-  //  ghWindow *tmp = _win;
   for (int i = 0; i < GH_RESERVED_STRING.size(); i++) {
     if ( GH_RESERVED_STRING[i] == cname ) {
       return GH_EXECUTE_RESERVED;
     }
   }
-  //  while (tmp != (ghWindow *)NULL) {
-  //    if ( tmp->name == cname ) {
-  //      ret += cname;
-  //      if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-  //	cmd->resultmessage = ret;
-  //	return GH_EXECUTE_SUCCESS;
-  //      } else {
-  //	return GH_EXECUTE_SIZE_ERROR;
-  //      }
-  //}
-  //tmp = tmp->next ;
-  //}
-  //return GH_EXECUTE_NOT_FOUND;
 
   ret += cname;
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
@@ -1650,14 +1554,8 @@ ghRailCommandCameraRemove(ghCommandQueue *cmd, ghWindow _win) {
 
 int
 ghRailCommandCameraGet(ghCommandQueue *cmd,  std::map<std::string, ghWindow>& _wins) {
-  //ghWindow *tmp = _win;
   std::string ret = "camera get ";
     
-  //  while (tmp != (ghWindow *)NULL) {
-  //    ret += tmp->name;
-  //    ret += " ";
-  //    tmp = tmp->next ;
-  //  }
   for (const auto& [key, value] : _wins) {
     //std::cout << key << ": " << value << std::endl;
     ret += key;
@@ -1665,7 +1563,6 @@ ghRailCommandCameraGet(ghCommandQueue *cmd,  std::map<std::string, ghWindow>& _w
   }
   
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1696,7 +1593,6 @@ ghRailCommandConfigGetMaxspeed(ghCommandQueue *cmd, ghRail *rail) {
   ret += std::to_string(speed);
   
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
-    //strcpy(result, ret.c_str());
     cmd->resultmessage = ret;
     return GH_EXECUTE_SUCCESS;
   } else {
@@ -1859,7 +1755,6 @@ ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail) {
 int
 ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, std::map<std::string, ghWindow>& _wins) {
 
-  //ghWindow *wtmp = _win;
   std::string ret = "show status ";
   if ( rail->IsLoaded() ) {
     ret += rail->GetConfigure();
@@ -1878,15 +1773,6 @@ ghRailCommandShowStatus(ghCommandQueue *cmd, ghRail *rail, std::map<std::string,
       ret += " tracking ";
       ret += value.tracking;
     }
-    
-    //    while (wtmp != (ghWindow *)NULL) {
-    //      ret += " camera ";
-    //      ret += wtmp->name;
-    //      ret += " tracking ";
-    //      ret += wtmp->tracking;
-    //      wtmp = wtmp->next ;
-    //    }
-
     
   } else {
     ret += "simulation data not loaded";

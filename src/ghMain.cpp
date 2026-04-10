@@ -262,6 +262,32 @@ double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
 unsigned int ghScreenNum = 0;
 
+osg::Matrixd
+_calcCameraMatrix(ghCommandQueue *cmd,osg::Camera *cam) {
+
+  osgEarth::Ellipsoid WGS84;
+  osg::Vec3d eye, up, center;
+  //osg::Camera *cam = ghWindows[cmd->argstr[0]].view->getCamera();
+  cam->getViewMatrixAsLookAt( eye, center, up );
+  osg::Matrixd mat ;
+  if ( cmd->type == GH_COMMAND_CAMERA_SET_POS ) {
+    osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
+  } else if ( cmd->type == GH_COMMAND_CAMERA_SET_LOOK ) {
+    osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
+  } else if ( cmd->type == GH_COMMAND_CAMERA_SET_UP ) {
+    osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
+    mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
+  } else {
+    // NOP
+    mat.makeLookAt( eye, center, up );
+  }
+
+  return mat;
+
+}
+
 void
 ghCheckCommand() {
 
@@ -296,6 +322,16 @@ ghCheckCommand() {
       ghSky->setDateTime( ghRail3D->GetBaseDatetime());
       ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
       cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else if ( cmd->type == GH_COMMAND_CAMERA_SET_POS
+		|| cmd->type == GH_COMMAND_CAMERA_SET_LOOK
+		|| cmd->type == GH_COMMAND_CAMERA_SET_UP ) {
+      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
+	ghWindows[cmd->argstr[0]].view->getCameraManipulator()->setByInverseMatrix( _calcCameraMatrix(cmd,ghWindows[cmd->argstr[0]].view->getCamera()) );
+	cmd->state = GH_QUEUE_STATE_EXECUTED;
+      } else {
+	// Error Message
+	// Window name Not exist
+      }
     } else if ( cmd->type == GH_COMMAND_CAMERA_ADD  ) {
       if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
 	// Error Message
@@ -321,7 +357,6 @@ ghCheckCommand() {
 	vtmp->setSceneData( ghNode3D );
       }
       cmd->state = GH_QUEUE_STATE_EXECUTED;
-
     } else if ( cmd->type == GH_COMMAND_CAMERA_REMOVE  ) {
       if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
 	// https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer

@@ -591,13 +591,6 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
 	  //
 	  //  Check Tracking 
 	  //
-	  //wtmp = _win;
-	  //while (wtmp != (ghWindow *)NULL) {
-	  //  if ( wtmp->tracking == key ) {
-	  //    position_tracking[wtmp->name] = position_centric;
-	  //  }
-	  //  wtmp = wtmp->next ;
-	  //}
 	  for (const auto& [key2, value2] : _wins) {
 	    if ( value2.tracking == key ) {
 	      p_position_tracking.emplace(key2,position_centric);
@@ -650,33 +643,12 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
   // Camera update
   //
   //
-  //  wtmp = _win;
-  //  while (wtmp != (ghWindow *)NULL) {
-  //    if ( position_tracking.count(wtmp->name) > 0 && p_prev_position_tracking.count(wtmp->name) > 0 ) {
-  //      osg::Vec3d eye, up, center;
-  //      wtmp->view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-  //      osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking[wtmp->name] ^ eye);
-  //      osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking[wtmp->name] - eye);
-  //      osg::Vec3d upvec = osg::Vec3d(rightvec ^ dirvec);
-  //      osg::Matrixd mat ;
-  //      mat.makeLookAt( eye + (position_tracking[wtmp->name] - p_prev_position_tracking[wtmp->name]) , position_tracking[wtmp->name] , upvec );
-  //      wtmp->view->getCameraManipulator()->setByInverseMatrix(mat);
-  //    } else {
-  //      // NOP
-  //    }
-  //    _updateShmCameraViewport(wtmp->view,wtmp->shm);
-  //    wtmp = wtmp->next ;
-  //  }
 
   for (auto& [key2, value2] : _wins ) {
     if ( p_position_tracking.count(key2) > 0 && p_prev_position_tracking.count(key2) > 0 ) {
       osg::Vec3d eye, up, center;
       value2.view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-      osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking[key2] ^ eye);
-      osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking[key2] - eye);
-      osg::Vec3d upvec = osg::Vec3d(rightvec ^ dirvec);
-      osg::Matrixd mat ;
-      mat.makeLookAt( eye + ( p_position_tracking[key2] - p_prev_position_tracking[key2]) , p_position_tracking[key2] , upvec );
+      osg::Matrixd mat = _calcTrackingCameraMatrix( eye, center, up, key2, _map );
       value2.view->getCameraManipulator()->setByInverseMatrix(mat);
     } else {
       // NOP
@@ -815,6 +787,69 @@ ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d positio
 
   return geopoint;
 }
+
+osg::Matrixd
+ghRail::_calcTrackingCameraMatrix( osg::Vec3d eye,
+				     osg::Vec3d center,
+				     osg::Vec3d up,
+				     std::string winkey,
+				     osgEarth::MapNode *_map ) {
+  osgEarth::Ellipsoid WGS84;
+  osg::Matrixd mat;
+
+  osg::Vec3d rightvec = osg::Vec3d(p_prev_position_tracking[winkey] ^ eye);
+  osg::Vec3d dirvec = osg::Vec3d(p_prev_position_tracking[winkey] - eye); // eye -> train vector
+  osg::Vec3d upvec = osg::Vec3d(rightvec ^ dirvec);
+  osg::Vec3d new_pos = eye + ( p_position_tracking[winkey] - p_prev_position_tracking[winkey]);
+
+
+  osg::Vec3d ip_lnglat[GH_TRACKING_SAMPLING_POINTS+1];
+  double alt[GH_TRACKING_SAMPLING_POINTS+1];
+  double scale;
+
+  // Altitude sampling 
+  for (int i = 0; i < GH_TRACKING_SAMPLING_POINTS+1; i++) {
+    scale = (double)i / (double)GH_TRACKING_SAMPLING_POINTS;
+    osg::Vec3d scale_vec = dirvec * scale;
+    ip_lnglat[i] = WGS84.geocentricToGeodetic( new_pos + scale_vec );
+    _map->getTerrain()->getHeight(_map->getMapSRS(),ip_lnglat[i].x(),ip_lnglat[i].y(),&alt[i]);
+  }
+
+  // Updating terrain data yet...
+  if ( alt[0] < alt[GH_TRACKING_SAMPLING_POINTS] || alt[0] < 0.0 )  {
+    mat.makeLookAt( new_pos , p_position_tracking[winkey] , upvec );
+    return mat;
+  }
+  
+  //  check obstacle eye intersects
+  double coeff = ( alt[0] - alt[GH_TRACKING_SAMPLING_POINTS] ) / (double)GH_TRACKING_SAMPLING_POINTS;
+  int convex_id = 0;
+  for (int i = 1; i < GH_TRACKING_SAMPLING_POINTS+1; i++) {
+    if ( alt[i] >  ( alt[0] - ( coeff * (double)i ) ) ) {
+      convex_id = i;
+      break;
+    }
+  }
+  if ( convex_id > 0 ) {
+    double new_alt = ( alt[convex_id] - alt[GH_TRACKING_SAMPLING_POINTS] ) * ( (double)GH_TRACKING_SAMPLING_POINTS / ( (double)GH_TRACKING_SAMPLING_POINTS - (double)convex_id ) ) + alt[GH_TRACKING_SAMPLING_POINTS] ;
+    //std::cout <<"height obstacle id="<<convex_id<<" alt="<<alt[GH_TRACKING_SAMPLING_POINTS]<<" obst="<<alt[convex_id]<<" eye="<<alt[0]<<" new="<<new_alt<<std::endl;
+    osg::Vec3d new_pos_latlng = WGS84.geocentricToGeodetic(new_pos);
+    if ( new_alt >  alt[0] ) {
+      new_alt = new_pos_latlng.z() + 0.0004 * ( new_alt - alt[0] );  // adjust slowly for terrain to centric ellipsoid
+    } else {
+      new_alt = new_pos_latlng.z() ;
+    }
+    //std::cout <<"height mod org="<<new_pos_latlng.z()<<" new="<<new_alt<<std::endl;
+    osg::Vec3d mod_new_pos = WGS84.geodeticToGeocentric(osg::Vec3d(new_pos_latlng.x(),new_pos_latlng.y(),new_alt));
+    mat.makeLookAt( mod_new_pos , p_position_tracking[winkey] , upvec );
+  } else {
+    // No adjustment
+    mat.makeLookAt( new_pos , p_position_tracking[winkey] , upvec );
+  }
+  
+  return mat;
+}
+
 
 void
 ghRail::_updateShmClockTime(double stime) {
