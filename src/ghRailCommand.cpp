@@ -41,6 +41,7 @@ std::vector<std::string> GH_RESERVED_STRING =
   GH_STRING_WINDOW,
   GH_STRING_SCREEN,
   GH_STRING_NONE,
+  GH_STRING_NONEL,
   GH_STRING_ALL,
   GH_STRING_ADD,
   GH_STRING_FIELD,
@@ -734,35 +735,19 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       cmd->state = GH_QUEUE_STATE_EXECUTED;                        
       break;
     case GH_COMMAND_SHM_CLOCK_TIME:
-#ifdef _WINDOWS
-      cmd->executecode = GH_EXECUTE_UNKNOWN;
-#else
       cmd->executecode = ghRailCommandShmSet(GH_SHM_TYPE_CLOCK_TIME,cmd,rail,_wins);
-#endif
       cmd->state = GH_QUEUE_STATE_EXECUTED;                              
       break;
     case GH_COMMAND_SHM_TRAIN_POS:
-#ifdef _WINDOWS
-      cmd->executecode = GH_EXECUTE_UNKNOWN;
-#else
       cmd->executecode = ghRailCommandShmSet(GH_SHM_TYPE_TRAIN_POSITION,cmd,rail,_wins);
-#endif
       cmd->state = GH_QUEUE_STATE_EXECUTED;                              
       break;
     case GH_COMMAND_SHM_CAMERA_VIEW:
-#ifdef _WINDOWS
-      cmd->executecode = GH_EXECUTE_UNKNOWN;
-#else
       cmd->executecode = ghRailCommandShmSet(GH_SHM_TYPE_CAMERA_VIEWPORT,cmd,rail,_wins);
-#endif
       cmd->state = GH_QUEUE_STATE_EXECUTED;                        
       break;
     case GH_COMMAND_SHM_REMOVE:
-#ifdef _WINDOWS
-      cmd->executecode = GH_EXECUTE_UNKNOWN;
-#else
       cmd->executecode = ghRailCommandShmRemove(cmd,rail);
-#endif
       cmd->state = GH_QUEUE_STATE_EXECUTED;                                    
       break;
     default:
@@ -885,19 +870,6 @@ ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail) {
     return GH_EXECUTE_CANNOT_LOAD;
   }
 }
-
-//int
-//ghRailCommandFieldSet(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky) {
-//  int res = -1;
-//  res = rail->Setup(cmd->argstr[0]);
-//  if (  res == GH_SETUP_RESULT_OK ) {
-//    _sky->setDateTime( rail->GetBaseDatetime());
-//    return GH_EXECUTE_SUCCESS;
-//  } else {
-//    std::cout << "Error field code " << res << std::endl;
-//    return GH_EXECUTE_CANNOT_LOAD;
-//  }
-//}
 
 int
 ghRailCommandFieldGet(ghCommandQueue *cmd, ghRail *rail) {
@@ -1197,15 +1169,6 @@ ghRailCommandCameraSetPosition(ghCommandQueue *cmd,ghWindow _win) {
     return GH_EXECUTE_UNDER_TRACKING;
   }
 
-  // move to ghMain.cpp
-  //  osg::Vec3d eye, up, center;
-  //  osg::Camera *cam = _win.view->getCamera();
-  //  cam->getViewMatrixAsLookAt( eye, center, up );
-  //  osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  //  osg::Matrixd mat ;
-  //  mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-  //  _win.view->getCameraManipulator()->setByInverseMatrix(mat);
-  
   ret += cmd->argstr[0];
   ret += " position ";
   ret += std::to_string(cmd->argnum[0]);
@@ -1250,14 +1213,6 @@ int
 ghRailCommandCameraSetLookat(ghCommandQueue *cmd, ghWindow _win) {
 
   std::string ret = "camera set ";
-  //osg::Vec3d eye, up, center;
-  //osg::Camera *cam = _win.view->getCamera();
-  //cam->getViewMatrixAsLookAt( eye, center, up );
-
-  //osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  //osg::Matrixd mat ;
-  //mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-  //_win.view->getCameraManipulator()->setByInverseMatrix(mat);
 
   ret += cmd->argstr[0];
   ret += " lookat ";
@@ -1303,14 +1258,6 @@ int
 ghRailCommandCameraSetUpvec(ghCommandQueue *cmd, ghWindow _win) {
 
   std::string ret = "camera set ";
-  //osg::Vec3d eye, up, center;
-  //osg::Camera *cam = _win.view->getCamera();
-  //cam->getViewMatrixAsLookAt( eye, center, up );
-
-  //osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-  //osg::Matrixd mat ;
-  //mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
-  //_win.view->getCameraManipulator()->setByInverseMatrix(mat);
 
   ret += cmd->argstr[0];
   ret += " upvec ";
@@ -1354,7 +1301,7 @@ ghRailCommandCameraGetUpvec(ghCommandQueue *cmd, ghWindow _win) {
 int
 ghRailCommandCameraSetTracking(ghCommandQueue *cmd,ghRail *rail,ghWindow _win) {
   std::string ret = "camera set ";
-  if ( cmd->argstr[1] == GH_STRING_NONE ) {
+  if ( cmd->argstr[1] == GH_STRING_NONE || cmd->argstr[1] == GH_STRING_NONEL ) {
     ret += cmd->argstr[0];
     ret += " tracking ";
     ret += GH_STRING_NONE; 
@@ -1704,25 +1651,33 @@ ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail, std::map<std::
     return GH_EXECUTE_CANNOT_GET;
   } else {
     std::string skey = std::to_string(shmkey);
+    std::string keyname = GH_STRING_NONEL;
     int ssize = -1;
     if ( shmtype == GH_SHM_TYPE_CLOCK_TIME ) {
       ssize = rail->InitShmClock(shmkey);
+      keyname = rail->GetShmClockKeyname();
       ret += "clock time ";
     } else if ( shmtype == GH_SHM_TYPE_TRAIN_POSITION ) {
       ssize = rail->InitShmTrain(shmkey);
+      keyname = rail->GetShmTrainKeyname();
       ret += "train potision ";
     } else if ( shmtype == GH_SHM_TYPE_CAMERA_VIEWPORT ) {
-      ssize = ghInitShmWindow(shmkey,_wins[cmd->argstr[0]]);
+      ssize = ghInitShmWindow(shmkey,&_wins[cmd->argstr[0]].shm,cmd->argstr[0]);
       ret += "camera ";
       ret += cmd->argstr[0];
       ret += " viewport ";
+      keyname = ghGetShmWindowKeyname(&_wins[cmd->argstr[0]].shm);
     } else {
       return GH_EXECUTE_NOT_FOUND;
     }
     if ( ssize < 0 ) {
       return GH_EXECUTE_CANNOT_ALLOCATE;
     } else {
+#ifdef _WINDOWS
+      ret += keyname + " ";
+#else
       ret += skey + " ";
+#endif
       ret += std::to_string(ssize);
     }
   }

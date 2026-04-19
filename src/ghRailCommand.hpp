@@ -99,7 +99,7 @@ config get displaydistance
 config get maxwindow
 
 
-7. Shared Memory Command ( linux Only yet )
+7. Shared Memory Command ( windows or linux(SYSV) )
 
 shm (set|remove) (clock|train|camera) (time|position|viewport)
 
@@ -231,6 +231,7 @@ shm remove [ shm key ]
 #define GH_STRING_SCREEN    "screen"
 #define GH_STRING_WINDOW    "window"
 #define GH_STRING_NONE      "none"
+#define GH_STRING_NONEL     "NONE"
 #define GH_STRING_ALL       "all"
 #define GH_STRING_ADD       "add"
 

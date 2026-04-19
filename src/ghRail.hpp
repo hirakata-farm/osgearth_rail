@@ -22,9 +22,7 @@
 # include <cstdlib>
 # include <cstring>
 #ifdef _WINDOWS
-//
-// NOP
-//
+//#include <windows.h>
 #else
 # include <sys/types.h>
 # include <sys/ipc.h>
@@ -48,7 +46,7 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.6.2"
+#define GH_APP_REVISION "0.6.3"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -69,7 +67,6 @@
 #define GH_SETUP_RESULT_NOT_GET_LOCOMOTIVE 14
 
 #define GH_COMMAND_CAMERA_UNTRACKING "none"
-//  ghRailCommand.h #define GH_STRING_NONE "none"
 
 #define GH_DEFAULT_MAX_CLOCK_SPEED 12.0
 #define GH_DEFAULT_MIN_CLOCK_SPEED 0.1
@@ -77,7 +74,7 @@
 #define GH_DEFAULT_DISPLAY_DISTANCE 5000.0 // [m]
 #define GH_MIN_DISPLAY_DISTANCE      100.0 // [m]
 
-#define GH_DEFAULT_MAX_WINDOW 4
+#define GH_DEFAULT_MAX_WINDOW 8
 #define GH_DEFAULT_MIN_WINDOW 1
 
 #define GH_ALTMODE_CLAMP 0
@@ -88,7 +85,7 @@
 
 
 #define GH_TRACKING_SAMPLING_POINTS 3
-
+#define GH_TRACKING_ADJUST_PARAM 0.0004  // smaller the value, it becomes slower. ( > 0 )
 
 #define GH_THRESHOLD_TIME_BACK_SEC -1.0 // [sec]
 // 60fps = 0.016666 [sec / frame]
@@ -109,9 +106,14 @@
 typedef struct ghSharedMemory
 {
   int	key ;
+  std::string keyname;
   int	type ;
   int	size;
+#ifdef _WINDOWS
+  void *shmhandle;
+#else
   int	shmid ;
+#endif
   char	*addr ;
 } ghSharedMemory ;
 
@@ -121,15 +123,6 @@ typedef struct
   double position[2];
 } ghShmTrainPosition;
 
-//typedef struct ghWindow
-//{
-//  osgViewer::View* view;
-//  osg::ArgumentParser *args;
-//  string name;
-//  string tracking;
-//  ghSharedMemory shm;
-//  ghWindow *next;
-//} ghWindow;
 
 struct ghWindow
 {
@@ -141,8 +134,8 @@ struct ghWindow
 osgViewer::View* ghCreateView( std::string name , int screenNum , unsigned int x,unsigned int y ,double sizeratio );
 void ghSetConfigWindow(ghWindow _win,std::string title,int x,int y,int width,int height);
 void ghGetConfigWindow(ghWindow _win,std::string title,int *ret);
-//int ghInitShmWindow(int shmkey,ghWindow *_win,std::string name);
-int ghInitShmWindow(int shmkey,ghWindow _win);
+int ghInitShmWindow(int shmkey,ghSharedMemory *shm,std::string winname);
+std::string ghGetShmWindowKeyname(ghSharedMemory *shm);
 
 //
 //
@@ -184,7 +177,9 @@ class ghRail
       bool IsPlaying();
       void SetPlayPause(bool flag);
       int InitShmClock(int shmkey);
+      std::string GetShmClockKeyname();
       int InitShmTrain(int shmkey);
+      std::string GetShmTrainKeyname();
       int RemoveShm(int shmkey);      
       
       bool IsTrainID(std::string trainid);

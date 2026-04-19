@@ -304,11 +304,6 @@ ghRail::GetTrainDistance(std::string trainid)
   return ret;
 }
 
-//string
-//ghRail::GetTrackingTrain() {
-//  return p_tracking;
-//}
-
 bool
 ghRail::IsTrainID(std::string trainid) {
   if ( p_units.count(trainid) < 1 ) {
@@ -472,7 +467,6 @@ ghRail::Setup(std::string configname)
     std::string dir2 = tdirs[ tunit["way"].get<int>() ][lineid2];
     std::string trainid2 = tunit["trainid"].get<std::string>();
     std::string routename2 = lineid2 + "_" + route2;
-    //std::cout << " line " << lineid2 << " " << dir2 << " " << route2 << " "  << trainid2 << std::endl;    
     
     //    p_units[trainid2].Setup( trainid2,
     //			     locomotivesize,
@@ -512,22 +506,17 @@ ghRail::Setup(std::string configname)
 ////////////////////////////////////////
 //
 
-//void
-//ghRail::Update( double simulationTime, osgEarth::MapNode* _map ,  ghWindow* _win )
 void
 ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<std::string, ghWindow>& _wins )
 {
 
   osg::AnimationPath::ControlPoint point;
   osg::Vec3d position_centric;
-  //std::map<std::string, osg::Vec3d> position_tracking;
-  //ghWindow *wtmp = _win;
   p_position_tracking.clear();
  
   double timediff = simulationTime - p_previous_simulationTime; // [sec]
   if ( GH_THRESHOLD_TIME_BACK_SEC < timediff && timediff < 0 ) {
     // Time is going back just a little
-    //std::cout << "warning simulation time " << to_string(timediff) << std::endl;
     return;
   }
   double distance = 0.0;
@@ -550,7 +539,6 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
       position_centric = point.getPosition();
       if ( i == 0 && ! key.empty() ) {
 	_updateShmTrainPosition(traincnt,key,position_centric);
-	//std::cout << "train count " << traincnt << std::endl;
 	traincnt++;
       }
   
@@ -676,9 +664,33 @@ ghRail::InitShmClock(int shmkey) {
   p_shm_clock.key = shmkey;
   p_shm_clock.type = GH_SHM_TYPE_CLOCK_TIME;
   p_shm_clock.size = sizeof(int);
-#ifdef _WINDOWS  
-  // NOP
-#else  
+  p_shm_clock.keyname = "clock::";
+  p_shm_clock.keyname += std::to_string(shmkey);
+
+#ifdef _WINDOWS
+  p_shm_clock.shmhandle = CreateFileMapping(
+					    INVALID_HANDLE_VALUE, 
+					    NULL, 
+					    PAGE_READWRITE, 
+					    0, 
+					    p_shm_clock.size,
+					    p_shm_clock.keyname.c_str()
+					    );
+
+  if (p_shm_clock.shmhandle == NULL) {
+    std::cout<<"Clock CreateFileMapping:Error"<<std::endl;
+    return -1;
+  }
+
+  //LPVOID pBuf = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, D_SHARED_MEMORY_SIZE);
+  p_shm_clock.addr = (char *)MapViewOfFile(p_shm_clock.shmhandle, FILE_MAP_ALL_ACCESS, 0, 0, p_shm_clock.size);
+  if (p_shm_clock.addr == NULL) {
+    std::cout<<"Clock MapViewOfFile:Error"<<std::endl;
+    CloseHandle(p_shm_clock.shmhandle);
+    return -1;
+  }
+
+#else
   if ((p_shm_clock.shmid = shmget(p_shm_clock.key, p_shm_clock.size, IPC_CREAT | 0666)) < 0) {
     p_shm_clock.key = -1;
     printf("Clock shared memory get Error: %s\n", strerror(errno));
@@ -694,24 +706,50 @@ ghRail::InitShmClock(int shmkey) {
   return p_shm_clock.size;
 }
 
+std::string
+ghRail::GetShmClockKeyname() {
+  return p_shm_clock.keyname;
+}
+
 int 
 ghRail::InitShmTrain(int shmkey) {
 
   p_shm_train.key = shmkey;
   p_shm_train.type = GH_SHM_TYPE_TRAIN_POSITION;
   int num = 0;
-#ifdef _WINDOWS
-  // NOP
-#else
+  p_shm_train.keyname = "train::";
+  p_shm_train.keyname += std::to_string(shmkey);
+
   for (const auto& [key, value] : p_units) {
     if ( ! key.empty() ) {
       num ++;
     }
   }
-#endif  
   p_shm_train.size = sizeof(ghShmTrainPosition)*num;
+
 #ifdef _WINDOWS
-  // NOP
+  p_shm_train.shmhandle = CreateFileMapping(
+					    INVALID_HANDLE_VALUE, 
+					    NULL, 
+					    PAGE_READWRITE, 
+					    0, 
+					    p_shm_train.size,
+					    p_shm_train.keyname.c_str()
+					    );
+
+  if (p_shm_train.shmhandle == NULL) {
+    std::cout<<"Train CreateFileMapping:Error"<<std::endl;
+    return -1;
+  }
+
+  //LPVOID pBuf = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, D_SHARED_MEMORY_SIZE);
+  p_shm_train.addr = (char *)MapViewOfFile(p_shm_train.shmhandle, FILE_MAP_ALL_ACCESS, 0, 0, p_shm_train.size);
+  if (p_shm_train.addr == NULL) {
+    std::cout<<"Train MapViewOfFile:Error"<<std::endl;
+    CloseHandle(p_shm_train.shmhandle);
+    return -1;
+  }
+  
 #else  
   if ((p_shm_train.shmid = shmget(p_shm_train.key, p_shm_train.size, IPC_CREAT | 0666)) < 0) {
     printf("Train shared memory get Error: %s\n", strerror(errno));
@@ -727,6 +765,12 @@ ghRail::InitShmTrain(int shmkey) {
   return p_shm_train.size;
 }
 
+std::string
+ghRail::GetShmTrainKeyname() {
+  return p_shm_train.keyname;
+}
+
+
 
 int 
 ghRail::RemoveShm(int shmkey) {
@@ -735,8 +779,11 @@ ghRail::RemoveShm(int shmkey) {
   ////////////////////////////////
   if ( p_shm_clock.key = shmkey || shmkey == 0 ) {
       // Detach shmkey
+    p_shm_clock.keyname = GH_SHM_PATH;
+    p_shm_clock.type = GH_SHM_TYPE_NONE;
 #ifdef _WINDOWS    
     // NOP
+    CloseHandle(p_shm_clock.shmhandle);
 #else    
     shmdt( p_shm_clock.addr );
     shmctl(  p_shm_clock.shmid, IPC_RMID, NULL);
@@ -749,8 +796,10 @@ ghRail::RemoveShm(int shmkey) {
   ////////////////////////////////
   if ( p_shm_train.key = shmkey || shmkey == 0 ) {
       // Detach shmkey
+    p_shm_train.keyname = GH_SHM_PATH;
+    p_shm_train.type = GH_SHM_TYPE_NONE;
 #ifdef _WINDOWS
-    // NOP
+    CloseHandle(p_shm_train.shmhandle);
 #else    
     shmdt( p_shm_train.addr );
     shmctl(  p_shm_train.shmid, IPC_RMID, NULL);
@@ -832,14 +881,12 @@ ghRail::_calcTrackingCameraMatrix( osg::Vec3d eye,
   }
   if ( convex_id > 0 ) {
     double new_alt = ( alt[convex_id] - alt[GH_TRACKING_SAMPLING_POINTS] ) * ( (double)GH_TRACKING_SAMPLING_POINTS / ( (double)GH_TRACKING_SAMPLING_POINTS - (double)convex_id ) ) + alt[GH_TRACKING_SAMPLING_POINTS] ;
-    //std::cout <<"height obstacle id="<<convex_id<<" alt="<<alt[GH_TRACKING_SAMPLING_POINTS]<<" obst="<<alt[convex_id]<<" eye="<<alt[0]<<" new="<<new_alt<<std::endl;
     osg::Vec3d new_pos_latlng = WGS84.geocentricToGeodetic(new_pos);
     if ( new_alt >  alt[0] ) {
-      new_alt = new_pos_latlng.z() + 0.0004 * ( new_alt - alt[0] );  // adjust slowly for terrain to centric ellipsoid
+      new_alt = new_pos_latlng.z() + GH_TRACKING_ADJUST_PARAM * ( new_alt - alt[0] );  // adjust slowly for terrain to centric ellipsoid
     } else {
       new_alt = new_pos_latlng.z() ;
     }
-    //std::cout <<"height mod org="<<new_pos_latlng.z()<<" new="<<new_alt<<std::endl;
     osg::Vec3d mod_new_pos = WGS84.geodeticToGeocentric(osg::Vec3d(new_pos_latlng.x(),new_pos_latlng.y(),new_alt));
     mat.makeLookAt( mod_new_pos , p_position_tracking[winkey] , upvec );
   } else {
@@ -917,7 +964,6 @@ ghRail::_getMinimumDistanceFromCamera(const std::map<std::string, ghWindow>& _wi
   double distance = 0;
   double min_distance = 1000000;  
   osg::Vec3d eye, up, center;
-  //ghWindow *tmp = _win;
 
   for (const auto& [key, value] : _wins) {
       value.view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
@@ -926,16 +972,6 @@ ghRail::_getMinimumDistanceFromCamera(const std::map<std::string, ghWindow>& _wi
 	min_distance = distance;
       }
   }
-  //  while (tmp != (ghWindow *)NULL)
-  //    {
-  //      tmp->view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-  //      distance = osg::Vec3d(eye - position).length();
-  //      if ( distance < min_distance ) {
-  //	min_distance = distance;
-  //      }
-  //      if (tmp->next == NULL ) return( min_distance ) ;
-  //tmp = tmp->next ;
-  //}
   return( min_distance ) ;
 }
   
@@ -1118,33 +1154,68 @@ ghGetConfigWindow( ghWindow _win, std::string title, int *ret) {
 
 
 int
-ghInitShmWindow(int shmkey,ghWindow _win) {
+ghInitShmWindow(int shmkey,ghSharedMemory *shm,std::string winname) {
 
-  //  ghWindow *tmp = ghGetWindowByName(_win,name);
-  //  if ( tmp->shm.key > 0 ) {
-  //    // Already use
-  //    return -1;
-  //  }
-  _win.shm.key = shmkey;
-  _win.shm.type = GH_SHM_TYPE_CAMERA_VIEWPORT;
+  shm->key = shmkey;
+  shm->type = GH_SHM_TYPE_CAMERA_VIEWPORT;
   // sizeof double 8 * 24 = 192
-  _win.shm.size = sizeof(double)*2*12;
+  shm->size = sizeof(double)*2*12;
+  shm->keyname.assign("window::");
+  shm->keyname += winname;
+  shm->keyname += std::to_string(shmkey);
 
-#ifdef _WINDOWS        
-  // NOP
-#else  
-  if ((_win.shm.shmid = shmget(_win.shm.key, _win.shm.size, IPC_CREAT | 0666)) < 0) {
+#ifdef _WINDOWS
+  shm->shmhandle = CreateFileMapping(
+				     INVALID_HANDLE_VALUE, 
+				     NULL, 
+				     PAGE_READWRITE, 
+				     0, 
+				     shm->size,
+				     shm->keyname.c_str()
+				     );
+
+  if (shm->shmhandle == NULL) {
+    std::cout<<"Window "<<winname<<" CreateFileMapping:Error"<<std::endl;
+    return -1;
+  }
+
+  //LPVOID pBuf = MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, D_SHARED_MEMORY_SIZE);
+  shm->addr = (char *)MapViewOfFile(shm->shmhandle, FILE_MAP_ALL_ACCESS, 0, 0,shm->size);
+  if (shm->addr == NULL) {
+    std::cout<<"Window "<<winname<<" MapViewOfFile:Error"<<std::endl;
+    CloseHandle(shm->shmhandle);
+    return -1;
+  }
+#else
+  if ((shm->shmid = shmget(shm->key, shm->size, IPC_CREAT | 0666)) < 0) {
     printf("Window shared memory get Error: %s\n", strerror(errno));
-    _win.shm.key = -1;
+    shm->key = -1;
     return -1;
   }
   // Attached shared memory
-  if ((_win.shm.addr = (char *)shmat(_win.shm.shmid, (void *)0, 0)) == (char *) -1) {
+  if ((shm->addr = (char *)shmat(shm->shmid, (void *)0, 0)) == (char *) -1) {
     printf("Window shared memory attach Error: %s\n", strerror(errno));
-    _win.shm.key = -1;
+    shm->key = -1;
     return -1;
   }
 #endif
-  
-  return _win.shm.size;
+  return shm->size;
 }
+
+
+std::string 
+ghGetShmWindowKeyname(ghSharedMemory *shm) {
+  return shm->keyname;
+}
+
+  
+//https://shimons-labo.com/%E5%85%B1%E6%9C%89%E3%83%A1%E3%83%A2%E3%83%AA%E3%82%92%E4%BD%BF%E7%94%A8%E3%81%97%E3%81%A6c%E3%81%A8python%E9%96%93%E3%81%A7%E7%94%BB%E5%83%8F%E3%81%AE%E9%80%81%E5%8F%97%E4%BF%A1%E3%82%92%E8%A1%8C/
+
+//https://doc.qt.io/qt-6/ja/shared-memory.html
+
+
+//https://qiita.com/gpsnmeajp/items/4964fb3a3e551c614b96
+
+
+
+

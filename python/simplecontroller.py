@@ -40,6 +40,13 @@ import io
 import subprocess
 import importlib.util
 
+connect_mode = "socket"
+python_plathome = "windows"
+if os.name == "nt":
+    python_plathome = "windows"
+else:
+    python_plathome = "linux"
+
 ######################################################
 #
 #  Check for Shared Memory Library
@@ -48,14 +55,32 @@ import importlib.util
 def is_module_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
 
-shm_mode = False
 default_host = "localhost"
+
+#
+# check shared_memory module
+#
+if is_module_available("multiprocessing"):
+    from multiprocessing import shared_memory
+    connect_mode = "shm"
+    default_host = "localhost"
+    print(f" shared memory ON ")
+else:
+    connect_mode = "socket"
+    print(f" shared memory OFF ")
+    default_host = socket.gethostbyname(socket.gethostname())
+    
+#
+# check sysv_ipc module
+#
 if is_module_available("sysv_ipc"):
     import sysv_ipc
-    shm_mode = True
+    connect_mode = "shm"
     default_host = "localhost"
+    print(f" sysv ipc ON ")
 else:
-    shm_mode = False
+    connect_mode = "socket"
+    print(f" sysv ipc OFF ")
     default_host = socket.gethostbyname(socket.gethostname())
     
 ######################################################
@@ -71,12 +96,14 @@ remote_port = 57139
 socket_buffer_size = 16384
 show_socket_detail = True
 def about():
-    messagebox.showinfo("about", "simple osgearth_rail controller 0.5.3")
+    messagebox.showinfo("about", "simple osgearth_rail controller 0.6.3")
 
 def cpuload():
-    subprocess.Popen(["python3","cpusage.py"])
-    #subprocess.Popen(["python.exe","cpusage.py"])  # for Windows
-    
+    global python_plathome
+    if python_plathome == "windows":
+        subprocess.Popen(["python.exe","cpusage.py"])  # for Windows
+    else:
+        subprocess.Popen(["python3","cpusage.py"])
 
 ######################################################
 #
@@ -96,8 +123,10 @@ polling_socket_wait_second = 28
 polling_shm_wait_second = 1
 #############
 custom_auto_tracking = False
-custom_auto_tracking_count = 11
-custom_auto_tracking_times = 12
+#custom_auto_tracking_count = 11
+#custom_auto_tracking_times = 12
+custom_auto_tracking_count = 170
+custom_auto_tracking_times = 180
 #############
 
 class SocketClient():
@@ -154,25 +183,43 @@ def setup_shm():
     global shm_train_size_byte
     global shm_camera
     global remote_polling_second
+    global python_plathome
+
     shmmsg = remote_socket.send("shm set clock time\n")
     if shmmsg[1] != "Accept" :
         return False
-    if shmmsg[6].isnumeric():
-        shm_time = sysv_ipc.SharedMemory(int(shmmsg[6]))
+
+    if python_plathome == "linux":
+        if shmmsg[6].isnumeric():
+            shm_time = sysv_ipc.SharedMemory(int(shmmsg[6]))
+
+    if python_plathome == "windows":
+        shm_time = shared_memory.SharedMemory(name=shmmsg[6])
 
     shmmsg = remote_socket.send("shm set train position\n")
     if shmmsg[1] != "Accept" :
         return False
-    if shmmsg[6].isnumeric():
-        shm_train = sysv_ipc.SharedMemory(int(shmmsg[6]))
+
+    if python_plathome == "linux":
+        if shmmsg[6].isnumeric():
+            shm_train = sysv_ipc.SharedMemory(int(shmmsg[6]))
+            shm_train_size_byte = int(shmmsg[7])
+
+    if python_plathome == "windows":
+        shm_train = shared_memory.SharedMemory(name=shmmsg[6])
         shm_train_size_byte = int(shmmsg[7])
 
     shmmsg = remote_socket.send("shm set camera root viewport\n")
     if shmmsg[1] != "Accept" :
         return False
-    if shmmsg[7].isnumeric():
-        #shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[7]))
-        shm_camera[ shmmsg[5] ] = sysv_ipc.SharedMemory(int(shmmsg[7]))
+    if python_plathome == "linux":
+        if shmmsg[7].isnumeric():
+            #shm_camera["root"] = sysv_ipc.SharedMemory(int(shmmsg[7]))
+            shm_camera[ shmmsg[5] ] = sysv_ipc.SharedMemory(int(shmmsg[7]))
+
+    if python_plathome == "windows":
+        shm_camera[ shmmsg[5] ] = shared_memory.SharedMemory(name=shmmsg[7])
+
     remote_polling_second = 1
     
 
@@ -236,7 +283,7 @@ def get_random_train_id():
     global trainid
     length = len(trainid)
     loop_count = 0
-    loop_max = length
+    loop_max = length * 10
     while True:
         idx = int(random.uniform(0, length-1))
         if trainid[idx] in markers:
@@ -305,8 +352,13 @@ def update_socket_viewport():
 def update_shm_clock():
     global shm_time
     global timelabel_var
+    global python_plathome
 
-    bytedata = shm_time.read()
+    if python_plathome == "windows":
+        bytedata = bytes(shm_time.buf[:4])
+    else:
+        bytedata = shm_time.read()
+
     datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
     dhour = math.floor(datasec / 3600) ;
     dmin = math.floor( ( datasec - dhour * 3600 ) / 60) ;
@@ -325,8 +377,12 @@ def update_shm_clock():
 def update_shm_train():
     global shm_train
     global shm_train_size_byte
-    #global tracking_id
-    bytedata = shm_train.read()
+    global python_plathome
+
+    if python_plathome == "windows":
+        bytedata = bytes(shm_train.buf[:shm_train_size_byte])
+    else:
+        bytedata = shm_train.read()
     offset = 0
     for icnt in range(0,shm_train_size_byte,48):
         if (offset+48) < shm_train_size_byte+1:
@@ -357,10 +413,16 @@ def update_shm_train():
 def update_shm_viewport():
     global shm_camera
     global viewport_camera
-
+    global python_plathome
+    
     map_widget.delete_all_polygon()
     for item in shm_camera:
-        bytedata = shm_camera[item].read()
+        if python_plathome == "windows":
+            bytedata = bytes(shm_camera[item].buf[:192])
+        else:
+            #bytedata = shm_camera[item].read()
+            bytedata = shm_camera[item].read()
+
         double_number = struct.unpack('<24d', bytedata)
         positionlist = []
         for i in range(0,24,2):
@@ -412,7 +474,7 @@ def update_thread_shm():
                 update_shm_clock()
                 update_shm_train()
                 update_shm_viewport()
-                custom_auto_tracking_camera()
+                custom_auto_tracking_camera_except_root()
                 time.sleep(polling_shm_wait_second)
             else:
                 time.sleep(1)
@@ -425,7 +487,7 @@ def server_initialize(fieldid):
     global trainid
     global field_isloaded
     global remote_host
-    global shm_mode
+    global connect_mode
     global polling_thread
 
     message = "field set " + fieldid + "\n"
@@ -452,20 +514,18 @@ def server_initialize(fieldid):
     else:
         trainid = list()  # return error or wrong
         
-    if remote_host == "localhost":
-        shm_mode = True
+    if connect_mode == "shm":
         setup_shm()
         polling_thread = threading.Thread(target=update_thread_shm)
-        print (" shared memory mode")
+        print (" use shared memory")
     else:
-        shm_mode = False
         polling_thread = threading.Thread(target=update_thread_socket)
-        print (" socket mode")
+        print (" use socket only")
     field_isloaded = True
     polling_thread.start()
     return True
 
-def server_multiview_script_5views():
+def server_multiview_script():
     global custom_auto_tracking
     response = remote_socket.send("clock set time 9:10\n")
     time.sleep(2)
@@ -503,7 +563,7 @@ def server_multiview_script_5views():
     custom_auto_tracking = True
     menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
 
-def server_multiview_script():
+def server_multiview_script_4views():
     global custom_auto_tracking
     response = remote_socket.send("clock set time 9:10\n")
     time.sleep(2)
@@ -534,6 +594,77 @@ def server_multiview_script():
     custom_auto_tracking = True
     menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
 
+def server_multiview_script_8views():
+    global custom_auto_tracking
+    response = remote_socket.send("clock set time 10:00\n")
+    time.sleep(2)
+    response = remote_socket.send("clock set speed 0.0625\n") # 1/16
+    time.sleep(2)
+    message = "camera set root window 960 510\n"
+    response = remote_socket.send(message);
+    time.sleep(2)
+    
+    message = "camera add camera1 2880 0 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera1"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera1 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera2 0 540 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera2"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera2 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera3 2880 540 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera3"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera3 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera4 0 1080 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera4"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera4 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera5 960 1080 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera5"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera5 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera6 1920 1080 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera6"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera6 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    message = "camera add camera7 2880 1080 0.25\n"
+    response = remote_socket.send(message);
+    windows["camera7"] = "NONE"
+    time.sleep(2)
+    message = "camera set camera7 window 960 510\n"
+    response = remote_socket.send(message);
+    
+    time.sleep(2)
+    run_command()
+    custom_auto_tracking = True
+    menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
+
+
 
     
 #####################################################################
@@ -542,6 +673,7 @@ def server_multiview_script():
     
 def server_connect_dialog():
     global remost_host
+    global connect_mode
 
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x400")
@@ -553,6 +685,13 @@ def server_connect_dialog():
     host_txt = tkinter.Entry(dialog,width=20)
     host_txt.place(x=200, y=10)
     host_txt.insert(0,remote_host)
+
+    selected_mode = tkinter.StringVar(value=connect_mode)
+    mode_radio_socket = ttk.Radiobutton(dialog, text="connect socket only", value="socket", variable=selected_mode)
+    mode_radio_shm = ttk.Radiobutton(dialog, text="use shared memory", value="shm", variable=selected_mode)    
+    mode_radio_socket.place(x=30,y=30)
+    mode_radio_shm.place(x=200,y=30)        
+
     
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
 
@@ -570,27 +709,30 @@ def server_connect_dialog():
 
     option11_radio = ttk.Radiobutton(dialog, text="Custom", value="CUSTOM", variable=selected_option)
 
-    option01_radio.place(x=30,y=40)
-    option02_radio.place(x=30,y=60)
-    option03_radio.place(x=30,y=80)
-    option04_radio.place(x=30,y=100)
-    option05_radio.place(x=30,y=120)
-    option06_radio.place(x=30,y=140)
-    option07_radio.place(x=30,y=160)
-    option08_radio.place(x=30,y=180)
-    option09_radio.place(x=30,y=200)
-    option10_radio.place(x=30,y=220)
+    option01_radio.place(x=30,y=60)
+    option02_radio.place(x=30,y=80)
+    option03_radio.place(x=30,y=100)
+    option04_radio.place(x=30,y=120)
+    option05_radio.place(x=30,y=140)
+    option06_radio.place(x=30,y=160)
+    option07_radio.place(x=30,y=180)
+    option08_radio.place(x=30,y=200)
+    option09_radio.place(x=30,y=220)
+    option10_radio.place(x=30,y=240)
     
-    option11_radio.place(x=30,y=240)        
+    option11_radio.place(x=30,y=260)        
     tc_txt = tkinter.Entry(dialog,width=20)
-    tc_txt.place(x=120, y=240)
+    tc_txt.place(x=120, y=260)
     tc_txt.insert(0,"require ID")
 
     def on_server_ok():
         global remote_host
+        global connect_mode
+                
         remote_host = host_txt.get()
         custom_code = tc_txt.get()
         fieldid = selected_option.get()
+        connect_mode = selected_mode.get()
 
         if fieldid == "CUSTOM":
             if ' ' in custom_code:
@@ -618,9 +760,9 @@ def server_connect_dialog():
         dialog.destroy()
         
     ok_button = tkinter.Button(dialog, text="Data Load", fg="blue", command=on_server_ok)
-    ok_button.place(x=30,y=300)
+    ok_button.place(x=30,y=320)
     no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_server_no)
-    no_button.place(x=200,y=300)
+    no_button.place(x=200,y=320)
 
 
     dialog.grab_set() # modal dialog
@@ -794,7 +936,7 @@ def manual_input_dialog():
     no_button.place(x=200,y=70)
 
 def camera_add_dialog():
-    global shm_mode
+    global connect_mode
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x260")
     dialog.title("New Camera add")
@@ -837,7 +979,7 @@ def camera_add_dialog():
         response = remote_socket.send(message);
         dialog.destroy()
         if response[1] == "Accept":
-            if shm_mode:
+            if connect_mode == "shm":
                 time.sleep(5) # wait time for Setup 3D Viewer
                 message = "shm set camera " + cname + " viewport\n"
                 shmmsg = remote_socket.send(message)
@@ -988,28 +1130,71 @@ def custom_auto_tracking_camera():
     global tracking_distance
     global tracking_height
 
-    if field_isloaded:
-        if field_isrunning:
-            if custom_auto_tracking:
-                if custom_auto_tracking_count > custom_auto_tracking_times:
-                    for item in windows:
-                        loopcount = 0
-                        while True:
-                            newid = get_random_train_id()
-                            if not is_same_tracking_id_in_windows(newid):
-                                message = "camera set " + item + " tracking none\n"
-                                response = remote_socket.send(message);
-                                if response[1] == "Accept":
-                                    set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
-                                    windows[item] = newid
-                                break
-                            if loopcount > len(trainid):
-                                break
-                            loopcount += 1
-                        time.sleep(1)
-                    custom_auto_tracking_count = 0
-                else:
-                    custom_auto_tracking_count += 1
+    if not field_isloaded:
+        return
+    if not field_isrunning:
+        return
+    if not custom_auto_tracking:
+        return
+    
+    if custom_auto_tracking_count > custom_auto_tracking_times:
+        for item in windows:
+            loopcount = 0
+            while True:
+                newid = get_random_train_id()
+                if not is_same_tracking_id_in_windows(newid):
+                    message = "camera set " + item + " tracking none\n"
+                    response = remote_socket.send(message);
+                    if response[1] == "Accept":
+                        set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
+                        windows[item] = newid
+                    break
+                if loopcount > len(trainid):
+                    break
+                loopcount += 1
+            time.sleep(1)
+        custom_auto_tracking_count = 0
+    else:
+        custom_auto_tracking_count += 1
+
+            
+def custom_auto_tracking_camera_except_root():
+    global field_isloaded
+    global field_isrunning
+    global custom_auto_tracking
+    global custom_auto_tracking_count
+    global custom_auto_tracking_times
+    global trainid
+    global tracking_distance
+    global tracking_height
+
+    if not field_isloaded:
+        return
+    if not field_isrunning:
+        return
+    if not custom_auto_tracking:
+        return
+
+    if custom_auto_tracking_count > custom_auto_tracking_times:
+        for item in windows:
+            if item != "root":
+                loopcount = 0
+                while True:
+                    newid = get_random_train_id()
+                    if not is_same_tracking_id_in_windows(newid):
+                        message = "camera set " + item + " tracking none\n"
+                        response = remote_socket.send(message);
+                        if response[1] == "Accept":
+                            set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
+                            windows[item] = newid
+                        break
+                    if loopcount > len(trainid):
+                        break
+                    loopcount += 1
+                time.sleep(1)
+        custom_auto_tracking_count = 0
+    else:
+        custom_auto_tracking_count += 1
 
             
     
@@ -1024,6 +1209,7 @@ def custom_auto_tracking_camera():
 root_tk = tkinter.Tk()
 screen_width = root_tk.winfo_screenwidth()
 screen_height = root_tk.winfo_screenheight()
+print(f"plathome: {python_plathome} {os.name}")
 print(f"Resolution: {screen_width}x{screen_height}")
 #root_tk.geometry(f"{1000}x{700}")
 root_tk.title("simple osgearth_rail controller")

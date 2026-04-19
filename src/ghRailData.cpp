@@ -222,7 +222,8 @@ void
 ghRailModel::Setup(std::string host, std::string locomotive)
 {
   p_host = host;
-  p_url = host + GEOGLYPH_3DMODEL_PATH + locomotive;
+  //p_url = host + GEOGLYPH_3DMODEL_PATH + locomotive;
+  p_url = host + GEOGLYPH_3DMODEL_PATH ;
   p_model = locomotive;
   p_status = 0;
 }
@@ -242,40 +243,21 @@ ghRailModel::GetModel()
 std::string
 ghRailModel::GetGltf()
 {
-  std::string tmp = p_model;
-  unsigned int pos = tmp.find("glb");
+  std::string tmp = p_url + p_model;
   //
   //
+  //  osgearth plugins cannot load ".glb" file
+  //                   replace ".gltf" file is OK
   //
-  //
-  std::string modelfile = tmp.replace(pos, 3, "gltf");
-  //std::cout << modelfile << std::endl;
-  //locomotive/Amtrak17_car1.gltf
-
-#ifdef _WINDOWS  
-  std::string modelf = modelfile;
-  std::string::size_type pos2 = 0;
-  while ((pos2 = modelf.find("/", pos2)) != std::string::npos) {
-    modelf.replace(pos2, 1, "\\");
-    pos2 += 2;
-  }
-  modelfile = modelf;
-  //std::cout << modelf << std::endl;
-#endif
-
-  //
-  // check for exists
-  //
-  FILE* fp = fopen(modelfile.c_str(), "r");
-  if (fp == NULL) {
-    // No Files
-    modelfile = GEOGLYPH_MODEL_FILE_TEMPLATE;
+  std::string modelfile = tmp;
+  int pos = tmp.find("glb");
+  
+  if ( pos == std::string::npos ) {
+    // NOP
   } else {
-    fclose(fp);
+    modelfile = tmp.replace(pos, 3, "gltf");
+    //std::cout << modelfile << std::endl;
   }
-  //
-  //
-  //
   
   return modelfile;
 }

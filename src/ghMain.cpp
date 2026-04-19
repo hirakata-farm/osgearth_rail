@@ -350,8 +350,8 @@ ghCheckCommand() {
 	ghWindows.emplace(cmd->argstr[0],
 			  ghWindow{
 			    vtmp,
-			      GH_COMMAND_CAMERA_UNTRACKING,
-			      ghSharedMemory{-1,GH_SHM_TYPE_NONE,0,0,NULL}
+			    GH_COMMAND_CAMERA_UNTRACKING,
+			    ghSharedMemory{-1,GH_SHM_PATH,GH_SHM_TYPE_NONE,0,0,NULL}
 			  });
 	ghViewer->addView( vtmp );
 	vtmp->setSceneData( ghNode3D );
@@ -593,7 +593,7 @@ ghMainRail(osg::ArgumentParser args)
 			ghWindow{
 			  ghCreateView(GH_STRING_ROOT,ghScreenNum,64,48,0.5),
 			  GH_COMMAND_CAMERA_UNTRACKING,
-			  ghSharedMemory{-1,GH_SHM_TYPE_NONE,0,0,NULL}
+			  ghSharedMemory{-1,GH_SHM_PATH,GH_SHM_TYPE_NONE,0,0,NULL}
 			});
       ghViewer->addView( ghWindows[GH_STRING_ROOT].view );
       ghWindows[GH_STRING_ROOT].view->getEventHandlers().push_front(ui);
