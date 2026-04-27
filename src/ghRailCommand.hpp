@@ -106,7 +106,7 @@ shm (set|remove) (clock|train|camera) (time|position|viewport)
 shm set clock time
 shm set train position
 shm set camera [camera name] viewport
-shm remove [ shm key ]
+shm remove [ shm key name ]
 
 
 

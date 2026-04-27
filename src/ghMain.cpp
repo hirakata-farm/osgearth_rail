@@ -647,15 +647,17 @@ ghMainRail(osg::ArgumentParser args)
         }
       //
       // End of while loop ( Rendering loop )
-      ghRail3D->RemoveShm(0);
+      ghRail3D->RemoveShm(GH_STRING_ALL);
       for (const auto& [key, value] : ghWindows) {
 	ghViewer->removeView(value.view);
 	if ( value.shm.key > 0 ) {
 #ifdef _WINDOWS
 	  // NOP
 #else      
-	  shmdt( value.shm.addr );
-	  shmctl( value.shm.shmid, IPC_RMID, NULL);
+	  //shmdt( value.shm.addr );
+	  //shmctl( value.shm.shmid, IPC_RMID, NULL);
+	  munmap( value.shm.addr, value.shm.size );
+	  shm_unlink( value.shm.keyname.c_str() );
 #endif      
 	}
       }

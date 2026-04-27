@@ -21,12 +21,19 @@
 # include <map>
 # include <cstdlib>
 # include <cstring>
+# include <chrono>
+
 #ifdef _WINDOWS
 //#include <windows.h>
 #else
-# include <sys/types.h>
-# include <sys/ipc.h>
-# include <sys/shm.h>
+//# include <sys/types.h>
+//# include <sys/ipc.h>
+//# include <sys/shm.h>
+#include <fcntl.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #endif
 
 #include <osgDB/ReadFile>
@@ -46,7 +53,7 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.6.3"
+#define GH_APP_REVISION "0.6.5"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -94,7 +101,9 @@
 //  5fps = 0.2      [sec / frame]        
 
 //////////////////////////////////////////////////////////
-#define GH_SHM_PATH  "/tmp/geoglyph3d"
+//#define GH_SHM_PATH  "/tmp/geoglyph3d"
+#define GH_SHM_PATH  "/geoglyph3d"
+#define GH_SHM_DIGITS  1000000
 #define GH_SHM_TYPE_NONE           -1 // int 4 byte :  [sec]
 #define GH_SHM_TYPE_CLOCK_TIME      0 // int 4 byte :  [sec]
 #define GH_SHM_TYPE_TRAIN_POSITION  1 // (char[32],double[2])x(numoftrains)  48xn byte : [id,lat,lng]
@@ -180,7 +189,8 @@ class ghRail
       std::string GetShmClockKeyname();
       int InitShmTrain(int shmkey);
       std::string GetShmTrainKeyname();
-      int RemoveShm(int shmkey);      
+      //int RemoveShm(int shmkey);
+      int RemoveShm(std::string shmkeyname);      
       
       bool IsTrainID(std::string trainid);
 

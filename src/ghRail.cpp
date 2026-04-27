@@ -25,6 +25,7 @@
 # include "ghRail.hpp"
 #define GH_STRING_ROOT  "root"
 #define GH_STRING_NONE  "NONE"
+#define GH_STRING_ALL  "all"
 
 #ifdef _WINDOWS  
 // NOP
@@ -664,8 +665,13 @@ ghRail::InitShmClock(int shmkey) {
   p_shm_clock.key = shmkey;
   p_shm_clock.type = GH_SHM_TYPE_CLOCK_TIME;
   p_shm_clock.size = sizeof(int);
+#ifdef _WINDOWS  
   p_shm_clock.keyname = "clock::";
+#else
+  p_shm_clock.keyname = GH_SHM_PATH;
+#endif  
   p_shm_clock.keyname += std::to_string(shmkey);
+  
 
 #ifdef _WINDOWS
   p_shm_clock.shmhandle = CreateFileMapping(
@@ -691,13 +697,15 @@ ghRail::InitShmClock(int shmkey) {
   }
 
 #else
-  if ((p_shm_clock.shmid = shmget(p_shm_clock.key, p_shm_clock.size, IPC_CREAT | 0666)) < 0) {
+  //p_shm_clock.size, IPC_CREAT | 0666))
+  if ( ( p_shm_clock.shmid = shm_open(p_shm_clock.keyname.c_str(),  O_CREAT | O_RDWR, 0666 ) )  < 0 ) {
     p_shm_clock.key = -1;
     printf("Clock shared memory get Error: %s\n", strerror(errno));
     return -1;
   }
+  ftruncate(p_shm_clock.shmid, p_shm_clock.size);
   // Attached shared memory
-  if ((p_shm_clock.addr = (char *)shmat(p_shm_clock.shmid, (void *)0, 0)) == (char *) -1) {
+  if ( (p_shm_clock.addr = (char *)mmap(0,p_shm_clock.size,PROT_READ | PROT_WRITE, MAP_SHARED, p_shm_clock.shmid,0 ) ) == (char *) -1 ) {
     printf("Clock shared memory attach Error: %s\n", strerror(errno));
     p_shm_clock.key = -1;
     return -1;
@@ -716,10 +724,14 @@ ghRail::InitShmTrain(int shmkey) {
 
   p_shm_train.key = shmkey;
   p_shm_train.type = GH_SHM_TYPE_TRAIN_POSITION;
-  int num = 0;
+#ifdef _WINDOWS  
   p_shm_train.keyname = "train::";
+#else
+  p_shm_train.keyname = GH_SHM_PATH;
+#endif  
   p_shm_train.keyname += std::to_string(shmkey);
-
+  int num = 0;
+  
   for (const auto& [key, value] : p_units) {
     if ( ! key.empty() ) {
       num ++;
@@ -751,12 +763,14 @@ ghRail::InitShmTrain(int shmkey) {
   }
   
 #else  
-  if ((p_shm_train.shmid = shmget(p_shm_train.key, p_shm_train.size, IPC_CREAT | 0666)) < 0) {
-    printf("Train shared memory get Error: %s\n", strerror(errno));
+  if ( ( p_shm_train.shmid = shm_open(p_shm_train.keyname.c_str(),  O_CREAT | O_RDWR, 0666 ) )  < 0 ) {
     p_shm_train.key = -1;
+    printf("Train shared memory get Error: %s\n", strerror(errno));
     return -1;
   }
-  if ((p_shm_train.addr = (char *)shmat(p_shm_train.shmid, (void *)0, 0)) == (char *) -1) {
+  ftruncate(p_shm_train.shmid, p_shm_train.size);
+  // Attached shared memory
+  if ( (p_shm_train.addr = (char *)mmap(0,p_shm_train.size,PROT_READ | PROT_WRITE, MAP_SHARED, p_shm_train.shmid,0 ) ) == (char *) -1 ) {
     printf("Train shared memory attach Error: %s\n", strerror(errno));
     p_shm_train.key = -1;
     return -1;
@@ -773,42 +787,47 @@ ghRail::GetShmTrainKeyname() {
 
 
 int 
-ghRail::RemoveShm(int shmkey) {
+ghRail::RemoveShm(std::string shmkeyname) {
+
+  //////////////////////////////////////////
 
 
   ////////////////////////////////
-  if ( p_shm_clock.key = shmkey || shmkey == 0 ) {
+  if ( p_shm_clock.keyname == shmkeyname || shmkeyname == GH_STRING_ALL ) {
       // Detach shmkey
-    p_shm_clock.keyname = GH_SHM_PATH;
-    p_shm_clock.type = GH_SHM_TYPE_NONE;
 #ifdef _WINDOWS    
     // NOP
     CloseHandle(p_shm_clock.shmhandle);
 #else    
-    shmdt( p_shm_clock.addr );
-    shmctl(  p_shm_clock.shmid, IPC_RMID, NULL);
+    munmap( p_shm_clock.addr,p_shm_clock.size );
+    shm_unlink(  p_shm_clock.keyname.c_str() );
 #endif    
     p_shm_clock.key = -1;
+    p_shm_clock.keyname = GH_SHM_PATH;
+    p_shm_clock.type = GH_SHM_TYPE_NONE;
+    return 1;
   } else {
     // NOP
   }
   
   ////////////////////////////////
-  if ( p_shm_train.key = shmkey || shmkey == 0 ) {
+  if ( p_shm_train.keyname == shmkeyname || shmkeyname == GH_STRING_ALL ) {
       // Detach shmkey
-    p_shm_train.keyname = GH_SHM_PATH;
-    p_shm_train.type = GH_SHM_TYPE_NONE;
 #ifdef _WINDOWS
     CloseHandle(p_shm_train.shmhandle);
 #else    
-    shmdt( p_shm_train.addr );
-    shmctl(  p_shm_train.shmid, IPC_RMID, NULL);
+    munmap( p_shm_train.addr,p_shm_train.size );
+    shm_unlink(  p_shm_train.keyname.c_str() );
 #endif
     p_shm_train.key = -1;
+    p_shm_train.keyname = GH_SHM_PATH;
+    p_shm_train.type = GH_SHM_TYPE_NONE;
+    return 1;
   } else {
     // NOP
   }
 
+  //  Window Shared memory unlink here
   
   return -1;
 }
@@ -1160,7 +1179,11 @@ ghInitShmWindow(int shmkey,ghSharedMemory *shm,std::string winname) {
   shm->type = GH_SHM_TYPE_CAMERA_VIEWPORT;
   // sizeof double 8 * 24 = 192
   shm->size = sizeof(double)*2*12;
+#ifdef _WINDOWS  
   shm->keyname.assign("window::");
+#else
+  shm->keyname.assign(GH_SHM_PATH);
+#endif  
   shm->keyname += winname;
   shm->keyname += std::to_string(shmkey);
 
@@ -1187,13 +1210,14 @@ ghInitShmWindow(int shmkey,ghSharedMemory *shm,std::string winname) {
     return -1;
   }
 #else
-  if ((shm->shmid = shmget(shm->key, shm->size, IPC_CREAT | 0666)) < 0) {
-    printf("Window shared memory get Error: %s\n", strerror(errno));
+  if ( ( shm->shmid = shm_open(shm->keyname.c_str(),  O_CREAT | O_RDWR, 0666 ) )  < 0 ) {
     shm->key = -1;
+    printf("Window shared memory get Error: %s\n", strerror(errno));
     return -1;
   }
+  ftruncate(shm->shmid, shm->size);
   // Attached shared memory
-  if ((shm->addr = (char *)shmat(shm->shmid, (void *)0, 0)) == (char *) -1) {
+  if ( (shm->addr = (char *)mmap(0,shm->size,PROT_READ | PROT_WRITE, MAP_SHARED, shm->shmid,0 ) ) == (char *) -1 ) {
     printf("Window shared memory attach Error: %s\n", strerror(errno));
     shm->key = -1;
     return -1;

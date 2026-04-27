@@ -414,8 +414,10 @@ ghRailParseCommand(ghCommandQueue *cmd) {
 	}
       }	else if ( command[1] == GH_STRING_REMOVE && command_size == 3 ) {
 	cmd->type = GH_COMMAND_SHM_REMOVE;
-	cmd->argnum[0] = std::stod(command[2]);
-	cmd->argnumidx = 1;	  	  			
+	//cmd->argnum[0] = std::stod(command[2]);
+	//cmd->argnumidx = 1;	  	  			
+	cmd->argstr[0] = command[2];
+	cmd->argstridx = 1;	  	  			
       }  else {
 	// NOP
       }
@@ -1639,18 +1641,21 @@ ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail, std::map<std::
   //    offset = 24 + ghCountWindow(_win);
   //  }
 
-  int offset = 24 + _wins.size();
-  
-#ifdef _WINDOWS
-  int shmkey = 86822723;
-#else  
-  int shmkey = ftok(GH_SHM_PATH,shmtype+offset);
-#endif
+  //int offset = 24 + _wins.size();
+  //#ifdef _WINDOWS
+  //  int shmkey = 86822723;
+  //#else  
+  //  int shmkey = ftok(GH_SHM_PATH,shmtype+offset);
+  //#endif
+  auto now = std::chrono::system_clock::now();
+  auto duration = now.time_since_epoch();
+  int shmkey = ( std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() ) % GH_SHM_DIGITS ;
+
   std::string ret = "shm set ";
   if (shmkey < 0) {
     return GH_EXECUTE_CANNOT_GET;
   } else {
-    std::string skey = std::to_string(shmkey);
+    //std::string skey = std::to_string(shmkey);
     std::string keyname = GH_STRING_NONEL;
     int ssize = -1;
     if ( shmtype == GH_SHM_TYPE_CLOCK_TIME ) {
@@ -1673,11 +1678,12 @@ ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail, std::map<std::
     if ( ssize < 0 ) {
       return GH_EXECUTE_CANNOT_ALLOCATE;
     } else {
-#ifdef _WINDOWS
+      //#ifdef _WINDOWS
+      //      ret += keyname + " ";
+      //#else
+      //      ret += skey + " ";
+      //#endif
       ret += keyname + " ";
-#else
-      ret += skey + " ";
-#endif
       ret += std::to_string(ssize);
     }
   }
@@ -1693,10 +1699,12 @@ ghRailCommandShmSet(int shmtype,ghCommandQueue *cmd,ghRail *rail, std::map<std::
 int
 ghRailCommandShmRemove(ghCommandQueue *cmd,ghRail *rail) {
   std::string ret = "shm remove ";
-  int shmkey = (int)cmd->argnum[0];
-  ret += std::to_string(cmd->argnum[0]);
+  //int shmkey = (int)cmd->argnum[0];
+  //ret += std::to_string(cmd->argnum[0]);
+  std::string keyname = cmd->argstr[0];
+  ret += keyname;
 
-  int ssize = rail->RemoveShm(shmkey);
+  int ssize = rail->RemoveShm(keyname);
 
   if ( ret.size() < GH_SOCKET_BUFFER_SIZE ) {
     cmd->resultmessage = ret;
