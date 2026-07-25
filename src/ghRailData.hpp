@@ -32,14 +32,6 @@
 
 #define MAX_FILE_LENGTH 200000
 
-#ifdef _WINDOWS
-#define GEOGLYPH_MODEL_FILE_TEMPLATE "locomotive\\DSBIC3_car2.gltf"
-#else
-#define GEOGLYPH_MODEL_FILE_TEMPLATE "locomotive/DSBIC3_car2.gltf"
-#endif
-
-
-//#define GEOGLYPH_MIN_SIZE 8000
 
 //
 // ghRailJSON  Class 
@@ -61,6 +53,8 @@ class ghRailJSON
       std::vector<std::string> GetVectorString( std::string str );
       int GetVectorSize( std::string str );
       std::string GetUrl();
+      std::string GetModelsPath();
+      std::vector<std::string> GetModelsVectorString( std::string str );
     private:
       std::string p_url;
       std::string p_host;
@@ -83,10 +77,13 @@ class ghRailCSV
 class ghRailModel
     {
     public:
-      void Setup(std::string host, std::string locomotive);
+      void Setup(std::string host, std::string path, std::string locomotive);
       std::string GetUrl();
       std::string GetModel();
-      std::string GetGltf();
+      std::string GetOSGB();
+      std::string GetOBJ();
+      std::string GetGLTF();
+      std::string GetGLB();
       void SetStatus(int status);
       int GetStatus();
     private:

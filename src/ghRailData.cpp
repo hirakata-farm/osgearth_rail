@@ -166,6 +166,29 @@ ghRailJSON::GetUrl()
   return p_url;
 }
 
+std::string
+ghRailJSON::GetModelsPath()
+{
+  nlohmann::json models = GetJsonObject( "models" );
+  return models["path"];
+}
+
+std::vector<std::string>
+ghRailJSON::GetModelsVectorString( std::string str )
+{
+
+  std::vector<std::string> p_array;
+
+  nlohmann::json models = GetJsonObject( "models" );
+  nlohmann::json json = models[ str ];
+  p_array.reserve( GetVectorSize(str) );
+  for (nlohmann::json::iterator itss = json.begin(); itss != json.end(); ++itss) {
+    p_array.push_back( itss.value().get<std::string>() );
+  }
+  return p_array;
+  
+}
+
 
 /////////////////////////
 
@@ -219,11 +242,11 @@ ghRailCSV::GetCsv()
 
 
 void
-ghRailModel::Setup(std::string host, std::string locomotive)
+ghRailModel::Setup(std::string host, std::string path, std::string locomotive)
 {
   p_host = host;
   //p_url = host + GEOGLYPH_3DMODEL_PATH + locomotive;
-  p_url = host + GEOGLYPH_3DMODEL_PATH ;
+  p_url = host + GEOGLYPH_3DMODEL_PATH + path;
   p_model = locomotive;
   p_status = 0;
 }
@@ -241,26 +264,92 @@ ghRailModel::GetModel()
 }
 
 std::string
-ghRailModel::GetGltf()
+ghRailModel::GetOBJ()
+{
+  std::string tmp = p_url + p_model;
+  //
+  //
+  //
+  std::string modelfile = tmp;
+  int pos = tmp.find("obj");
+  if ( pos == std::string::npos ) {
+    std::cout << "Wrong OBJ Modelfile " << modelfile << std::endl;
+  } else {
+    // NOP
+    //modelfile = tmp.replace(pos, 3, "gltf");
+    //std::cout << "set OBJ Modelfile " << modelfile << std::endl;
+  }
+  return modelfile;
+}
+std::string
+ghRailModel::GetOSGB()
+{
+  std::string tmp = p_url + p_model;
+  //
+  //
+  //
+  std::string modelfile = tmp;
+  int pos = tmp.find("osgb");
+  if ( pos == std::string::npos ) {
+    std::cout << "Wrong osgb Modelfile " << modelfile << std::endl;
+  } else {
+    // NOP
+    //modelfile = tmp.replace(pos, 3, "gltf");
+    //std::cout << "set OBJ Modelfile " << modelfile << std::endl;
+  }
+  return modelfile;
+}
+std::string
+ghRailModel::GetGLTF()
 {
   std::string tmp = p_url + p_model;
   //
   //
   //  osgearth plugins cannot load ".glb" file
   //                   replace ".gltf" file is OK
+  //  
+  //   Use Open Scene Graph plugins
+  //       support and install for glb and gltf
+  //
+  //
+  std::string modelfile = tmp;
+  int pos = tmp.find("gltf");
+  if ( pos == std::string::npos ) {
+    std::cout << "Wrong GLTF Modelfile " << modelfile << std::endl;
+  } else {
+    // NOP
+    //modelfile = tmp.replace(pos, 3, "gltf");
+    //std::cout << "set GLTF Modelfile " << modelfile << std::endl;
+  }
+  return modelfile;
+}
+
+std::string
+ghRailModel::GetGLB()
+{
+  std::string tmp = p_url + p_model;
+  //
+  //
+  //  osgearth plugins cannot load ".glb" file
+  //                   replace ".gltf" file is OK
+  //  
+  //   Use Open Scene Graph plugins
+  //       support and install for glb and gltf
+  //
   //
   std::string modelfile = tmp;
   int pos = tmp.find("glb");
-  
   if ( pos == std::string::npos ) {
-    // NOP
+    std::cout << "Wrong GLB Modelfile " << modelfile << std::endl;
   } else {
-    modelfile = tmp.replace(pos, 3, "gltf");
-    //std::cout << modelfile << std::endl;
+    // NOP
+    //modelfile = tmp.replace(pos, 3, "gltf");
   }
-  
+
   return modelfile;
+    
 }
+
 
 void
 ghRailModel::SetStatus(int status)

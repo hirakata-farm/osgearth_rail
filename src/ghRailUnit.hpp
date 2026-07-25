@@ -24,9 +24,6 @@
 
 # include <osg/AnimationPath>
 # include <osg/PositionAttitudeTransform>
-# include <osgEarth/GeoMath>
-# include <osgEarth/GeoTransform>
-# include <osgEarth/LabelNode>
 
 #include <osgDB/ReadFile>
 #include <osg/Node>
@@ -34,6 +31,10 @@
 #include <osgDB/Registry>
 #include <osgDB/Input>
 #include <osgDB/Options>
+
+# include <osgEarth/GeoMath>
+# include <osgEarth/GeoTransform>
+# include <osgEarth/LabelNode>
 
 # include <nlohmann/json.hpp>
 
@@ -91,8 +92,14 @@
 
 #define GH_LAYER_DISTANCE_THRESHOLD 1.8
 
-////////////////////////////////////////////////////////
+//#define GH_MODEL_FORMAT "obj"
+#define GH_MODEL_FORMAT "osgb"
+#define GH_MODEL_PATH_SEPARATOR "/"
 
+#ifdef _WINDOWS
+#define GH_MODEL_VERTEX_SHADER_COMPATIBLE "osgearth_rail.vert"
+#define GH_MODEL_FRAGMENT_SHADER_COMPATIBLE "osgearth_rail.frag"
+#endif
 
 ////////////////////////////////////////////////////////
 
@@ -113,13 +120,18 @@ class ghRailUnit
       std::string GetModelUri(int coach);
       void SetModelLabel(bool flag);
       std::string GetTimetable();
-      void CreateModelNode(int coach);
       int GetLocomotiveModelSize();
+
+      void CreateModelNode(int coach);
       osg::Switch *GetModelSwitch(int coach);
+      void         SetModelSwitch(int coach, bool status);
       osgEarth::GeoTransform *GetModelTransform(int coach);
-      osg::PositionAttitudeTransform *GetModelAttitude(int coach);      
-      int GetModelStatus(int coach);
+      void                    SetModelPosition(int coach, osgEarth::GeoPoint point);
+      osg::PositionAttitudeTransform *GetModelAttitude(int coach);
+      //void                          SetModelAttitude(int coach, osg::AnimationPath::ControlPoint point);
+      int  GetModelStatus(int coach);
       void SetModelStatus(int coach,int status);
+      
       std::string GetMarkerUri();
       std::string GetLineInfo();
       std::string GetDistanceInfo();
@@ -136,6 +148,7 @@ class ghRailUnit
       nlohmann::json p_jsondata;
       std::vector<ghRailModel> p_models;
       std::vector<osg::Switch *> p_switch;
+      std::vector<osg::Node *> p_modelnode;
       std::vector<osgEarth::GeoTransform *> p_transform;
       std::vector<osg::PositionAttitudeTransform *> p_attitude;
 
@@ -175,7 +188,7 @@ class ghRailUnit
 
       double __simulateTwoPoints(double x,double t, double d,double v);
       void _initLocomotiveArray( std::vector<int>  lsize );
-      void _initLocomotiveModel(std::vector<std::string>  locomotive );
+      void _initLocomotiveModel(std::string path, std::vector<std::string>  locomotive );
       osgEarth::LabelNode *_createLabelNode(std::string text);
 
       osg::AnimationPath::ControlPoint _calcControlPointGeomLayers(double lat, double lng, osg::Quat quat);

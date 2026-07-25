@@ -12,6 +12,14 @@
 *
 *
 */
+//
+// fix for winsock.h error for Windows
+//
+#define WIN32_LEAN_AND_MEAN
+
+#include <osgDB/PluginQuery>
+#include <osg/Group>
+
 #include <osgEarthImGui/ImGuiApp>
 #include <osgEarth/EarthManipulator>
 #include <osgEarth/Sky>
@@ -19,8 +27,6 @@
 #include <osgViewer/CompositeViewer>
 #include <osgViewer/ViewerEventHandlers>
 #include <osgEarth/MapNode>
-#include <osgDB/PluginQuery>
-#include <osg/Group>
 #include <osgEarth/PlaceNode>
 
 #include <osgEarthImGui/LayersGUI>
@@ -32,6 +38,7 @@
 #include <osgEarthImGui/RenderingGUI>
 #include <osgEarthImGui/AnnotationsGUI>
 #include <osgEarthImGui/PickerGUI>
+
 
 #include "ghRailGUI"
 #include "ghRail.hpp"
@@ -77,7 +84,12 @@ ghShowPlugins()
       osgDB::outputPluginDetails(std::cout,*itr);
       //std::cout << (*itr) << std::endl;
     }
-  
+
+  //osgDB::FileNameList plugins = osgDB::listAllAvailablePlugins();
+  //for (const auto& plugin : plugins) {
+  //std::cout << "Plugin: " << plugin << std::endl;
+  //}
+  //std::cout << "plugins finished" << std::endl;
 }
 
 double
@@ -512,7 +524,7 @@ ghMainRail(osg::ArgumentParser args)
   ghRail3D->Init();
   ghRail3D->SetClockSpeed(1.0);
   ghRail3D->SetPlayPause(false);
-      
+
   ghViewer = new osgViewer::CompositeViewer(args);  //  Application Root
   
   //ghViewer.setThreadingModel(ghViewer.SingleThreaded);
@@ -553,7 +565,7 @@ ghMainRail(osg::ArgumentParser args)
       /***  map node  **/
       osgEarth::MapNode* mapNode = osgEarth::MapNode::findMapNode(ghNode3D);
       //std::cout << mapNode->getMapSRS()->getGeographicSRS() << std::endl;
-
+	    
       /***  Sky and date time **/
       ghSky = SkyNode::create();
       ghSky->setDateTime(DateTime());
@@ -565,12 +577,14 @@ ghMainRail(osg::ArgumentParser args)
       ghSky->setMoonVisible(false);
       ghSky->setStarsVisible(true);
       auto parent = mapNode->getParent(0);
+      //std::cout << " parent name " << parent->className() << std::endl;
       ghSky->addChild(mapNode);
       parent->addChild(ghSky);
       parent->removeChild(mapNode);
+
       /***  Sky and date time **/
 
-      // Call this to add the GUI. 
+      // Call this to add the GUI.
       auto ui = new ImGuiAppEngine(args);
       ui->add("File", new QuitGUI());
       ui->add("Tools", new NetworkMonitorGUI());
@@ -601,7 +615,7 @@ ghMainRail(osg::ArgumentParser args)
 
       double _elapsed_prev = 0.0f;
       double _elapsed_current = ghViewer->elapsedTime();
-
+	    
       /////////////////////////
       SocketReceiveThread* rsock = new SocketReceiveThread(ghClient);
       SocketSendThread* ssock = new SocketSendThread(ghClient,GH_SOCKET_SEND_WAIT); 
@@ -643,7 +657,6 @@ ghMainRail(osg::ArgumentParser args)
 	  ghViewer->frame();
 
 	  ghCheckCommand();
-	  
         }
       //
       // End of while loop ( Rendering loop )
@@ -692,7 +705,7 @@ main(int argc, char** argv)
     fprintf( stderr,"    %s rev %s\n", GH_APP_NAME, GH_APP_REVISION ) ;
     fprintf( stderr,"--------------------------------------------\n" ) ;
     //ghArgs = new osg::ArgumentParser(&argc, argv);
-  
+
 #ifdef _WINDOWS
     // Nop signal
 #else    

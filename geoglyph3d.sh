@@ -2,6 +2,7 @@
 
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/YOURPATH/OSG/dist/lib
 export DISPLAY=:0
+export OSG_NOTIFY_LEVEL=WARN
 
 # for shared memory , defined ghRail.hpp
 GFILE=/tmp/geoglyph3d

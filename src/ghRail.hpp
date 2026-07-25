@@ -53,7 +53,7 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.6.5"
+#define GH_APP_REVISION "0.7.6"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -227,7 +227,7 @@ class ghRail
       ghSharedMemory p_shm_clock;
       ghSharedMemory p_shm_train;
       
-      osgEarth::GeoPoint _calcGeoPoint(const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach);
+      osgEarth::GeoPoint _calcGeoPoint( osg::Vec3d position , std::string key, double simtime, int coach);
       osg::Matrixd _calcTrackingCameraMatrix( osg::Vec3d eye,osg::Vec3d center,osg::Vec3d up,std::string winkey,osgEarth::MapNode* _map);
 
       void _updateShmClockTime(double stime);

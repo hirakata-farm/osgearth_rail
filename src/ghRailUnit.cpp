@@ -17,7 +17,6 @@
 # include "ghString.hpp"
 # include "ghRailUnit.hpp"
 
-
 void
 ghRailUnit::Setup( std::string id,
 		   std::string marker,
@@ -127,7 +126,16 @@ ghRailUnit::Setup( std::string id,
     }
   }
   std::vector<int> locomotivesize = p_locomotive.GetVectorInt("interval");
-  std::vector<std::string> locomotivemodel = p_locomotive.GetVectorString("model");
+  //std::vector<std::string> locomotivemodel = p_locomotive.GetVectorString("model");
+
+  //
+  //nlohmann::json json;
+  //std::string lineid = json["lineid"].get<std::string>();
+  //
+  
+  std::string modelpath = p_locomotive.GetModelsPath();
+  std::vector<std::string> locomotivemodel = p_locomotive.GetModelsVectorString( GH_MODEL_FORMAT );
+  //  std::vector<std::string> locomotivemodel_glb = p_locomotive.GetVectorString("glb");  
 
   //
   //  Expand geompath vector ( station edge )
@@ -143,7 +151,7 @@ ghRailUnit::Setup( std::string id,
   //   vector<int> ranges{ a1, a2, a3, a4 .....};
   //
   _initLocomotiveArray(locomotivesize);
-  _initLocomotiveModel(locomotivemodel);
+  _initLocomotiveModel(modelpath,locomotivemodel);
 
   _geompath2geometry(p_locomotives);
   
@@ -216,7 +224,8 @@ ghRailUnit::GetModelUri(int coach) {
 
 int
 ghRailUnit::GetLocomotiveModelSize() {
-  return p_locomotive.GetVectorSize("model");
+  //return p_locomotive.GetVectorSize("model");
+  return p_locomotive.GetVectorSize("size");
 }
 
 void
@@ -279,14 +288,136 @@ ghRailUnit::SetModelStatus(int coach,int status) {
   
 }
 
-//osgEarth::GeoTransform *
 void
 ghRailUnit::CreateModelNode(int coach) {
 
-  osg::Node* locomotive = osgDB::readNodeFile( p_models[coach].GetGltf() );
+  std::string modelfile = p_models[coach].GetOSGB();
+  //std::string modelfile = p_models[coach].GetGLTF();
+  osg::ref_ptr<osgDB::Options> options = new osgDB::Options();
+  int pos = modelfile.find( GH_MODEL_FORMAT );
+  if ( pos == std::string::npos ) {
+    // NOP
+    std::cout << " Wrong Model format  " << modelfile << std::endl;
+  } else {
+    //std::cout << " Load Model " << modelfile << std::endl;
+    
+    osg::ref_ptr<osgDB::ReaderWriter> rw = osgDB::Registry::instance()->getReaderWriterForExtension( GH_MODEL_FORMAT );
+    //osg::ref_ptr<osgDB::ReaderWriter> rw = osgDB::Registry::instance()->getReaderWriterForExtension( "verse_gltf" );
+    options->setPluginData("ReaderWriter", rw.get());
+    //options->setOptionString("Mode=ascii");
+    //options->setOptionString("Mode=binary");   
+    //options->setOptionString("plugin=verse_gltf Mode=binary");
+  }
+
+  p_modelnode[coach] = osgDB::readNodeFile( modelfile, options.get());
+  //p_modelnode[coach] = osgDB::readNodeFile( modelfile );
+
   p_attitude[coach]->setPosition( osg::Vec3(0.0,0.0,0.0) );
   p_attitude[coach]->setScale( osg::Vec3(1.0,1.0,1.0) );
-  p_attitude[coach]->addChild( locomotive );
+  p_attitude[coach]->addChild( p_modelnode[coach] );
+  p_transform[coach]->addChild( p_attitude[coach] );
+
+  ////////////////////////////////////////////////
+  //  Train Label ( p_trainid )
+  //
+  // https://www.packtpub.com/en-us/learning/how-to-tutorials/openscenegraph-advanced-scene-graph-components
+  //
+  //
+  //
+  //p_transform[coach]->addChild( labelnode );
+  //
+  if ( coach < 1 && p_islabel ) {
+
+    //osgEarth::Style labelStyle;
+    //labelStyle.getOrCreate<osgEarth::TextSymbol>()->alignment() = osgEarth::TextSymbol::ALIGN_CENTER_CENTER;
+    //labelStyle.getOrCreate<osgEarth::TextSymbol>()->fill().mutable_value().color() = osgEarth::Util::Color(GH_DEFAULT_LABEL_COLOR);
+    //labelStyle.getOrCreate<osgEarth::TextSymbol>()->halo() = osgEarth::Util::Color(GH_DEFAULT_LABEL_HALO);
+    //labelStyle.getOrCreate<osgEarth::TextSymbol>()->size() = GH_DEFAULT_LABEL_SIZE;
+    //labelStyle.getOrCreate<osgEarth::TextSymbol>()->pixelOffset() = osg::Vec2s(0.0, GH_DEFAULT_LABEL_SIZE*3.0);
+    //p_modellabel->setText(p_trainid);
+    //p_modellabel->setStyle(labelStyle);
+    //p_transform[coach]->addChild( p_modellabel );
+    p_modellabel = _createLabelNode(p_trainid);
+    p_transform[coach]->addChild( p_modellabel );
+    
+  }
+
+  /////////////////////////
+  // for shader compatible
+  //
+  // osgearth load osgb model, but warning: material::apply(state&) - not supported.
+  //
+  //osg::StateSet* stateSet = p_modelnode[coach]->getOrCreateStateSet();
+  //stateSet->setRenderBinDetails( 11, "RenderBin" );
+  //osgEarth::ShaderGenerator gen;
+  //p_modelnode[coach]->accept(gen);
+  //gen.run(p_modelnode[coach]);
+  //stateSet->setMode(GL_LIGHTING, osg::StateAttribute::OFF | osg::StateAttribute::PROTECTED);
+  //
+#ifdef _WINDOWS
+  osg::ref_ptr<osg::StateSet> ss = p_modelnode[coach]->getOrCreateStateSet();
+  ss->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+  osg::ref_ptr<osg::Program> program = new osg::Program;
+  osg::ref_ptr<osg::Shader> vertShader = new osg::Shader(osg::Shader::VERTEX);
+  osg::ref_ptr<osg::Shader> fragShader = new osg::Shader(osg::Shader::FRAGMENT);
+  vertShader->loadShaderSourceFromFile(GH_MODEL_VERTEX_SHADER_COMPATIBLE);
+  fragShader->loadShaderSourceFromFile(GH_MODEL_FRAGMENT_SHADER_COMPATIBLE);
+  program->addShader(vertShader);
+  program->addShader(fragShader);
+  ss->setAttributeAndModes(program);
+#endif  
+  //
+  /////////////////////////
+
+  
+  p_switch[coach]->addChild( p_transform[coach], true );
+  
+  p_models[coach].SetStatus(GH_MODEL_STATUS_LOADED);
+ 
+  //return p_transform[coach];
+}
+
+
+/*********************
+void
+ghRailUnit::CreateModelNodeObsolete(int coach) {
+
+  //osg::Node* locomotive = osgDB::readNodeFile( p_models[coach].GetGltf() );
+
+  std::string modelfile = p_models[coach].GetGlb();
+  osg::ref_ptr<osgDB::Options> options = new osgDB::Options();
+  int pos = modelfile.find("glb");
+  if ( pos == std::string::npos ) {
+    // NOP
+    // use default node reader
+    //
+  } else {
+
+    //std::string libName1 = osgDB::Registry::instance()->createLibraryNameForExtension("verse_mesh");
+    //osgDB::Registry::LoadStatus status1 = osgDB::Registry::instance()->loadLibrary(libName1);
+
+    //std::string libName2 = osgDB::Registry::instance()->createLibraryNameForExtension("verse_image");
+    //osgDB::Registry::LoadStatus status2 = osgDB::Registry::instance()->loadLibrary(libName2);
+
+    //std::string libName = osgDB::Registry::instance()->createLibraryNameForExtension("verse_gltf");
+    //osgDB::Registry::LoadStatus status = osgDB::Registry::instance()->loadLibrary(libName);
+    //    //if (status != osgDB::Registry::NOT_LOADED) { std::cout << libName << " loaded.\n"; }
+    osg::ref_ptr<osgDB::ReaderWriter> rw = osgDB::Registry::instance()->getReaderWriterForExtension("verse_gltf");
+    options->setPluginData("ReaderWriter", rw.get());
+    options->setOptionString("Mode=binary");
+
+    //options->setOptionString("plugin=verse_gltf Mode=binary");
+    //options->setOptionString("Mode:binary");
+    //options->setOptionString("Mode=binary");   
+  }
+
+  
+  // osg::Node* locomotive = osgDB::readNodeFile( modelfile, options.get());
+  p_modelnode[coach] = osgDB::readNodeFile( modelfile, options.get());
+  
+  p_attitude[coach]->setPosition( osg::Vec3(0.0,0.0,0.0) );
+  p_attitude[coach]->setScale( osg::Vec3(1.0,1.0,1.0) );
+  p_attitude[coach]->addChild( p_modelnode[coach] );
   p_transform[coach]->addChild( p_attitude[coach] );
 
   ////////////////////////////////////////////////
@@ -336,15 +467,25 @@ ghRailUnit::CreateModelNode(int coach) {
 //  return text.release();
 //}
 
+*********************/
+
 
 osg::Switch *
 ghRailUnit::GetModelSwitch(int coach) {
  return p_switch[coach];
 }
+void
+ghRailUnit::SetModelSwitch(int coach, bool status) {
+  p_switch[coach]->setChildValue( p_transform[coach] , status);
+}
 
 osgEarth::GeoTransform *
 ghRailUnit::GetModelTransform(int coach) {
  return p_transform[coach];
+}
+void
+ghRailUnit::SetModelPosition(int coach, osgEarth::GeoPoint point ) {
+  p_transform[coach]->setPosition(point);
 }
 
 osg::PositionAttitudeTransform *
@@ -1314,16 +1455,19 @@ ghRailUnit::_initLocomotiveArray(std::vector<int>  lsize) {
 }
   
 void
-ghRailUnit::_initLocomotiveModel(std::vector<std::string>  locomotive) {
+ghRailUnit::_initLocomotiveModel(std::string path,  std::vector<std::string>  locomotive) {
 
   p_models.reserve( (int)locomotive.size() );
   p_transform.reserve( (int)locomotive.size() );
   p_switch.reserve( (int)locomotive.size() );
   p_attitude.reserve( (int)locomotive.size() );
+  p_modelnode.reserve( (int)locomotive.size() );
   
   for (const std::string& uri : locomotive ) {
     ghRailModel loco;
-    loco.Setup(GEOGLYPH_ROOT_URI,uri);
+    std::string fullpath = path + GH_MODEL_PATH_SEPARATOR + GH_MODEL_FORMAT + GH_MODEL_PATH_SEPARATOR;
+    //loco.Setup(GEOGLYPH_ROOT_URI,uri);
+    loco.Setup(GEOGLYPH_ROOT_URI,fullpath,uri);
 
     p_models.push_back( loco );
     p_switch.push_back( new osg::Switch ); // initialize

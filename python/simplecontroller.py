@@ -84,7 +84,7 @@ remote_port = 57139
 socket_buffer_size = 16384
 show_socket_detail = True
 def about():
-    messagebox.showinfo("about", "simple osgearth_rail controller 0.6.5")
+    messagebox.showinfo("about", "simple osgearth_rail controller 0.7.5")
 
 def cpuload():
     global python_plathome
@@ -109,6 +109,7 @@ tracking_height = 200      # [m]
 polling_thread = None
 polling_socket_wait_second = 28
 polling_shm_wait_second = 1
+polling_thread_stop_signal = threading.Event()
 #############
 custom_auto_tracking = False
 #custom_auto_tracking_count = 11
@@ -398,11 +399,12 @@ def update_map_center(lat,lng):
     if mapredraw:
         map_widget.set_position(lat,lng)        
         
-def update_thread_socket():
+def update_thread_socket(stop_event):
     global field_isloaded
     global field_isrunning
     global polling_socket_wait_second
-    while True:
+
+    while not stop_event.is_set():
         if field_isloaded:
             if field_isrunning:
                 timestr = remote_socket.send("clock get time\n");
@@ -417,12 +419,12 @@ def update_thread_socket():
         else:
             break
 
-def update_thread_shm():
+def update_thread_shm(stop_event):
     global field_isloaded
     global field_isrunning
     global polling_shm_wait_second
 
-    while True:
+    while not stop_event.is_set():
         if field_isloaded:
             if field_isrunning:
                 update_shm_clock()
@@ -443,6 +445,7 @@ def server_initialize(fieldid):
     global remote_host
     global connect_mode
     global polling_thread
+    global polling_thread_stop_signal
 
     message = "field set " + fieldid + "\n"
     fieldresult = remote_socket.send(message);
@@ -470,10 +473,10 @@ def server_initialize(fieldid):
         
     if connect_mode == "shm":
         setup_shm()
-        polling_thread = threading.Thread(target=update_thread_shm)
+        polling_thread = threading.Thread(target=update_thread_shm, args=(polling_thread_stop_signal,))
         print (" use shared memory")
     else:
-        polling_thread = threading.Thread(target=update_thread_socket)
+        polling_thread = threading.Thread(target=update_thread_socket, args=(polling_thread_stop_signal,))
         print (" use socket only")
     field_isloaded = True
     polling_thread.start()
@@ -735,6 +738,47 @@ def server_connect_dialog():
     dialog.grab_set() # modal dialog
     root_tk.wait_window(dialog) # wait for close dialog
 
+def server_exit_close():
+    global polling_thread
+    global polling_thread_stop_signal
+    global field_isloaded
+    global connect_mode
+    global shm_time
+    global shm_train
+    global shm_camera
+    global polling_socket_wait_second
+    
+    field_isloaded = False
+
+    if polling_thread == None:
+        #print(threading.active_count())
+        print("exited")
+    else:
+        polling_thread_stop_signal.set()
+        polling_thread.join(timeout=polling_socket_wait_second)
+
+    if connect_mode == "shm":
+        shm_time.close()
+        shm_train.close()
+        shm_time.unlink()
+        shm_train.unlink()
+        for item in shm_camera:
+            shm_camera[item].close()
+            shm_camera[item].unlink()
+    
+    response = remote_socket.send("exit\n");
+    time.sleep(1)
+    remote_socket.close()
+    #messagebox.showinfo("3D view", " closing process..")
+    menu0.entryconfig("3D view open", state=tkinter.NORMAL)
+    menu0.entryconfig("3D view close", state=tkinter.DISABLED)
+    menu1.entryconfig("clock", state=tkinter.DISABLED)
+    menu1.entryconfig("speed", state=tkinter.DISABLED)
+    menu1.entryconfig("camera", state=tkinter.DISABLED)
+    menu_button_2.config(state=tkinter.DISABLED)
+    menu_button_3.config(state=tkinter.DISABLED)
+
+    
 def server_exit_dialog():
     global field_isloaded
     dialog = tkinter.Toplevel(root_tk)
@@ -742,19 +786,8 @@ def server_exit_dialog():
     dialog.title("3D view close")
 
     def on_exit_ok():
-        global field_isloaded
-        field_isloaded = False
-        response = remote_socket.send("exit\n");
-        remote_socket.close()
+        server_exit_close()
         dialog.destroy()
-        #messagebox.showinfo("3D view", " closing process..")
-        menu0.entryconfig("3D view open", state=tkinter.NORMAL)
-        menu0.entryconfig("3D view close", state=tkinter.DISABLED)
-        menu1.entryconfig("clock", state=tkinter.DISABLED)
-        menu1.entryconfig("speed", state=tkinter.DISABLED)
-        menu1.entryconfig("camera", state=tkinter.DISABLED)
-        menu_button_2.config(state=tkinter.DISABLED)
-        menu_button_3.config(state=tkinter.DISABLED)
 
     def on_exit_no():
         dialog.destroy()
@@ -1063,7 +1096,7 @@ def run_command():
     menu_button_3.config(state=tkinter.NORMAL)
 
 def pause_command():
-    global field_isrunningo
+    global field_isrunning
     field_isrunning = False
     response = remote_socket.send("pause\n");
     menu_button_2.config(state=tkinter.NORMAL)
@@ -1071,12 +1104,11 @@ def pause_command():
     
 def app_quit():
     global field_isloaded
-    field_isloaded = False
-    if polling_thread == None:
-        #print(threading.active_count())
-        print("exited")
-    else:
-        polling_thread.join()
+    
+    #field_isloaded = False
+    if field_isloaded:
+        server_exit_close()    
+
     root_tk.quit
     exit()
 

@@ -482,7 +482,7 @@ ghRail::Setup(std::string configname)
 			     tunit,
 			     p_route[routename2] );
     p_units[trainid2].SimulatePath( &p_time );
-    
+
   }
 
   //
@@ -533,7 +533,7 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
   for (auto it = p_units.begin(); it != p_units.end(); ++it) {
     std::string key = it->first;    
     int unitsize = p_units[key].GetLocomotiveModelSize();
-    
+
     for (int i = 0; i < unitsize; i++) {
 
       point = p_units[key].GetControlPoint(simulationTime,i);
@@ -546,9 +546,7 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
       if ( position_centric.x() == 0 && position_centric.y() == 0 ) {
 	//  Need not display train
 	if ( p_units[key].GetModelStatus(i) == GH_MODEL_STATUS_MAPPED ) {
-	  osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-	  osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);
-	  modelswitch->setChildValue(trans,false);
+	  p_units[key].SetModelSwitch(i,false);
 	  p_units[key].SetModelStatus(i,GH_MODEL_STATUS_REMOVED );
 	} else {
 	  // NOP
@@ -561,18 +559,17 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
 	  if ( p_units[key].GetModelStatus(i) < GH_MODEL_STATUS_LOADED ) {
 	    p_units[key].CreateModelNode(i);
 	    osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-	    osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);	    
-	    trans->setTerrain(_map->getTerrain());
 	    _map->addChild(modelswitch);
 	    p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	  } else {
-	    osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);	    
-	    trans->setPosition( _calcGeoPoint( _map->getMapSRS()->getGeographicSRS() , position_centric , key, simulationTime , i ) );
+	    p_units[key].SetModelPosition(i,
+					   _calcGeoPoint( position_centric , key, simulationTime , i )
+					   );	    
+	    
 	    osg::PositionAttitudeTransform *attitude = p_units[key].GetModelAttitude(i);
 	    attitude->setAttitude( point.getRotation() );
 	    if (  p_units[key].GetModelStatus(i) == GH_MODEL_STATUS_REMOVED ) {
-	      osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-	      modelswitch->setChildValue(trans,true);
+	      p_units[key].SetModelSwitch(i,true);
 	      p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	    }
 	  }
@@ -595,27 +592,24 @@ ghRail::Update( double simulationTime, osgEarth::MapNode* _map , const std::map<
 	    if ( p_units[key].GetModelStatus(i) < GH_MODEL_STATUS_LOADED ) {
 	      // NOP
 	    } else {
-	      osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-	      osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);
-	      modelswitch->setChildValue(trans,false);
+	      p_units[key].SetModelSwitch(i,false);
 	      p_units[key].SetModelStatus(i,GH_MODEL_STATUS_REMOVED );	      
 	    }
 	  } else {
 	    if ( p_units[key].GetModelStatus(i) < GH_MODEL_STATUS_LOADED ) {
 	      p_units[key].CreateModelNode(i);
 	      osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-	      osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);
-	      trans->setTerrain(_map->getTerrain());
 	      _map->addChild(modelswitch);
 	      p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	    } else {
-	      osgEarth::GeoTransform *trans = p_units[key].GetModelTransform(i);
-	      trans->setPosition( _calcGeoPoint( _map->getMapSRS()->getGeographicSRS() , position_centric , key, simulationTime , i ) );
+
+	      p_units[key].SetModelPosition(i,
+					    _calcGeoPoint( position_centric , key, simulationTime , i )
+					    );	    
 	      osg::PositionAttitudeTransform *attitude = p_units[key].GetModelAttitude(i);
 	      attitude->setAttitude( point.getRotation() );
 	      if (  p_units[key].GetModelStatus(i) == GH_MODEL_STATUS_REMOVED ) {
-		osg::Switch *modelswitch = p_units[key].GetModelSwitch(i);
-		modelswitch->setChildValue(trans,true);
+		p_units[key].SetModelSwitch(i,true);
 		p_units[key].SetModelStatus(i,GH_MODEL_STATUS_MAPPED );
 	      }
 	    }
@@ -834,7 +828,7 @@ ghRail::RemoveShm(std::string shmkeyname) {
 
 
 osgEarth::GeoPoint
-ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d position , std::string key, double simtime, int coach) {
+ghRail::_calcGeoPoint( osg::Vec3d position , std::string key, double simtime, int coach) {
   osgEarth::Ellipsoid WGS84;
   osg::Vec3d position_lnglat;
   osgEarth::GeoPoint geopoint;
@@ -845,12 +839,12 @@ ghRail::_calcGeoPoint( const osgEarth::SpatialReference* srs, osg::Vec3d positio
   if ( p_altmode == GH_ALTMODE_RELATIVE ) {
     osg::Vec3d pos = p_units[key].GetControlPointVector(simtime,coach);
     if ( pos.z() > 0 ) pos.z() = 0.0;
-    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), pos.z()*layerunit , osgEarth::ALTMODE_RELATIVE );
+    geopoint = osgEarth::GeoPoint(osgEarth::SpatialReference::get("wgs84"), position_lnglat.x(), position_lnglat.y(), pos.z()*layerunit , osgEarth::ALTMODE_RELATIVE );
   } else if ( p_altmode == GH_ALTMODE_ABSOLUTE ) {
-    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), position_lnglat.z(), osgEarth::ALTMODE_ABSOLUTE );
+    geopoint = osgEarth::GeoPoint(osgEarth::SpatialReference::get("wgs84"), position_lnglat.x(), position_lnglat.y(), position_lnglat.z(), osgEarth::ALTMODE_ABSOLUTE );
   } else {
     // GH_ALTMODE_CLAMP or Unknown
-    geopoint = osgEarth::GeoPoint(srs, position_lnglat.x(), position_lnglat.y(), 0, osgEarth::ALTMODE_RELATIVE );
+    geopoint = osgEarth::GeoPoint(osgEarth::SpatialReference::get("wgs84"), position_lnglat.x(), position_lnglat.y(), 0, osgEarth::ALTMODE_RELATIVE );
   }
 
   return geopoint;
@@ -1093,7 +1087,12 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y, d
   if ( name == GH_STRING_ROOT ) name = GH_WELCOME_MESSAGE;  
   traits->windowName = name;
   osg::ref_ptr<osg::GraphicsContext> gc = osg::GraphicsContext::createGraphicsContext( traits.get() );
-  if ( !gc ) return NULL;
+  if ( !gc ) {
+    std::cout<<"ghCreateView: Graphics Context Error"<<std::endl;
+    return NULL;
+  }
+  gc->getState()->setUseVertexAttributeAliasing(true);
+  //
   osg::ref_ptr<osg::Camera> camera = new osg::Camera;
   camera->setGraphicsContext( gc.get() );
   camera->setViewport( new osg::Viewport(0, 0, width, height) );
