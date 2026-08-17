@@ -1,6 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
-osgEarth Sample - OpenStreetMap
-
+	osgEarth Sample - OpenStreetMap
 	 Pseudo Textured Buildings version
 
 -->
@@ -23,19 +23,22 @@ osgEarth Sample - OpenStreetMap
         <styles>
 
            <library name="building_resources">
-                <url>https://earth.geoglyph.info/osgearth_rail_demo/buildings/catalog.xml</url>
+                <url>https://earth.geoglyph.info/osgearth_rail/buildings/catalog.xml</url>
             </library>
             <style type="text/css"><![CDATA[
                 poi {
                      icon-align: center-center;
                      icon-declutter: true;
                      text-content: feature.properties.name;
+		     text-encoding: utf-8;
+		     text-font: "fonts/NotoSansCJK-Regular.ttc";
+		     text-size: 32;
                      text-halo: #f5f8fa;
 		     text-color: #3d9ff5;
                      altitude-clamping: terrain;
                 }
                 
-                staion : poi {
+                station : poi {
                     select: feature.properties.railway === 'station';
                     icon: "data/railway-station-32.png";
                 }
@@ -72,15 +75,15 @@ osgEarth Sample - OpenStreetMap
                 building-wall {
                     skin-library:     building_resources;
                     skin-tags:        building;
-                    skin-random-seed: 1;
-		    fill: #b79e97;
+                    skin-random-seed: 41;
+		    render-transparent: false;
                 }
                 building-rooftop {
                     skin-library:     building_resources;
                     skin-tags:        rooftop;
                     skin-tiled:       true;
                     skin-random-seed: 1;
-		    fill: #c45c25;
+		    render-transparent: false;		    
                 }
                 ]]>
             </style>
@@ -100,41 +103,6 @@ osgEarth Sample - OpenStreetMap
             </script>
         </styles>
     </TiledFeatureModel>
- <!--
-    <TiledFeatureModel name="buildings alone" pickable="true" open="false">
-        <min_level>14</min_level>
-        <max_level>14</max_level>
-        <features>data:osm</features>
-        <additive>false</additive>
-        <styles>
-            <style type="text/css"><![CDATA[
-                building {
-                    select: 'building' in feature.properties;
-                    extrusion-height: getBuildingHeight();
-                    extrusion-flatten: true;
-                    extrusion-wall-gradient: 0.35;
-                    altitude-clamping: terrain;
-                    fill: #ffffff;
-                }
-                ]]>
-            </style>
-
-            <script><![CDATA[
-                function getBuildingHeight() {
-                    var h = 4.0 + (feature.id % 10);
-                    if ("height" in feature.properties)
-                        h = parseFloat(feature.properties['height'].replace('m',''));
-                    else if ("building:height" in feature.properties)
-                        h = parseFloat(feature.properties["building:height"].replace('m',''));
-                    else if ("building:levels" in feature.properties)
-                        h = parseFloat(feature.properties["building:levels"] * 4.0);
-                    return Math.max(h, 4.0);
-                }
-                ]]>
-            </script>
-        </styles>
-    </TiledFeatureModel>
--->    
 <!--
     <XYZImage name="OSM Imagery">
         <url>https://[abc].tile.openstreetmap.org/{z}/{x}/{y}.png</url>

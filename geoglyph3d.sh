@@ -17,7 +17,7 @@ case "$1" in
       if [ -e ${GFILE} ]; then
 	  rm ${GFILE}
       fi
-      build/osgearth_rail earth/osmrail.earth &
+      build/osgearth_rail earth/osmrail_buildings.earth &
       echo $! > ${GFILE}
       ;;
   stop)
@@ -40,7 +40,4 @@ case "$1" in
       exit 1
 esac
 exit 0
-
-#gdb --args build/osgearth_rail  earth/osmrail.earth
-#set follow-fork-mode child
 

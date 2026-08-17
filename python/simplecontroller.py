@@ -21,10 +21,7 @@
 import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'packages'))
 
-import socket
 import time
-from datetime import datetime
-import re
 import threading
 import tkinter
 import tkintermapview
@@ -39,6 +36,8 @@ import random
 import io
 import subprocess
 import importlib.util
+
+import socketcommand as sockcmd
 
 connect_mode = "socket"
 is_shm_library = False
@@ -84,7 +83,7 @@ remote_port = 57139
 socket_buffer_size = 16384
 show_socket_detail = True
 def about():
-    messagebox.showinfo("about", "simple osgearth_rail controller 0.7.5")
+    messagebox.showinfo("about", "simple osgearth_rail controller 0.7.6")
 
 def cpuload():
     global python_plathome
@@ -93,6 +92,12 @@ def cpuload():
     else:
         subprocess.Popen(["python3","cpusage.py"])
 
+
+
+######################################################
+        
+sockcmd.SetupSocket(socket_buffer_size,show_socket_detail)
+        
 ######################################################
 #
 #
@@ -119,46 +124,6 @@ custom_auto_tracking_times = 180
 custom_auto_tracking_windows = { "root" : "NONE" }
 #############
 
-class SocketClient():
-
-    def __init__(self,datasize,flag):
-        self.host = None
-        self.port = None
-        self.datasize = datasize
-        self.showtimestamp = flag
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
-        
-    def connect(self,host,port):
-        self.host = host
-        self.port = port
-        try:
-            self.socket.connect((host, port))
-            print('[{0}] server connect -> address : {1}:{2}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self.host, self.port) )
-            return True
-        except socket.error:
-            print('[{0}] server connect ERROR -> address : {1}:{2}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), self.host, self.port) )
-            return False
- 
-    def send(self,message):
-        if self.socket != None:
-            self.socket.send( message.encode('utf-8') )
-            if self.showtimestamp:
-                print('[{0}] Send:{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), message.rstrip()) )
-            rcv_data = self.socket.recv(self.datasize)
-            rcv_data = rcv_data.decode('utf-8').rstrip()
-            if self.showtimestamp:
-                print('[{0}] Recv:{1}'.format(datetime.now().strftime('%Y-%m-%d %H:%M:%S'), rcv_data) )
-            return re.split(r"\s+", rcv_data)
-    
-    def close(self):
-        if self.socket != None:        
-            self.socket.close()
-            self.socket = None
-             
-remote_socket = SocketClient(socket_buffer_size,show_socket_detail)
-
-##################################################################
-
 def isfloat(s):
     try:
         float(s)
@@ -174,19 +139,23 @@ def setup_shm():
     global shm_camera
     global remote_polling_second
 
-    shmmsg = remote_socket.send("shm set clock time\n")
-    if shmmsg[1] != "Accept" :
+    response = sockcmd.CommandShmSetClockTime()
+    if response[1] != "Accept":
+        return False        
+
+    shm_time = shared_memory.SharedMemory(name=response[6])
+
+    response = sockcmd.CommandShmSetTrainPosition()
+    if response[1] != "Accept" :
         return False
-    shm_time = shared_memory.SharedMemory(name=shmmsg[6])
-    shmmsg = remote_socket.send("shm set train position\n")
-    if shmmsg[1] != "Accept" :
+    
+    shm_train = shared_memory.SharedMemory(name=response[6])
+    shm_train_size_byte = int(response[7])
+
+    response = sockcmd.CommandShmSetCameraViewport("root")
+    if response[1] != "Accept" :
         return False
-    shm_train = shared_memory.SharedMemory(name=shmmsg[6])
-    shm_train_size_byte = int(shmmsg[7])
-    shmmsg = remote_socket.send("shm set camera root viewport\n")
-    if shmmsg[1] != "Accept" :
-        return False
-    shm_camera[ shmmsg[5] ] = shared_memory.SharedMemory(name=shmmsg[7])
+    shm_camera[ response[5] ] = shared_memory.SharedMemory(name=response[7])
     remote_polling_second = 1
     
 
@@ -225,22 +194,20 @@ def timetable_dialog(id, data):
 
 
 def setup_train_marker(tname,lat,lng):
-    message = "train icon " + tname + "\n"
-    msgstr = remote_socket.send(message)
-    if msgstr[1] == "Accept":
-        if 'http' in msgstr[5]:
-            imagedata = urlopen(msgstr[5])
+    response = sockcmd.CommandTrainIcon(tname)    
+    if response[1] == "Accept":
+        if 'http' in response[5]:
+            imagedata = urlopen(response[5])
             imageobject = Image.open(io.BytesIO(imagedata.read()))
             resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
             #image = ImageTk.PhotoImage(data=imagedata.read())
             image = ImageTk.PhotoImage(resized_image)
             markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image, command=click_train_marker )
     else:
-        print( msgstr )
+        print( response )
     
 def click_train_marker(marker):
-    message = "train timetable " + marker.text + "\n"
-    response = remote_socket.send(message)
+    response = sockcmd.CommandTrainTimetable(marker.text)    
     if response[1] == "Accept":
         train_id = response[4]
         train_timetable = " ".join(response[5:])
@@ -272,7 +239,7 @@ def is_same_tracking_id_in_windows(trainid):
 def update_socket_train():
     global trainid
 
-    response = remote_socket.send("train position all\n");
+    response = sockcmd.CommandTrainPosition("all")
     if response[1] != "Accept":
         return
     data = " ".join(response[5:])
@@ -302,8 +269,7 @@ def update_socket_viewport():
 
     map_widget.delete_all_polygon()
     for item in windows:
-        message = "camera get " + item + " viewport\n"        
-        response = remote_socket.send(message)
+        response = sockcmd.CommandCameraGetViewport(item)
         if response[1] == "Accept":
             data = " ".join(response[6:])
             positionlist = []
@@ -323,7 +289,6 @@ def update_shm_clock():
     global timelabel_var
 
     bytedata = bytes(shm_time.buf[:4])
-
     datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
     dhour = math.floor(datasec / 3600) ;
     dmin = math.floor( ( datasec - dhour * 3600 ) / 60) ;
@@ -344,7 +309,6 @@ def update_shm_train():
     global shm_train_size_byte
 
     bytedata = bytes(shm_train.buf[:shm_train_size_byte])
-
     offset = 0
     for icnt in range(0,shm_train_size_byte,48):
         if (offset+48) < shm_train_size_byte+1:
@@ -407,9 +371,9 @@ def update_thread_socket(stop_event):
     while not stop_event.is_set():
         if field_isloaded:
             if field_isrunning:
-                timestr = remote_socket.send("clock get time\n");
-                if timestr[1] == "Accept":
-                    timelabel_var.set(timestr[5])
+                response = sockcmd.CommandClockGetTime()
+                if response[1] == "Accept":
+                    timelabel_var.set(response[5])
                 update_socket_train()
                 update_socket_viewport()
                 custom_auto_tracking_camera()
@@ -447,9 +411,8 @@ def server_initialize(fieldid):
     global polling_thread
     global polling_thread_stop_signal
 
-    message = "field set " + fieldid + "\n"
-    fieldresult = remote_socket.send(message);
-    if fieldresult[1] != "Accept" :
+    response = sockcmd.CommandFieldSet(fieldid)
+    if response[1] != "Accept" :
         return False
     menu0.entryconfig("3D view open", state=tkinter.DISABLED)
     menu0.entryconfig("3D view close", state=tkinter.NORMAL)
@@ -459,17 +422,18 @@ def server_initialize(fieldid):
     menu1.entryconfig("manual input", state=tkinter.NORMAL)
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
-    time.sleep(3) # wait time for Setup 3D Viewer        
-    response = remote_socket.send("clock set time 12:00\n")
-    time.sleep(3) # wait time for Setup 3D Viewer        
-    response = remote_socket.send("config set altmode relative\n")
-    time.sleep(3) # wait time for Setup 3D Viewer                
-    trainid = remote_socket.send("field get train\n")
-    time.sleep(2) # wait time for Setup 3D Viewer                
-    if trainid[1] == "Accept":
-        del trainid[0:4]  # remove Geoglyph header string
-    else:
-        trainid = list()  # return error or wrong
+    time.sleep(3) # wait time for Setup 3D Viewer
+
+    response = sockcmd.CommandClockSetTime("12:00")
+    time.sleep(3) # wait time for Setup 3D Viewer
+    response = sockcmd.CommandConfigAltmode("relative")
+    time.sleep(3) # wait time for Setup 3D Viewer
+    response = sockcmd.CommandFieldGetTrain()
+    trainid = list()
+    time.sleep(2) # wait time for Setup 3D Viewer
+    if response[1] == "Accept":
+        del response[0:4]  # remove Geoglyph header string
+        trainid = response
         
     if connect_mode == "shm":
         setup_shm()
@@ -485,38 +449,30 @@ def server_initialize(fieldid):
 def server_multiview_script():
     global custom_auto_tracking
     global custom_auto_tracking_windows
-    
-    response = remote_socket.send("clock set time 9:10\n")
+
+    response = sockcmd.CommandClockSetTime("9:10")
     time.sleep(2)
-    response = remote_socket.send("clock set speed 0.0625\n") # 1/16
+    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16
     time.sleep(2)
-    message = "camera add camera1 1280 720 0.3\n"
-    response = remote_socket.send(message);
     windows["camera1"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera1",1280,720,0.3)
     time.sleep(2)
-    message = "camera set camera1 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera1",1280,710)
     time.sleep(2)
-    message = "camera add camera2 2560 720 0.3\n"
-    response = remote_socket.send(message);
     windows["camera2"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera2",2560,720,0.3)
     time.sleep(2)
-    message = "camera set camera2 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera2",1280,710)
     time.sleep(2)
-    message = "camera add camera3 0 1440 0.3\n"
-    response = remote_socket.send(message);
     windows["camera3"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera3",0,1440,0.3)
     time.sleep(2)
-    message = "camera set camera3 window 2560 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera3",2560,710)
     time.sleep(2)
-    message = "camera add camera4 2560 1440 0.3\n"
-    response = remote_socket.send(message);
     windows["camera4"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera4",2560,1440,0.3)
     time.sleep(2)
-    message = "camera set camera4 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera4",1280,710)
     time.sleep(2)
     run_command()
     custom_auto_tracking = True
@@ -529,30 +485,24 @@ def server_multiview_script_4views():
     global custom_auto_tracking
     global custom_auto_tracking_windows
     
-    response = remote_socket.send("clock set time 9:10\n")
+    response = sockcmd.CommandClockSetTime("9:10")
     time.sleep(2)
-    response = remote_socket.send("clock set speed 0.0625\n") # 1/16
+    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16    
     time.sleep(2)
-    message = "camera add camera1 0 1440 0.3\n"
-    response = remote_socket.send(message);
     windows["camera1"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera1",0,1440,0.3)
     time.sleep(2)
-    message = "camera set camera1 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera1",1280,710)
     time.sleep(2)
-    message = "camera add camera2 1280 1440 0.3\n"
-    response = remote_socket.send(message);
     windows["camera2"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera2",1280,1440,0.3)
     time.sleep(2)
-    message = "camera set camera2 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera2",1280,710)
     time.sleep(2)
-    message = "camera add camera3 2560 1440 0.3\n"
-    response = remote_socket.send(message);
     windows["camera3"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera3",2560,1440,0.3)
     time.sleep(2)
-    message = "camera set camera3 window 1280 710\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("camera3",1280,710)
     time.sleep(2)
     run_command()
     custom_auto_tracking = True
@@ -564,69 +514,46 @@ def server_multiview_script_8views():
     global custom_auto_tracking
     global custom_auto_tracking_windows    
     
-    response = remote_socket.send("clock set time 10:00\n")
+    response = sockcmd.CommandClockSetTime("10:00")
     time.sleep(2)
-    response = remote_socket.send("clock set speed 0.0625\n") # 1/16
+    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16
     time.sleep(2)
-    message = "camera set root window 960 510\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetWindow("root",960,510)
     time.sleep(2)
-    
-    message = "camera add camera1 2880 0 0.25\n"
-    response = remote_socket.send(message);
     windows["camera1"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera1",2880,0,0.25)
     time.sleep(2)
-    message = "camera set camera1 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera1",960,510)
     time.sleep(2)
-    message = "camera add camera2 0 540 0.25\n"
-    response = remote_socket.send(message);
     windows["camera2"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera2",0,540,0.25)
     time.sleep(2)
-    message = "camera set camera2 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera2",960,510)
     time.sleep(2)
-    message = "camera add camera3 2880 540 0.25\n"
-    response = remote_socket.send(message);
     windows["camera3"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera3",2880,540,0.25)
     time.sleep(2)
-    message = "camera set camera3 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera3",960,510)
     time.sleep(2)
-    message = "camera add camera4 0 1080 0.25\n"
-    response = remote_socket.send(message);
     windows["camera4"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera4",0,1080,0.25)
     time.sleep(2)
-    message = "camera set camera4 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera4",960,510)
     time.sleep(2)
-    message = "camera add camera5 960 1080 0.25\n"
-    response = remote_socket.send(message);
     windows["camera5"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera5",960,1080,0.25)
     time.sleep(2)
-    message = "camera set camera5 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera5",960,510)
     time.sleep(2)
-    message = "camera add camera6 1920 1080 0.25\n"
-    response = remote_socket.send(message);
     windows["camera6"] = "NONE"
+    response = sockcmd.CommandCameraAdd("camera6",1920,1080,0.25)
     time.sleep(2)
-    message = "camera set camera6 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera6",960,510)
     time.sleep(2)
-    message = "camera add camera7 2880 1080 0.25\n"
-    response = remote_socket.send(message);
-    windows["camera7"] = "NONE"
+    windows["camera7"] = "NONE"    
+    response = sockcmd.CommandCameraAdd("camera7",2880,1080,0.25)
     time.sleep(2)
-    message = "camera set camera7 window 960 510\n"
-    response = remote_socket.send(message);
-    
+    response = sockcmd.CommandCameraSetWindow("camera7",960,510)
     time.sleep(2)
     run_command()
     custom_auto_tracking = True
@@ -712,8 +639,8 @@ def server_connect_dialog():
                 messagebox.showinfo("Warning", "Invalid custom code")
                 return 
             fieldid = custom_code
-        
-        response = remote_socket.connect(remote_host, remote_port)
+
+        response = sockcmd.ConnectSocket(remote_host, remote_port)
         if response == False:
             dialog.destroy()
             messagebox.showinfo("Warning", "3D viewer Error")
@@ -765,10 +692,11 @@ def server_exit_close():
         for item in shm_camera:
             shm_camera[item].close()
             shm_camera[item].unlink()
-    
-    response = remote_socket.send("exit\n");
+
+            
+    sockcmd.CommandExit()
     time.sleep(1)
-    remote_socket.close()
+    sockcmd.CloseSocket()
     #messagebox.showinfo("3D view", " closing process..")
     menu0.entryconfig("3D view open", state=tkinter.NORMAL)
     menu0.entryconfig("3D view close", state=tkinter.DISABLED)
@@ -809,9 +737,9 @@ def clock_dialog():
     dialog.geometry("300x100")
     dialog.title("Clock")
 
-    timestr = remote_socket.send("clock get time\n");
-    if timestr[1] == "Accept":    
-        timestr2 = timestr[5].split(":")
+    response = sockcmd.CommandClockGetTime()
+    if response[1] == "Accept":    
+        timestr2 = response[5].split(":")
     else:
         dialog.destroy()
         return
@@ -819,8 +747,8 @@ def clock_dialog():
     def set_selected_time():
         hour = hour_spinbox.get()
         minute = minute_spinbox.get()
-        message = "clock set time " + hour + ":" + minute + "\n"
-        response = remote_socket.send(message);
+        response = sockcmd.CommandClockSetTime(str(hour) + ":" + str(minute))
+
     def close_selected_time():
         dialog.destroy()
 
@@ -852,23 +780,23 @@ def speed_dialog():
     dialog.geometry("300x180")
     dialog.title("Speed")
 
-    speedstr = remote_socket.send("clock get speed\n");
-    if speedstr[1] == "Accept":
-        speed = float(speedstr[5])
+    response = sockcmd.CommandClockGetSpeed()
+    if response[1] == "Accept":
+        speed = float(response[5])
     else:
         dialog.destroy()
         return
     
     def set_selected_speed():
-        message = "clock set speed "
+        speed = 0
         labeltxt = "x "
         if selected_value.get() == "fast":
-            message += str(scaleF.get()) + "\n"
+            speed = scaleF.get()
             labeltxt += str(scaleF.get())
         else:
-            message += str(scaleS.get()) + "\n"
+            speed = scaleS.get()
             labeltxt += str(scaleS.get())
-        response = remote_socket.send(message);            
+        response = sockcmd.CommandClockSetSpeed(speed)
         speedlabel_var.set(labeltxt)
     def close_selected_speed():
         dialog.destroy()
@@ -923,7 +851,7 @@ def manual_input_dialog():
     
     def on_button_ok():
         cmdret.delete(0, tkinter.END)
-        response = remote_socket.send( cmdtxt.get() );
+        response = sockcmd.CommandManual( cmdtxt.get() );
         cmdret.insert(0, " ".join(response) )
         cmdtxt.delete(0, tkinter.END)
 
@@ -975,16 +903,15 @@ def camera_add_dialog():
         s = s_scale.get()
         x = x_spinbox.get()
         y = y_spinbox.get()
-        message = "camera add " + cname + " " + str(x) + " " + str(y) + " " + str(s) + "\n"
-        response = remote_socket.send(message);
+
+        response = sockcmd.CommandCameraAdd(cname,x,y,s)
         dialog.destroy()
         if response[1] == "Accept":
             if connect_mode == "shm":
                 time.sleep(5) # wait time for Setup 3D Viewer
-                message = "shm set camera " + cname + " viewport\n"
-                shmmsg = remote_socket.send(message)
-                if shmmsg[1] == "Accept":
-                    shm_camera[ cname ] = shared_memory.SharedMemory(name=shmmsg[7])
+                response = sockcmd.CommandShmSetCameraViewport(cname)
+                if response[1] == "Accept":
+                    shm_camera[ cname ] = shared_memory.SharedMemory(name=response[7])
                     windows[cname] = "NONE"
 
     def on_button_no():
@@ -1008,28 +935,24 @@ def calculate_bearing(pointA, pointB):
 
 def set_camera_tracking_position(cameraid,trainid,distance,height):
 
-    message = "camera get " + cameraid + " position\n"
-    cameraret = remote_socket.send(message);
-    if cameraret[1] == "Accept" and isfloat(cameraret[6]):
-        camera_point = ( float(cameraret[7]), float(cameraret[6]) )
-        camera_alt = float(cameraret[8])
+    response = sockcmd.CommandCameraGetPosition(cameraid)
+    if response[1] == "Accept" and isfloat(response[6]):
+        camera_point = ( float(response[7]), float(response[6]) )
+        camera_alt = float(response[8])
     else:
         return
-    message = "train position " + trainid + "\n"
-    trainret = remote_socket.send(message);
-    if trainret[1] == "Accept" and isfloat(trainret[5]):
-        train_point = ( float(trainret[6]), float(trainret[5]) )
-        train_alt = float(trainret[7])
+    response = sockcmd.CommandTrainPosition(trainid)
+    if response[1] == "Accept" and isfloat(response[5]):
+        train_point = ( float(response[6]), float(response[5]) )
+        train_alt = float(response[7])
     else:
         return
     bearing = calculate_bearing(train_point,camera_point)
     distance_km = distance / 1000
     camera_alt = train_alt + height
     destination = geodesic(kilometers=distance_km).destination((train_point[0], train_point[1]), bearing )
-    message = "camera set " + cameraid + " position " + str(destination.longitude) + " " + str(destination.latitude) + " " + str(camera_alt) + "\n"
-    result = remote_socket.send(message);
-    message = "camera set " + cameraid + " tracking " + trainid + "\n"
-    response = remote_socket.send(message);
+    response = sockcmd.CommandCameraSetPosition(cameraid,destination.longitude,destination.latitude,camera_alt)
+    response = sockcmd.CommandCameraSetTracking(cameraid,trainid)
     
     
 def camera_tracking_dialog():
@@ -1045,8 +968,8 @@ def camera_tracking_dialog():
     def set_camera_tracking():
         c_id = ccombo.get()
         t_id = tcombo.get()
-        message = "camera set " + c_id + " tracking none\n"
-        response = remote_socket.send(message)
+
+        response = sockcmd.CommandCameraSetTracking(c_id,"none")
         if response[1] == "Accept":
             if t_id == "none":
                 return
@@ -1091,14 +1014,14 @@ def camera_tracking_dialog():
 def run_command():
     global field_isrunning
     field_isrunning = True
-    response = remote_socket.send("run\n");
+    response = sockcmd.CommandRunSimulation()
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
 
 def pause_command():
     global field_isrunning
     field_isrunning = False
-    response = remote_socket.send("pause\n");
+    response = sockcmd.CommandPauseSimulation()
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
     
@@ -1144,8 +1067,7 @@ def custom_auto_tracking_camera():
             while True:
                 newid = get_random_train_id()
                 if not is_same_tracking_id_in_windows(newid):
-                    message = "camera set " + item + " tracking none\n"
-                    response = remote_socket.send(message);
+                    response = sockcmd.CommandCameraSetTracking(item,"none")
                     if response[1] == "Accept":
                         set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
                         windows[item] = newid
