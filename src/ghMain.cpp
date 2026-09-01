@@ -58,7 +58,7 @@
 #include <sys/wait.h>
 #endif
 
-#define GH_SOCKET_RECEIVE_BUFFER_SIZE 1024
+#define GH_SOCKET_RECEIVE_BUFFER_SIZE 16384
 
 #define LC "[imgui] "
 
@@ -124,6 +124,7 @@ _calcElapsedTime(DateTime dt,double elapsesec) {
 ///////////////////////////////////////////////////////////////////
 //
 ghCommandQueue *ghQueue = (ghCommandQueue *)NULL ;
+ghCommandQueue *ghQueueCheck = (ghCommandQueue *)NULL ;
 int ghClient = 0;
 int listen_port = GH_DEFAULT_SOCKET_PORT;
 
@@ -274,92 +275,43 @@ double ghSimulationTime = 0.0;
 double ghElapsedSec = 10.0f;
 unsigned int ghScreenNum = 0;
 
-osg::Matrixd
-_calcCameraMatrix(ghCommandQueue *cmd,osg::Camera *cam) {
 
-  osgEarth::Ellipsoid WGS84;
-  osg::Vec3d eye, up, center;
-  //osg::Camera *cam = ghWindows[cmd->argstr[0]].view->getCamera();
-  cam->getViewMatrixAsLookAt( eye, center, up );
-  osg::Matrixd mat ;
-  if ( cmd->type == GH_COMMAND_CAMERA_SET_POS ) {
-    osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-  } else if ( cmd->type == GH_COMMAND_CAMERA_SET_LOOK ) {
-    osg::Vec3d center2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-  } else if ( cmd->type == GH_COMMAND_CAMERA_SET_UP ) {
-    osg::Vec3d up2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-    mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
-  } else {
-    // NOP
-    mat.makeLookAt( eye, center, up );
-  }
-
-  return mat;
-
-}
 
 void
 ghCheckCommand() {
 
-  if ( ghQueue == (ghCommandQueue *)NULL ) return;
-  if ( ghQueue->state == GH_QUEUE_STATE_RESULT_SEND ) {
-    if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
-      ghViewer->setDone(true);
-    }
-    return;
-  }
-  // All Command Already Finished
-
-  ghCommandQueue *cmdtmp = ghQueue;
-  ghCommandQueue *cmd = (ghCommandQueue *)NULL;
-
-  while (cmdtmp != (ghCommandQueue *)NULL)
-    {
-      if ( cmdtmp->state == GH_QUEUE_STATE_PART_EXECUTED ) {
-	cmd = cmdtmp;
-	break;
-      }
-      cmdtmp = cmdtmp->prev ;
-    }
+  ghCommandQueue *cmd = ghQueueCheck;
 
   if ( cmd == (ghCommandQueue *)NULL ) return;
+  int cmdcode = ghRailGetCommandID(cmd);
 
-  if ( cmd->state == GH_QUEUE_STATE_PART_EXECUTED ) {
-    if ( cmd->type == GH_COMMAND_CLOCK_SET_TIME ) {
-      ghElapsedSec = 0.0f;
-      cmd->state = GH_QUEUE_STATE_EXECUTED;
-    } else if ( cmd->type == GH_COMMAND_FIELD_SET  ) {
-      ghSky->setDateTime( ghRail3D->GetBaseDatetime());
-      ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
-      cmd->state = GH_QUEUE_STATE_EXECUTED;
-    } else if ( cmd->type == GH_COMMAND_CAMERA_SET_POS
-		|| cmd->type == GH_COMMAND_CAMERA_SET_LOOK
-		|| cmd->type == GH_COMMAND_CAMERA_SET_UP ) {
-      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
-	ghWindows[cmd->argstr[0]].view->getCameraManipulator()->setByInverseMatrix( _calcCameraMatrix(cmd,ghWindows[cmd->argstr[0]].view->getCamera()) );
-	cmd->state = GH_QUEUE_STATE_EXECUTED;
+  ////////////////////////////////////////////////
+  if ( cmdcode == GH_COMMAND_EXIT ) {
+    ghViewer->setDone(true);
+    cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_FIELD+GH_TYPE_SET) ) {
+    ghSky->setDateTime( ghRail3D->GetBaseDatetime());
+    ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
+    cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CLOCK+GH_TYPE_SET+GH_KEY_TIME) ) {
+    ghElapsedSec = 0.0f;
+    cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_ADD) ) {
+    if ( cmd->resultcode == GH_QUEUE_RETURN_CODE_SUCCESS ) { 
+      std::string camname = ghRailGetCommandName(cmd);
+      if ( ghWindows.count(camname) > 0 ) {
+	// NOP
+	// Same window name existed
       } else {
-	// Error Message
-	// Window name Not exist
-      }
-    } else if ( cmd->type == GH_COMMAND_CAMERA_ADD  ) {
-      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
-	// Error Message
-	// Same Window name
-	std::cout << "Same window name already exist "<<cmd->argstr[0]<<" list=";
-	for (const auto& [key, value] : ghWindows) {
-	  std::cout << key << " ";
-	}
-	std::cout << "."<<std::endl;
-      } else {
-	osgViewer::View* vtmp = ghCreateView(cmd->argstr[0],
+	float vec[4];
+	ghRailGetCommandFloatVector(cmd,&vec[0]);
+	osgViewer::View* vtmp = ghCreateView(camname,
 					     ghScreenNum,
-					     (unsigned int)cmd->argnum[0],
-					     (unsigned int)cmd->argnum[1],
-					     cmd->argnum[2] );
-	ghWindows.emplace(cmd->argstr[0],
+					     (unsigned int)vec[0],
+					     (unsigned int)vec[1],
+					     (unsigned int)vec[2],
+					     (unsigned int)vec[3] );
+	ghWindows.emplace(camname,
 			  ghWindow{
 			    vtmp,
 			    GH_COMMAND_CAMERA_UNTRACKING,
@@ -368,22 +320,30 @@ ghCheckCommand() {
 	ghViewer->addView( vtmp );
 	vtmp->setSceneData( ghNode3D );
       }
-      cmd->state = GH_QUEUE_STATE_EXECUTED;
-    } else if ( cmd->type == GH_COMMAND_CAMERA_REMOVE  ) {
-      if ( ghWindows.count(cmd->argstr[0]) > 0 ) {
-	// https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
-	ghWindows[cmd->argstr[0]].view->getCamera()->setNodeMask(0x0);
-	ghViewer->removeView( ghWindows[cmd->argstr[0]].view );
-	ghWindows.erase(cmd->argstr[0]);
-	cmd->state = GH_QUEUE_STATE_EXECUTED;
+    } else {
+      // NOP
+    }
+    cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_REMOVE) ) {
+    if ( cmd->resultcode == GH_QUEUE_RETURN_CODE_SUCCESS ) { 
+      // https://osg-users.openscenegraph.narkive.com/BKtcS0HA/adding-removing-views-from-compositeviewer
+      std::string camname = ghRailGetCommandName(cmd);
+      if ( ghWindows.count(camname) > 0 ) {
+	ghWindows[camname].view->getCamera()->setNodeMask(0x0);
+	ghViewer->removeView( ghWindows[camname].view );
+	ghWindows.erase(camname);
       } else {
-	// Error Message
-	// Window name Not exist
+	// NOP
+	// No name window
       }
     } else {
       // NOP
     }
+    cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else {
+    // NOP
   }
+  ////////////////////////////////////////////////
 
 }
 
@@ -405,45 +365,33 @@ public:
 #else      
       read(_sock, _buffer, GH_SOCKET_RECEIVE_BUFFER_SIZE);
 #endif
-      
+
       std::string command(_buffer);
       ghMutex.lock();      
-      if ( command.size() > GH_COMMAND_MIN_SIZE ) {
-	_cmdtmp = ghQueue;
-	ghQueue = ghRailInitCommandQueue(command);
-	if ( ghQueue != NULL ) {
-	  ghRailParseCommand(ghQueue);
-	  if ( ghQueue->type != GH_COMMAND_UNKNOWN ) {
-	    ghQueue->prev = _cmdtmp;
-	  } else {
-	    // NOP
-	  }
-	  //memset(_buffer, 0, sizeof(_buffer));
-	} else {
-	  ghQueue = _cmdtmp;
-	  //std::cout<<"Cannot allocate command queue"<<std::endl;
-	  // Error message ( cannot allocate command queue )
-	}
+
+      _cmdtmp = ghQueue;
+      ghQueue = ghRailInitCommandQueue(command);
+      if ( ghQueue != NULL ) {
+	ghQueue->prev = _cmdtmp;
       } else {
-	// Too short buffer Noise?
+	ghQueue = _cmdtmp;
       }
+
       if ( ghQueue ) {
-	if ( ghQueue->state == GH_QUEUE_STATE_PARSED ) {
+      	if ( ghQueue->status == GH_QUEUE_STATUS_RECEIVED ) {
 	  ghRailExecuteCommand(ghQueue,ghRail3D,ghSimulationTime,ghSky,ghWindows);
-	  if ( ghQueue->type == GH_COMMAND_EXIT || ghQueue->type == GH_COMMAND_CLOSE ) {
+	  
+	  if ( ghQueue->status == GH_QUEUE_STATUS_PART_EXECUTED && ghRailGetCommandID(ghQueue) == GH_COMMAND_EXIT ) {
+	    // receive thread loop exit..
 	    _running = false;
-	  } else {
-	    // NOP
-	    // debug check
-	    //for (auto& [key2, value2] : ghWindows ) {
-	    //  // Some check ..
-	    //}
 	  }
+	  
 	}
       } else {
 	// NOP
-	//std::cout<<"CommandQueue NULL="<<command<<std::endl;
+	std::cout<<"CommandQueue NULL="<< command <<std::endl;
       }
+
       ghMutex.unlock();
       memset(_buffer, 0, sizeof(_buffer));
     }
@@ -471,35 +419,34 @@ public:
       //std::cout << "Thread  is running." << std::endl;
       // Sleep for XX microseconds
       OpenThreads::Thread::microSleep(_waittime);
-
       ghCommandQueue *cmdtmp = ghQueue;
       ghCommandQueue *cmd = (ghCommandQueue *)NULL;
+      ghQueueCheck = (ghCommandQueue *)NULL ;
+      
       while (cmdtmp != (ghCommandQueue *)NULL)
 	{
-	  if ( cmdtmp->state == GH_QUEUE_STATE_EXECUTED ) {
+      	  if ( cmdtmp->status == GH_QUEUE_STATUS_EXECUTED ) {
 	    cmd = cmdtmp;
+	  }
+      	  if ( cmdtmp->status == GH_QUEUE_STATUS_PART_EXECUTED ) {
+	    ghQueueCheck = cmdtmp;
 	  }
 	  cmdtmp = cmdtmp->prev ;
 	}
+
       if ( cmd != (ghCommandQueue *)NULL ) {
 	ghMutex.lock();
-	if ( cmd->state == GH_QUEUE_STATE_EXECUTED ) {
-	  ghRailCreateResultMessage(cmd);
-	  const char* retmsg = cmd->resultmessage.c_str();
+      	if ( cmd->status== GH_QUEUE_STATUS_EXECUTED ) {
+	  std::string msg = ghRailCreateResultObject(cmd);
+	  //std::cout << "Thread send->" << msg << std::endl;
+	  const char* retmsg = msg.c_str();
 	  send(_sock, retmsg, std::strlen(retmsg), 0);
-	  cmd->state = GH_QUEUE_STATE_RESULT_SEND;
+	  cmd->status = GH_QUEUE_STATUS_RESULT_SEND;
 	} else {
-	  std::cout << ".";
+      	  //std::cout << ".";
 	  // NOP
-	  //  Unknown Error
-	  //std::cout << "Unknown command cmd=" << cmd << std::endl;
-	  //std::cout << cmd->argstr[0] << std::endl;
-	  //std::cout << cmd->argstr[1] << std::endl;  
-	  //std::cout << cmd->result << std::endl;    
-	  //std::cout << "             type=" << cmd->type << std::endl;
-	  //std::cout << "            state=" << cmd->state << std::endl;
 	}
-	ghMutex.unlock();
+      	ghMutex.unlock();
       }
     }
   }
@@ -605,7 +552,7 @@ ghMainRail(osg::ArgumentParser args)
       /***  Set window view ***/
       ghWindows.emplace(GH_STRING_ROOT,
 			ghWindow{
-			  ghCreateView(GH_STRING_ROOT,ghScreenNum,64,48,0.5),
+			  ghCreateView(GH_STRING_ROOT,ghScreenNum,64,48,1024,768),
 			  GH_COMMAND_CAMERA_UNTRACKING,
 			  ghSharedMemory{-1,GH_SHM_PATH,GH_SHM_TYPE_NONE,0,0,NULL}
 			});

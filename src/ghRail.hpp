@@ -53,13 +53,13 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.7.6"
+#define GH_APP_REVISION "0.8.6"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
 #define GH_DEFAULT_SOCKET_PORT 57139
 #define GH_MAX_SOCKET 3
-#define GH_SOCKET_SEND_WAIT 1000000 // 1 sec [microseconds]
+#define GH_SOCKET_SEND_WAIT 500000 // 0.5 sec [microseconds]
 
 #define GH_ELAPSED_THRESHOLD 1.0
 #define GH_SUN_AMBIENT 0.03
@@ -81,8 +81,8 @@
 #define GH_DEFAULT_DISPLAY_DISTANCE 5000.0 // [m]
 #define GH_MIN_DISPLAY_DISTANCE      100.0 // [m]
 
-#define GH_DEFAULT_MAX_WINDOW 8
-#define GH_DEFAULT_MIN_WINDOW 1
+#define GH_DEFAULT_MAX_CAMERA 8
+#define GH_DEFAULT_MIN_CAMERA 1
 
 #define GH_ALTMODE_CLAMP 0
 #define GH_ALTMODE_RELATIVE 1
@@ -140,7 +140,7 @@ struct ghWindow
   ghSharedMemory shm;
 };
 
-osgViewer::View* ghCreateView( std::string name , int screenNum , unsigned int x,unsigned int y ,double sizeratio );
+osgViewer::View* ghCreateView( std::string name , int screenNum , unsigned int x,unsigned int y ,unsigned int width,unsigned int height );
 void ghSetConfigWindow(ghWindow _win,std::string title,int x,int y,int width,int height);
 void ghGetConfigWindow(ghWindow _win,std::string title,int *ret);
 int ghInitShmWindow(int shmkey,ghSharedMemory *shm,std::string winname);
@@ -169,16 +169,20 @@ class ghRail
       void SetAltmode(int mode);
       double GetDisplayDistance();
       void SetDisplayDistance(double distance);
-      void SetMaxWindow(int wins);
-      int  GetMaxWindow();
+      void SetMaxCamera(int cams);
+      int  GetMaxCamera();
 
       std::string GetUnits();
+      int GetUnitsSize();
       std::string GetLines();
+      int GetLinesSize();
       std::string GetTimezoneStr();
       std::string GetDescription();
       bool SetTrainLabel(std::string trainid, bool flag);
+      int GetRunningTrainCount(double simtime);
       std::string GetTrainPosition(std::string trainid, double simtime);
       std::string GetTrainTimetable(std::string trainid);
+      int GetTrainTimetableRows(std::string trainid);
       std::string GetTrainIcon(std::string trainid);
       std::string GetTrainLine(std::string trainid);
       std::string GetTrainDistance(std::string trainid);      
@@ -211,8 +215,8 @@ class ghRail
       double p_min_clockspeed;
       int p_altmode;
       double p_displaydistance;
-      double p_max_window;
-      double p_min_window;
+      double p_max_camera;
+      double p_min_camera;
 
       ghRailTime p_time;
       ghRailJSON p_config;
@@ -237,7 +241,21 @@ class ghRail
     };
 
 
-std::vector<osg::Vec3d> _calcCameraViewpoints(osgViewer::View* _view);
+std::vector<osg::Vec3d> ghGetCameraViewpoints(osgViewer::View* _view);
+
+
+#define GH_STRING_NONE    "none"
+#define GH_STRING_ROOT    "root"
+#define GH_STRING_ALL     "all"
+#define GH_STRING_EXIT    "exit"
+#define GH_STRING_PLAY    "play"
+#define GH_STRING_PAUSE   "pause"
+#define GH_STRING_ON      "on"
+#define GH_STRING_OFF     "off"
+#define GH_STRING_CLAMP   "clamp"
+#define GH_STRING_RELATIVE "relative"
+#define GH_STRING_ABSOLUTE "absolute"
+
 
 #endif
 

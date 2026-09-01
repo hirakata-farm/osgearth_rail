@@ -23,9 +23,6 @@
 
 # include "ghString.hpp"
 # include "ghRail.hpp"
-#define GH_STRING_ROOT  "root"
-#define GH_STRING_NONE  "NONE"
-#define GH_STRING_ALL  "all"
 
 #ifdef _WINDOWS  
 // NOP
@@ -124,19 +121,19 @@ ghRail::GetDisplayDistance()
   return p_displaydistance;
 }
 void
-ghRail::SetMaxWindow(int wins)
+ghRail::SetMaxCamera(int cams)
 {
-  if ( wins < GH_DEFAULT_MAX_WINDOW ) {
-    p_max_window = GH_DEFAULT_MAX_WINDOW;
+  if ( cams < GH_DEFAULT_MAX_CAMERA ) {
+    p_max_camera = GH_DEFAULT_MAX_CAMERA;
   } else {
-    p_max_window = wins;
+    p_max_camera = cams;
   }
 }
 
 int
-ghRail::GetMaxWindow()
+ghRail::GetMaxCamera()
 {
-  return p_max_window;
+  return p_max_camera;
 }
 
 
@@ -148,9 +145,15 @@ ghRail::GetUnits()
   for (auto it = p_units.begin(); it != p_units.end(); ++it) {
     std::string key = it->first;    
     ret += key;
-    ret += " ";
+    ret += GH_RESULT_MSG_DELIMITER;
   }
   return ret;
+}
+
+int
+ghRail::GetUnitsSize()
+{
+  return p_units.size();
 }
 
 std::string
@@ -160,9 +163,14 @@ ghRail::GetLines()
   for (auto it = p_line.begin(); it != p_line.end(); ++it) {
     std::string key = it->first;    
     ret += key;
-    ret += " ";
+    ret += GH_RESULT_MSG_DELIMITER;
   }
   return ret;
+}
+int
+ghRail::GetLinesSize()
+{
+  return p_line.size();
 }
 
 std::string
@@ -198,6 +206,27 @@ ghRail::SetTrainLabel(std::string trainid, bool flag)
   }
 }
 
+int
+ghRail::GetRunningTrainCount(double simtime)
+{
+  
+  osg::AnimationPath::ControlPoint point;
+  osg::Vec3 position_centric;
+  int coach = 0;
+  int count = 0;
+  for (auto it = p_units.begin(); it != p_units.end(); ++it) {
+    std::string key = it->first;    
+    point = p_units[key].GetControlPoint(simtime,coach);
+    position_centric = point.getPosition();
+    if ( position_centric.x() == 0 && position_centric.y() == 0 ) {
+      // NOP
+    } else {
+      count ++;
+    }
+  }
+  return count;
+}
+
 std::string
 ghRail::GetTrainPosition(std::string trainid, double simtime)
 {
@@ -223,33 +252,35 @@ ghRail::GetTrainPosition(std::string trainid, double simtime)
 	if ( isfirst ) {
 	  isfirst = false;
 	} else {
-	  ret += ",";
+	  ret += GH_RESULT_MSG_DELIMITER;
 	}
 	ret += key;
-	ret += " ";
+	ret += GH_RESULT_MSG_DELIMITER;
 	ret += std::to_string(position_lnglat.x());
-	ret += " ";
+	ret += GH_RESULT_MSG_DELIMITER;
 	ret += std::to_string(position_lnglat.y());
-	ret += " ";
+	ret += GH_RESULT_MSG_DELIMITER;
 	ret += std::to_string(position_lnglat.z());
       }
     }
   } else {
     if ( p_units.count(trainid) < 1 ) {
       // No Units
-      ret += "Not found";
+      //ret = " not found";
+      ret = GH_ERROR_MSG_NOT_FOUND;
     } else {
       point = p_units[trainid].GetControlPoint(simtime,coach);
       position_centric = point.getPosition();
       if ( position_centric.x() == 0 && position_centric.y() == 0 ) {
-	ret += "Not running ";
-	ret += std::to_string(simtime);
+	//ret = "Not_running";
+	//ret += std::to_string(simtime);
+	ret = GH_ERROR_MSG_NOT_RUNNING;
       } else {
 	position_lnglat = WGS84.geocentricToGeodetic(position_centric);
 	ret += std::to_string(position_lnglat.x());
-	ret += " ";
+	ret += GH_RESULT_MSG_DELIMITER;
 	ret += std::to_string(position_lnglat.y());
-	ret += " ";
+	ret += GH_RESULT_MSG_DELIMITER;
 	ret += std::to_string(position_lnglat.z());
       }
     }
@@ -262,21 +293,35 @@ ghRail::GetTrainTimetable(std::string trainid)
   std::string ret = " ";
   if ( p_units.count(trainid) < 1 ) {
     // No Units
-    ret += "Not found";
+    //ret += "Not found";
+    ret = GH_ERROR_MSG_NOT_FOUND;
   } else {
     ret += p_units[trainid].GetTimetable();
   }
   return ret;
 }
+
+int
+ghRail::GetTrainTimetableRows(std::string trainid)
+{
+  if ( p_units.count(trainid) < 1 ) {
+    return -1;
+  } else {
+    return p_units[trainid].GetTimetableRows();
+  }
+}
+
+
 std::string
 ghRail::GetTrainIcon(std::string trainid)
 {
   std::string ret = " ";
   if ( p_units.count(trainid) < 1 ) {
     // No Units
-    ret += "Not found";
+    //ret += "Not found";
+    ret = GH_ERROR_MSG_NOT_FOUND;
   } else {
-    ret += p_units[trainid].GetMarkerUri();
+    ret = p_units[trainid].GetMarkerUri();
   }
   return ret;
 }
@@ -286,7 +331,8 @@ ghRail::GetTrainLine(std::string trainid)
   std::string ret = " ";
   if ( p_units.count(trainid) < 1 ) {
     // No Units
-    ret += "Not found";
+    //ret += "Not found";
+    ret = GH_ERROR_MSG_NOT_FOUND;
   } else {
     ret += p_units[trainid].GetLineInfo();
   }
@@ -298,7 +344,8 @@ ghRail::GetTrainDistance(std::string trainid)
   std::string ret = " ";
   if ( p_units.count(trainid) < 1 ) {
     // No Units
-    ret += "Not found";
+    //ret += "Not found";
+    ret = GH_ERROR_MSG_NOT_FOUND;
   } else {
     ret += p_units[trainid].GetDistanceInfo();
   }
@@ -325,8 +372,8 @@ ghRail::Init()
   p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
   p_altmode = GH_DEFAULT_ALTMODE;
   p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
-  p_max_window = GH_DEFAULT_MAX_WINDOW;
-  p_min_window = GH_DEFAULT_MIN_WINDOW;
+  p_max_camera = GH_DEFAULT_MAX_CAMERA;
+  p_min_camera = GH_DEFAULT_MIN_CAMERA;
   p_shm_clock.key = -1;
   p_shm_train.key = -1;  
 
@@ -496,8 +543,8 @@ ghRail::Setup(std::string configname)
   p_min_clockspeed = GH_DEFAULT_MIN_CLOCK_SPEED;
   p_altmode = GH_DEFAULT_ALTMODE;
   p_displaydistance = GH_DEFAULT_DISPLAY_DISTANCE;
-  p_max_window = GH_DEFAULT_MAX_WINDOW;
-  p_min_window = GH_DEFAULT_MIN_WINDOW;
+  p_max_camera = GH_DEFAULT_MAX_CAMERA;
+  p_min_camera = GH_DEFAULT_MIN_CAMERA;
   p_shm_clock.key = -1;
   p_shm_train.key = -1;  
 
@@ -959,7 +1006,7 @@ ghRail::_updateShmTrainPosition(int cnt,std::string strtrain,osg::Vec3d position
 void
 ghRail::_updateShmCameraViewport(osgViewer::View* _view,ghSharedMemory shm) {
   if ( shm.key < 0 ) return;
-  std::vector<osg::Vec3d> points = _calcCameraViewpoints(_view);
+  std::vector<osg::Vec3d> points = ghGetCameraViewpoints(_view);
   // points max 12
   double data[2];
   double *ptr = (double *)shm.addr;
@@ -989,7 +1036,7 @@ ghRail::_getMinimumDistanceFromCamera(const std::map<std::string, ghWindow>& _wi
 }
   
 std::vector<osg::Vec3d>
-_calcCameraViewpoints(osgViewer::View* _view) {
+ghGetCameraViewpoints(osgViewer::View* _view) {
 
   osg::Matrixd proj = _view->getCamera()->getProjectionMatrix();
   osg::Matrixd mv = _view->getCamera()->getViewMatrix();
@@ -1063,7 +1110,7 @@ _calcCameraViewpoints(osgViewer::View* _view) {
 }
 
 osgViewer::View*
-ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y, double sizeratio) {
+ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y, unsigned int width,unsigned int height) {
   unsigned int screen_width = 1024; // Default size
   unsigned int screen_height = 768; // Default size
   osg::GraphicsContext::WindowingSystemInterface* wsi = osg::GraphicsContext::getWindowingSystemInterface();
@@ -1072,16 +1119,23 @@ ghCreateView( std::string name, int screenNum , unsigned int x,unsigned int y, d
 
   if ( x > screen_width ) x = screen_width;
   if ( y > screen_height ) y = screen_height;
-  
-  unsigned int width = (unsigned int)floor(screen_width*sizeratio);
-  unsigned int height = (unsigned int)floor(screen_height*sizeratio);
+
+  unsigned int swidth = width;
+  unsigned int sheight = height;
+
+  if ( width > (unsigned int)floor(screen_width*0.8) ) {
+    swidth = (unsigned int)floor(screen_width*0.8);
+  }
+  if ( height > (unsigned int)floor(screen_height*0.8) ) {
+    sheight = (unsigned int)floor(screen_height*0.8);
+  }
 
   osg::ref_ptr<osg::GraphicsContext::Traits> traits = new osg::GraphicsContext::Traits;
   traits->screenNum = screenNum;
   traits->x = x;
   traits->y = y;
-  traits->width = width;
-  traits->height = height;
+  traits->width = swidth;
+  traits->height = sheight;
   traits->windowDecoration = true;
   traits->doubleBuffer = true;
   if ( name == GH_STRING_ROOT ) name = GH_WELCOME_MESSAGE;  

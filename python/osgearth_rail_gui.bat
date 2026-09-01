@@ -7,5 +7,5 @@ REM pip install tkintermapview -t packages
 REM pip install geopy -t packages
 REM pip install Pillow -t packages --upgrade
 
-python.exe simplecontroller.py
+python.exe osgearth_rail_gui.py
 

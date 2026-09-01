@@ -33,6 +33,23 @@
 #define MAX_FILE_LENGTH 200000
 
 
+
+#define GH_RESULT_MSG_DELIMITER       ','
+#define GH_ERROR_MSG_UNKNOWN_COMMAND  " unknown command"
+#define GH_ERROR_MSG_DATA_NOT_LOADED  " data not loaded"
+#define GH_ERROR_MSG_CANNOT_LOAD      " can not load"
+#define GH_ERROR_MSG_CANNOT_GET       " can not get"
+#define GH_ERROR_MSG_CANNOT_ALLOCATE  " can not allocate"
+#define GH_ERROR_MSG_SIZE_ERROR       " wrong size"
+#define GH_ERROR_MSG_NOT_FOUND        " not found"
+#define GH_ERROR_MSG_NOT_RUNNING      " not running"
+#define GH_ERROR_MSG_ALREADY_EXIST    " already exist"
+#define GH_ERROR_MSG_ALREADY_LOADED   " already loaded"
+#define GH_ERROR_MSG_STRING_RESERVED  " string reserved"
+#define GH_ERROR_MSG_STRING_TRACKING  " not set , beacuse under tracking"
+
+
+
 //
 // ghRailJSON  Class 
 //

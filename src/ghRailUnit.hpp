@@ -120,6 +120,7 @@ class ghRailUnit
       std::string GetModelUri(int coach);
       void SetModelLabel(bool flag);
       std::string GetTimetable();
+      int GetTimetableRows();
       int GetLocomotiveModelSize();
 
       void CreateModelNode(int coach);

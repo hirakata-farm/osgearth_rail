@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 #
-#  simple osgearth_rail controller
+#  osgearth_rail_gui
 #
 #   Copyright (C) 2025-2026 Yuki Osada
 #  This software is released under the BSD License, see LICENSE.
@@ -34,10 +34,9 @@ import math
 import struct
 import random
 import io
+import json
 import subprocess
 import importlib.util
-
-import socketcommand as sockcmd
 
 connect_mode = "socket"
 is_shm_library = False
@@ -47,6 +46,8 @@ if os.name == "nt":
 else:
     python_plathome = "linux"
 
+default_host = "localhost"
+
 ######################################################
 #
 #  Check for Shared Memory Library
@@ -54,8 +55,6 @@ else:
 
 def is_module_available(module_name: str) -> bool:
     return importlib.util.find_spec(module_name) is not None
-
-default_host = "localhost"
 
 #
 # check shared_memory module
@@ -72,6 +71,56 @@ else:
     
 ######################################################
 #
+#   Sub functions
+#
+#
+def about():
+    messagebox.showinfo("about", "osgearth_rail_gui 0.8.6")
+
+def cpuload():
+    global python_plathome
+    if python_plathome == "win64":
+        subprocess.Popen(["python.exe","cpusage.py"])  # for Windows
+    else:
+        subprocess.Popen(["python3","cpusage.py"])
+        
+def sockcmd_initialize(host,port):
+    global python_plathome
+    global cmdp
+    if python_plathome == "win64":
+        cmdp = subprocess.Popen(
+            ["python.exe","osgearth_rail_command.py","-t",host,"-p",str(port),"-m","json"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1 )
+    else:
+        cmdp = subprocess.Popen(
+            ["./osgearth_rail_command.py","-t",host,"-p",str(port),"-m","json"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1 )
+        
+    output0 = cmdp.stdout.readline()
+    output1 = cmdp.stdout.readline()
+    output2 = cmdp.stdout.readline()
+    return output1.split(" ")
+
+def sockcmd(command):
+    global cmdp
+    cmdp.stdin.write(command)
+    cmdp.stdin.flush()
+    output = cmdp.stdout.readline().replace("'", '"')
+    #print(output)
+    return json.loads(output)
+
+        
+######################################################
+#
+#
 #  Global Settings
 #
 main_window_width = 1024
@@ -82,24 +131,6 @@ remote_host = default_host
 remote_port = 57139
 socket_buffer_size = 16384
 show_socket_detail = True
-def about():
-    messagebox.showinfo("about", "simple osgearth_rail controller 0.7.6")
-
-def cpuload():
-    global python_plathome
-    if python_plathome == "win64":
-        subprocess.Popen(["python.exe","cpusage.py"])  # for Windows
-    else:
-        subprocess.Popen(["python3","cpusage.py"])
-
-
-
-######################################################
-        
-sockcmd.SetupSocket(socket_buffer_size,show_socket_detail)
-        
-######################################################
-#
 #
 field_isloaded = False
 field_isrunning = False
@@ -139,29 +170,29 @@ def setup_shm():
     global shm_camera
     global remote_polling_second
 
-    response = sockcmd.CommandShmSetClockTime()
-    if response[1] != "Accept":
+    response = sockcmd("shm set clock time\n");
+    if response["status"] != 1:
         return False        
 
-    shm_time = shared_memory.SharedMemory(name=response[6])
+    shm_time = shared_memory.SharedMemory(name=response["result"][0])
 
-    response = sockcmd.CommandShmSetTrainPosition()
-    if response[1] != "Accept" :
+    response = sockcmd("shm set train position\n")
+    if response["status"] != 1:
         return False
     
-    shm_train = shared_memory.SharedMemory(name=response[6])
-    shm_train_size_byte = int(response[7])
+    shm_train = shared_memory.SharedMemory(name=response["result"][0])
+    shm_train_size_byte = int(response["result"][1])
 
-    response = sockcmd.CommandShmSetCameraViewport("root")
-    if response[1] != "Accept" :
+    response = sockcmd("shm set camera root viewport\n")
+    if response["status"] != 1:
         return False
-    shm_camera[ response[5] ] = shared_memory.SharedMemory(name=response[7])
+
+    shm_camera[ "root" ] = shared_memory.SharedMemory(name=response["result"][0])
     remote_polling_second = 1
     
 
-def timetable_dialog(id, data):
+def timetable_dialog(id, tablelist):
 
-    tablelist = data.split(",")
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x400")
@@ -194,10 +225,10 @@ def timetable_dialog(id, data):
 
 
 def setup_train_marker(tname,lat,lng):
-    response = sockcmd.CommandTrainIcon(tname)    
-    if response[1] == "Accept":
-        if 'http' in response[5]:
-            imagedata = urlopen(response[5])
+    response = sockcmd("train icon " + tname + "\n")    
+    if response["status"] == 1:
+        if 'http' in response["result"][0]:
+            imagedata = urlopen(response["result"][0])
             imageobject = Image.open(io.BytesIO(imagedata.read()))
             resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
             #image = ImageTk.PhotoImage(data=imagedata.read())
@@ -207,11 +238,11 @@ def setup_train_marker(tname,lat,lng):
         print( response )
     
 def click_train_marker(marker):
-    response = sockcmd.CommandTrainTimetable(marker.text)    
-    if response[1] == "Accept":
-        train_id = response[4]
-        train_timetable = " ".join(response[5:])
-        timetable_dialog( train_id, train_timetable.rstrip(',') )
+    response = sockcmd("train timetable " + marker.text + "\n")
+    if response["status"] == 1:
+        train_id = marker.text
+        train_timetable = response["result"]
+        timetable_dialog( train_id, train_timetable )
 
 def get_random_train_id():
     global trainid
@@ -239,24 +270,24 @@ def is_same_tracking_id_in_windows(trainid):
 def update_socket_train():
     global trainid
 
-    response = sockcmd.CommandTrainPosition("all")
-    if response[1] != "Accept":
+    response = sockcmd("train position all\n")
+    if response["status"] != 1:
         return
-    data = " ".join(response[5:])
-    markerlist = data.split(",")
+    data = response["result"]
+    train_lst = data[::4]
+    train_lng = data[1::4]
+    train_lat = data[2::4]
+    trainsize = len(train_lst)
     for item in trainid:
         existflag = False
-        for updatemarker in markerlist:
-            markerdata = updatemarker.split(" ")
-            trainname = markerdata[0]
-            if trainname == item:
-                lng = float(markerdata[1])
-                lat = float(markerdata[2])
-                if trainname in markers:
-                    markers[trainname].set_position(lat,lng)
+        for i in range(trainsize):
+            if train_lst[i] == item:
+                lng = float(train_lng[i])
+                lat = float(train_lat[i])
+                if train_lst[i] in markers:
+                    markers[train_lst[i]].set_position(lat,lng)
                 else:
-                    if len(trainname) > 1:
-                        setup_train_marker(trainname,lat,lng)
+                    setup_train_marker(train_lst[i],lat,lng)
                 existflag = True
                 break
         if existflag == False:
@@ -269,19 +300,18 @@ def update_socket_viewport():
 
     map_widget.delete_all_polygon()
     for item in windows:
-        response = sockcmd.CommandCameraGetViewport(item)
-        if response[1] == "Accept":
-            data = " ".join(response[6:])
+        response = sockcmd("camera get " + item + " viewport\n")
+        if response["status"] == 1 and response["size"] > 5:
+            data = response["result"]
+            view_lng = data[::2]
+            view_lat = data[1::2]
+            viewsize = len(view_lng)
             positionlist = []
-            pointlist = data.split(",")
-            for point in pointlist:
-                pointdata = point.split(" ")
-                if len(pointdata) > 1:
-                    lng = float(pointdata[0])
-                    lat = float(pointdata[1])
-                    positionlist.append((lat,lng))
-            if len(positionlist) > 3:
-                viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
+            for i in range(viewsize):
+                lng = float(view_lng[i])
+                lat = float(view_lat[i])
+                positionlist.append((lat,lng))
+            viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
 
 
 def update_shm_clock():
@@ -371,9 +401,12 @@ def update_thread_socket(stop_event):
     while not stop_event.is_set():
         if field_isloaded:
             if field_isrunning:
-                response = sockcmd.CommandClockGetTime()
-                if response[1] == "Accept":
-                    timelabel_var.set(response[5])
+                response = sockcmd("clock get time\n")
+                if response["status"] == 1:
+                    timestr = response["result"]
+                    timelabel_var.set(timestr[0]+":"+timestr[1])
+                else:
+                    return
                 update_socket_train()
                 update_socket_viewport()
                 custom_auto_tracking_camera()
@@ -411,8 +444,8 @@ def server_initialize(fieldid):
     global polling_thread
     global polling_thread_stop_signal
 
-    response = sockcmd.CommandFieldSet(fieldid)
-    if response[1] != "Accept" :
+    response = sockcmd("field set " + fieldid + "\n");
+    if response["status"] != 1 :
         return False
     menu0.entryconfig("3D view open", state=tkinter.DISABLED)
     menu0.entryconfig("3D view close", state=tkinter.NORMAL)
@@ -424,16 +457,12 @@ def server_initialize(fieldid):
     menu_button_3.config(state=tkinter.DISABLED)
     time.sleep(3) # wait time for Setup 3D Viewer
 
-    response = sockcmd.CommandClockSetTime("12:00")
+    response = sockcmd("clock set time 12:00\n")
     time.sleep(3) # wait time for Setup 3D Viewer
-    response = sockcmd.CommandConfigAltmode("relative")
+    response = sockcmd("config set altmode relative\n")
     time.sleep(3) # wait time for Setup 3D Viewer
-    response = sockcmd.CommandFieldGetTrain()
-    trainid = list()
-    time.sleep(2) # wait time for Setup 3D Viewer
-    if response[1] == "Accept":
-        del response[0:4]  # remove Geoglyph header string
-        trainid = response
+    response = sockcmd("field get train\n")
+    trainid = response["result"]
         
     if connect_mode == "shm":
         setup_shm()
@@ -450,118 +479,26 @@ def server_multiview_script():
     global custom_auto_tracking
     global custom_auto_tracking_windows
 
-    response = sockcmd.CommandClockSetTime("9:10")
+    response = sockcmd("clock set time 9:10\n")
     time.sleep(2)
-    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16
+    response = sockcmd("clock set speed 0.0625\n") # 1/16
     time.sleep(2)
     windows["camera1"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera1",1280,720,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera1",1280,710)
+    response = sockcmd("camera add camera1 1280 720 1280 710\n")
     time.sleep(2)
     windows["camera2"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera2",2560,720,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera2",1280,710)
+    response = sockcmd("camera add camera2 2560 720 1280 710\n")
     time.sleep(2)
     windows["camera3"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera3",0,1440,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera3",2560,710)
+    response = sockcmd("camera add camera3 0 1440 2560 710\n")
     time.sleep(2)
     windows["camera4"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera4",2560,1440,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera4",1280,710)
+    response = sockcmd("camera add camera4 2560 1440 1280 710\n")
     time.sleep(2)
     run_command()
     custom_auto_tracking = True
     custom_auto_tracking_windows = { "camera1" : "NONE" , "camera2" : "NONE", "camera3" : "NONE", "camera4" : "NONE" }
-
-
     menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
-
-def server_multiview_script_4views():
-    global custom_auto_tracking
-    global custom_auto_tracking_windows
-    
-    response = sockcmd.CommandClockSetTime("9:10")
-    time.sleep(2)
-    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16    
-    time.sleep(2)
-    windows["camera1"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera1",0,1440,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera1",1280,710)
-    time.sleep(2)
-    windows["camera2"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera2",1280,1440,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera2",1280,710)
-    time.sleep(2)
-    windows["camera3"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera3",2560,1440,0.3)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera3",1280,710)
-    time.sleep(2)
-    run_command()
-    custom_auto_tracking = True
-    custom_auto_tracking_windows = { "camera1" : "NONE" , "camera2" : "NONE", "camera3" : "NONE" }
-    
-    menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
-
-def server_multiview_script_8views():
-    global custom_auto_tracking
-    global custom_auto_tracking_windows    
-    
-    response = sockcmd.CommandClockSetTime("10:00")
-    time.sleep(2)
-    response = sockcmd.CommandClockSetSpeed(0.0625) # 1/16
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("root",960,510)
-    time.sleep(2)
-    windows["camera1"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera1",2880,0,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera1",960,510)
-    time.sleep(2)
-    windows["camera2"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera2",0,540,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera2",960,510)
-    time.sleep(2)
-    windows["camera3"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera3",2880,540,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera3",960,510)
-    time.sleep(2)
-    windows["camera4"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera4",0,1080,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera4",960,510)
-    time.sleep(2)
-    windows["camera5"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera5",960,1080,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera5",960,510)
-    time.sleep(2)
-    windows["camera6"] = "NONE"
-    response = sockcmd.CommandCameraAdd("camera6",1920,1080,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera6",960,510)
-    time.sleep(2)
-    windows["camera7"] = "NONE"    
-    response = sockcmd.CommandCameraAdd("camera7",2880,1080,0.25)
-    time.sleep(2)
-    response = sockcmd.CommandCameraSetWindow("camera7",960,510)
-    time.sleep(2)
-    run_command()
-    custom_auto_tracking = True
-    custom_auto_tracking_windows = { "camera1" : "NONE" , "camera2" : "NONE", "camera3" : "NONE","camera4" : "NONE" , "camera5" : "NONE", "camera6" : "NONE", "camera7" : "NONE" }
-    
-    menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
-
-
 
     
 #####################################################################
@@ -640,8 +577,8 @@ def server_connect_dialog():
                 return 
             fieldid = custom_code
 
-        response = sockcmd.ConnectSocket(remote_host, remote_port)
-        if response == False:
+        response = sockcmd_initialize(remote_host, remote_port)
+        if response[1] != "OK":
             dialog.destroy()
             messagebox.showinfo("Warning", "3D viewer Error")
             return
@@ -694,9 +631,10 @@ def server_exit_close():
             shm_camera[item].unlink()
 
             
-    sockcmd.CommandExit()
-    time.sleep(1)
-    sockcmd.CloseSocket()
+    #sockcmd.CommandExit()
+    sockcmd("exit\n")
+    #time.sleep(1)
+    #sockcmd.CloseSocket()
     #messagebox.showinfo("3D view", " closing process..")
     menu0.entryconfig("3D view open", state=tkinter.NORMAL)
     menu0.entryconfig("3D view close", state=tkinter.DISABLED)
@@ -737,31 +675,30 @@ def clock_dialog():
     dialog.geometry("300x100")
     dialog.title("Clock")
 
-    response = sockcmd.CommandClockGetTime()
-    if response[1] == "Accept":    
-        timestr2 = response[5].split(":")
-    else:
+    response = sockcmd("clock get time\n")
+    if response["status"] != 1:
         dialog.destroy()
         return
+    timestr = response["result"]
     
     def set_selected_time():
         hour = hour_spinbox.get()
         minute = minute_spinbox.get()
-        response = sockcmd.CommandClockSetTime(str(hour) + ":" + str(minute))
+        response = sockcmd("clock set time " + str(hour) + ":" + str(minute) + "\n")
 
     def close_selected_time():
         dialog.destroy()
 
     # Hour Spinbox
     hour_spinbox = ttk.Spinbox(dialog, from_=0, to=23, wrap=True, width=8)
-    hour_spinbox.set(timestr2[0]) # Initial value
+    hour_spinbox.set(timestr[0]) # Initial value
     hour_spinbox.grid(row=0, column=0, padx=5, pady=5)
     hour_label = ttk.Label(dialog, text="hour")
     hour_label.grid(row=0, column=1, padx=5, pady=5)
 
     # Minute Spinbox
     minute_spinbox = ttk.Spinbox(dialog, from_=0, to=59, wrap=True, width=5)
-    minute_spinbox.set(timestr2[1]) # Initial value    
+    minute_spinbox.set(timestr[1]) # Initial value    
     minute_spinbox.grid(row=0, column=2, padx=5, pady=5)
     minute_label = ttk.Label(dialog, text="min")
     minute_label.grid(row=0, column=3, padx=5, pady=5)
@@ -780,13 +717,12 @@ def speed_dialog():
     dialog.geometry("300x180")
     dialog.title("Speed")
 
-    response = sockcmd.CommandClockGetSpeed()
-    if response[1] == "Accept":
-        speed = float(response[5])
+    response = sockcmd("clock get speed\n")
+    if response["status"] == 1:
+        speed = float(response["result"][0])
     else:
         dialog.destroy()
         return
-    
     def set_selected_speed():
         speed = 0
         labeltxt = "x "
@@ -796,7 +732,7 @@ def speed_dialog():
         else:
             speed = scaleS.get()
             labeltxt += str(scaleS.get())
-        response = sockcmd.CommandClockSetSpeed(speed)
+        response = sockcmd("clock set speed " + str(speed) + "\n")
         speedlabel_var.set(labeltxt)
     def close_selected_speed():
         dialog.destroy()
@@ -834,7 +770,7 @@ def speed_dialog():
 
 def manual_input_dialog():
     dialog = tkinter.Toplevel(root_tk)
-    dialog.geometry("500x120")
+    dialog.geometry("620x120")
     dialog.title("Command manual input")
 
     cmdlbl = tkinter.Label(dialog,text='Command')
@@ -843,17 +779,24 @@ def manual_input_dialog():
     cmdlbl = tkinter.Label(dialog,text='Result')
     cmdlbl.place(x=30, y=40)
 
-    cmdtxt = tkinter.Entry(dialog,width=40)
+    cmdtxt = tkinter.Entry(dialog,width=60)
     cmdtxt.place(x=100, y=10)
     
-    cmdret = tkinter.Entry(dialog,width=40)
+    cmdret = tkinter.Entry(dialog,width=60)
     cmdret.place(x=100, y=40)
     
     def on_button_ok():
         cmdret.delete(0, tkinter.END)
-        response = sockcmd.CommandManual( cmdtxt.get() );
-        cmdret.insert(0, " ".join(response) )
-        cmdtxt.delete(0, tkinter.END)
+        response = sockcmd( cmdtxt.get() + "\n");
+        msg = ""
+        for item in response["result"]:
+            if isfloat(item):
+                msg += str(item)
+            else:
+                msg += item
+            msg += " "
+        cmdret.insert(0, msg )
+        #cmdtxt.delete(0, tkinter.END)
 
     def on_button_no():
         dialog.destroy()
@@ -877,42 +820,51 @@ def camera_add_dialog():
     defaultname = "CAMERA" + str(len(windows));
     txt.insert(0,defaultname)
 
-    # size ratio slider
-    s_scale_var = tkinter.DoubleVar()
-    s_scale = tkinter.Scale(dialog, from_=0.1, to_=1.0, length=200, resolution=0.1, orient=tkinter.HORIZONTAL, variable=s_scale_var , showvalue=True)
-    s_scale.place(x=150, y=40)
-    s_label = ttk.Label(dialog, text="size ratio")
-    s_label.place(x=50, y=40)
+    # width Spinbox
+    w_spinbox = ttk.Spinbox(dialog, from_=640, to=1920, increment=2, wrap=True, width=8)
+    w_spinbox.set(1024) # Initial value
+    w_spinbox.place(x=150, y=40)
+    w_label = ttk.Label(dialog, text="width")
+    w_label.place(x=50, y=40)
+
+    # height Spinbox
+    h_spinbox = ttk.Spinbox(dialog, from_=480, to=1920, increment=2, wrap=True, width=8)
+    h_spinbox.set(768) # Initial value
+    h_spinbox.place(x=150, y=70)
+    h_label = ttk.Label(dialog, text="height")
+    h_label.place(x=50, y=70)
 
     # screenX Spinbox
     x_spinbox = ttk.Spinbox(dialog, from_=0, to=1920, increment=10, wrap=True, width=8)
-    x_spinbox.set(0) # Initial value
+    x_spinbox.set(32) # Initial value
     x_spinbox.place(x=150, y=100)
     x_label = ttk.Label(dialog, text="screen x")
     x_label.place(x=50, y=100)
 
     # screenY Spinbox
     y_spinbox = ttk.Spinbox(dialog, from_=0, to=1080, increment=10, wrap=True, width=8)
-    y_spinbox.set(0) # Initial value    
+    y_spinbox.set(32) # Initial value    
     y_spinbox.place(x=150, y=130)
     y_label = ttk.Label(dialog, text="screen y")
     y_label.place(x=50, y=130)
 
     def on_button_ok():
         cname = txt.get()
-        s = s_scale.get()
+        w = w_spinbox.get()
+        h = h_spinbox.get()
         x = x_spinbox.get()
         y = y_spinbox.get()
-
-        response = sockcmd.CommandCameraAdd(cname,x,y,s)
+        response = sockcmd("camera add " + cname + " " + str(x) + " " + str(y) + " " + str(w) + " " + str(h) + "\n")
         dialog.destroy()
-        if response[1] == "Accept":
+        if response["status"] == 1:
             if connect_mode == "shm":
-                time.sleep(5) # wait time for Setup 3D Viewer
-                response = sockcmd.CommandShmSetCameraViewport(cname)
-                if response[1] == "Accept":
-                    shm_camera[ cname ] = shared_memory.SharedMemory(name=response[7])
+                time.sleep(3) # wait time for Setup 3D Viewer
+                response = sockcmd("shm set camera " + cname + " viewport\n")
+                if response["status"] == 1:
+                    shm_camera[ cname ] = shared_memory.SharedMemory(name=response["result"][0])
                     windows[cname] = "NONE"
+                else:
+                    print(response["result"][0])
 
     def on_button_no():
         dialog.destroy()
@@ -935,24 +887,24 @@ def calculate_bearing(pointA, pointB):
 
 def set_camera_tracking_position(cameraid,trainid,distance,height):
 
-    response = sockcmd.CommandCameraGetPosition(cameraid)
-    if response[1] == "Accept" and isfloat(response[6]):
-        camera_point = ( float(response[7]), float(response[6]) )
-        camera_alt = float(response[8])
+    response = sockcmd("camera get " + cameraid + " position\n")
+    if response["status"] == 1:
+        camera_point = ( float(response["result"][1]), float(response["result"][0]) )
+        camera_alt = float(response["result"][2])
     else:
         return
-    response = sockcmd.CommandTrainPosition(trainid)
-    if response[1] == "Accept" and isfloat(response[5]):
-        train_point = ( float(response[6]), float(response[5]) )
-        train_alt = float(response[7])
+    response = sockcmd("train position " + trainid + "\n")
+    if response["status"] == 1:
+        train_point = ( float(response["result"][1]), float(response["result"][0]) )
+        train_alt = float(response["result"][2])
     else:
         return
     bearing = calculate_bearing(train_point,camera_point)
     distance_km = distance / 1000
     camera_alt = train_alt + height
     destination = geodesic(kilometers=distance_km).destination((train_point[0], train_point[1]), bearing )
-    response = sockcmd.CommandCameraSetPosition(cameraid,destination.longitude,destination.latitude,camera_alt)
-    response = sockcmd.CommandCameraSetTracking(cameraid,trainid)
+    response = sockcmd("camera set " + cameraid + " position " + str(destination.longitude) + " " + str(destination.latitude) + " " + str(camera_alt) + "\n")
+    response = sockcmd("camera set " + cameraid + " tracking " + trainid + "\n")
     
     
 def camera_tracking_dialog():
@@ -969,8 +921,8 @@ def camera_tracking_dialog():
         c_id = ccombo.get()
         t_id = tcombo.get()
 
-        response = sockcmd.CommandCameraSetTracking(c_id,"none")
-        if response[1] == "Accept":
+        response = sockcmd("camera set " + c_id + " tracking none\n")
+        if response["status"] == 1:
             if t_id == "none":
                 return
             else:
@@ -1014,14 +966,14 @@ def camera_tracking_dialog():
 def run_command():
     global field_isrunning
     field_isrunning = True
-    response = sockcmd.CommandRunSimulation()
+    response = sockcmd("play\n")
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
 
 def pause_command():
     global field_isrunning
     field_isrunning = False
-    response = sockcmd.CommandPauseSimulation()
+    response = sockcmd("pause\n")
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
     
@@ -1063,12 +1015,13 @@ def custom_auto_tracking_camera():
     if custom_auto_tracking_count > custom_auto_tracking_times:
         for item in custom_auto_tracking_windows:
             loopcount = 0
-            loopmax = len(trainid) * 5
+            loopmax = len(trainid) * 20
             while True:
                 newid = get_random_train_id()
                 if not is_same_tracking_id_in_windows(newid):
-                    response = sockcmd.CommandCameraSetTracking(item,"none")
-                    if response[1] == "Accept":
+                    #response = sockcmd.CommandCameraSetTracking(item,"none")
+                    response = sockcmd("camera set " + item + " tracking none\n")
+                    if response["status"] == 1:
                         set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
                         windows[item] = newid
                     break
@@ -1095,7 +1048,7 @@ screen_height = root_tk.winfo_screenheight()
 print(f"plathome: {python_plathome} {os.name}")
 print(f"Resolution: {screen_width}x{screen_height}")
 #root_tk.geometry(f"{1000}x{700}")
-root_tk.title("simple osgearth_rail controller")
+root_tk.title("osgearth_rail_gui")
 
 # Custom Menubar
 menu_frame = tkinter.Frame(root_tk, bg="lightgray", height=30)

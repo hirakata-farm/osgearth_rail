@@ -260,7 +260,7 @@ ghRailUnit::SetModelLabel(bool flag) {
 
 std::string
 ghRailUnit::GetTimetable() {
-  std::string ret = " ";
+  std::string ret = "";
   nlohmann::json timetable = p_jsondata["timetable"];
   // timetable[i].get<std::string>()     time string    "0T14:54:00"
   // timetable[i+1].get<std::string>()   station string
@@ -276,6 +276,14 @@ ghRailUnit::GetTimetable() {
   }
 
   return ret;
+}
+
+int
+ghRailUnit::GetTimetableRows() {
+  std::string ret = "";
+  nlohmann::json timetable = p_jsondata["timetable"];
+  int timetable_size = timetable.size();
+  return (int)floor(timetable_size/3);
 }
 
 int
@@ -1535,7 +1543,7 @@ ghRailUnit::GetMarkerUri() {
 
 std::string
 ghRailUnit::GetLineInfo() {
-  return p_lineid + " " + p_direction + " " + p_routeid;
+  return p_lineid + GH_RESULT_MSG_DELIMITER + p_direction + GH_RESULT_MSG_DELIMITER + p_routeid;
 }
 
 std::string
@@ -1555,12 +1563,12 @@ ghRailUnit::GetDistanceInfo() {
     std::string name = timetable[i+1].get<std::string>();
     if ( name != prevname ) {
       ret += name;
-      ret += ",";
+      ret += GH_RESULT_MSG_DELIMITER;
       int idx = _getStationIndex( name,1 ) ;  // start from 1
       distance = p_geometry[idx][3];
       if ( firstdistance < 0 ) firstdistance = distance;
       ret += std::to_string( distance - firstdistance );
-      ret += ",";
+      ret += GH_RESULT_MSG_DELIMITER;
 
       prevname = name;
     }
