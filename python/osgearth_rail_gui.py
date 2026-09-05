@@ -75,7 +75,7 @@ else:
 #
 #
 def about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.8.6")
+    messagebox.showinfo("about", "osgearth_rail_gui 0.8.7")
 
 def cpuload():
     global python_plathome
@@ -1028,7 +1028,7 @@ def custom_auto_tracking_camera():
                 if loopcount > loopmax:
                     break
                 loopcount += 1
-            time.sleep(1)
+            time.sleep(3)
         custom_auto_tracking_count = 0
     else:
         custom_auto_tracking_count += 1

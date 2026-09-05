@@ -184,7 +184,8 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_POSITION):
       ghRailCommandCameraSetPosition(cmd,_wins);
-      cmd->status = GH_QUEUE_STATUS_EXECUTED;	        
+      //cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      cmd->status = GH_QUEUE_STATUS_PART_EXECUTED;
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_GET+GH_KEY_POSITION):
       ghRailCommandCameraGetPosition(cmd,_wins);
@@ -192,7 +193,8 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_LOOKAT):
       ghRailCommandCameraSetLookat(cmd,_wins);
-      cmd->status = GH_QUEUE_STATUS_EXECUTED;	        
+      //cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      cmd->status = GH_QUEUE_STATUS_PART_EXECUTED;
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_GET+GH_KEY_LOOKAT):
       ghRailCommandCameraGetLookat(cmd,_wins);
@@ -200,7 +202,8 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_UPVEC):
       ghRailCommandCameraSetUpvec(cmd,_wins);
-      cmd->status = GH_QUEUE_STATUS_EXECUTED;	        
+      //cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      cmd->status = GH_QUEUE_STATUS_PART_EXECUTED;
       break;
     case (GH_COMMAND_CAMERA+GH_TYPE_GET+GH_KEY_UPVEC):
       ghRailCommandCameraGetUpvec(cmd,_wins);
@@ -696,37 +699,6 @@ ghRailCommandCameraGetTracking(ghCommandQueue *cmd, std::map<std::string, ghWind
 }
 
 
-osg::Matrixd
-_calcCameraMatrix(ghCommandQueue *cmd, osg::Camera *cam) {
-
-  osgEarth::Ellipsoid WGS84;
-  osg::Vec3d eye, up, center;
-  //osg::Camera *cam = ghWindows[cmd->argstr[0]].view->getCamera();
-  cam->getViewMatrixAsLookAt( eye, center, up );
-  osg::Matrixd mat ;
-  int cmdkey = ghRailGetCommandKey(cmd);
-  float vec3[3];
-
-  if ( cmdkey == GH_KEY_POSITION ) {
-    ghRailGetCommandFloatVector(cmd,&vec3[0]);
-    //osg::Vec3d eye2 = osg::Vec3d((double)cmd->argnum[0],(double)cmd->argnum[1], (double)cmd->argnum[2]);
-    osg::Vec3d eye2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
-    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-  } else if ( cmdkey == GH_KEY_LOOKAT ) {
-    ghRailGetCommandFloatVector(cmd,&vec3[0]);
-    osg::Vec3d center2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
-    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-  } else if ( cmdkey == GH_KEY_UPVEC ) {
-    ghRailGetCommandFloatVector(cmd,&vec3[0]);
-    osg::Vec3d up2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
-    mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
-  } else {
-    mat.makeLookAt( eye, center, up );
-  }
-    
-  return mat;
-}
-
 
 void
 ghRailCommandCameraSetPosition(ghCommandQueue *cmd,  std::map<std::string, ghWindow>& _wins) {
@@ -750,16 +722,15 @@ ghRailCommandCameraSetPosition(ghCommandQueue *cmd,  std::map<std::string, ghWin
       return;
     }
 
-    osgEarth::Ellipsoid WGS84;
-    osg::Vec3d eye, up, center;
-    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-    osg::Matrixd mat ;
+    //    osgEarth::Ellipsoid WGS84;
+    //    osg::Vec3d eye, up, center;
+    //    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
+    //    osg::Matrixd mat ;
     float vec[3];
-
     ghRailGetCommandFloatVector(cmd,&vec[0]);
-    osg::Vec3d eye2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
-    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
-    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
+    //    osg::Vec3d eye2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
+    //    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
+    //    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
 
     ret += camname;
     ret += " position ";
@@ -844,16 +815,15 @@ ghRailCommandCameraSetLookat(ghCommandQueue *cmd,  std::map<std::string, ghWindo
       return;
     }
 
-    osgEarth::Ellipsoid WGS84;
-    osg::Vec3d eye, up, center;
-    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-    osg::Matrixd mat ;
+    //    osgEarth::Ellipsoid WGS84;
+    //    osg::Vec3d eye, up, center;
+    //    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
+    //    osg::Matrixd mat ;
     float vec[3];
-
     ghRailGetCommandFloatVector(cmd,&vec[0]);
-    osg::Vec3d center2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
-    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
-    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
+    //    osg::Vec3d center2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
+    //    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
+    //    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
 
     ret += camname;
     ret += " lookat ";
@@ -938,16 +908,15 @@ ghRailCommandCameraSetUpvec(ghCommandQueue *cmd,  std::map<std::string, ghWindow
       return;
     }
 
-    osgEarth::Ellipsoid WGS84;
-    osg::Vec3d eye, up, center;
-    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
-    osg::Matrixd mat ;
+    //    osgEarth::Ellipsoid WGS84;
+    //    osg::Vec3d eye, up, center;
+    //    _wins[camname].view->getCamera()->getViewMatrixAsLookAt( eye, center, up );
+    //    osg::Matrixd mat ;
     float vec[3];
-
     ghRailGetCommandFloatVector(cmd,&vec[0]);
-    osg::Vec3d up2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
-    mat.makeLookAt( eye, center, up2 );
-    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
+    //    osg::Vec3d up2 = osg::Vec3d((double)vec[0],(double)vec[1],(double)vec[2]);
+    //    mat.makeLookAt( eye, center, up2 );
+    //    _wins[camname].view->getCameraManipulator()->setByInverseMatrix(mat);
 
     ret += camname;
     ret += " upvec ";

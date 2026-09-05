@@ -276,6 +276,33 @@ double ghElapsedSec = 10.0f;
 unsigned int ghScreenNum = 0;
 
 
+osg::Matrixd
+_calcCameraMatrix(ghCommandQueue *cmd, osg::Camera *cam) {
+
+  osgEarth::Ellipsoid WGS84;
+  osg::Vec3d eye, up, center;
+  //osg::Camera *cam = ghWindows[cmd->argstr[0]].view->getCamera();
+  cam->getViewMatrixAsLookAt( eye, center, up );
+  osg::Matrixd mat ;
+  int cmdkey = ghRailGetCommandKey(cmd);
+  float vec3[3];
+  ghRailGetCommandFloatVector(cmd,&vec3[0]);
+
+  if ( cmdkey == GH_KEY_POSITION ) {
+    osg::Vec3d eye2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
+    mat.makeLookAt( WGS84.geodeticToGeocentric(eye2), center, up );
+  } else if ( cmdkey == GH_KEY_LOOKAT ) {
+    osg::Vec3d center2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
+    mat.makeLookAt( eye, WGS84.geodeticToGeocentric(center2), up );
+  } else if ( cmdkey == GH_KEY_UPVEC ) {
+    osg::Vec3d up2 = osg::Vec3d((double)vec3[0],(double)vec3[1],(double)vec3[2]);
+    mat.makeLookAt( eye, center, WGS84.geodeticToGeocentric(up2) );
+  } else {
+    mat.makeLookAt( eye, center, up );
+  }
+    
+  return mat;
+}
 
 void
 ghCheckCommand() {
@@ -296,6 +323,30 @@ ghCheckCommand() {
   } else if ( cmdcode == (GH_COMMAND_CLOCK+GH_TYPE_SET+GH_KEY_TIME) ) {
     ghElapsedSec = 0.0f;
     cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_POSITION) ) {
+      std::string camname = ghRailGetCommandName(cmd);
+      if ( ghWindows.count(camname) > 0 ) {
+	ghWindows[camname].view->getCameraManipulator()->setByInverseMatrix( _calcCameraMatrix(cmd,ghWindows[camname].view->getCamera()) );
+      } else {
+	// NOP
+      }
+      cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_LOOKAT) ) {
+      std::string camname = ghRailGetCommandName(cmd);
+      if ( ghWindows.count(camname) > 0 ) {
+	ghWindows[camname].view->getCameraManipulator()->setByInverseMatrix( _calcCameraMatrix(cmd,ghWindows[camname].view->getCamera()) );
+      } else {
+	// NOP
+      }
+      cmd->status = GH_QUEUE_STATUS_EXECUTED;
+  } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_SET+GH_KEY_UPVEC) ) {
+      std::string camname = ghRailGetCommandName(cmd);
+      if ( ghWindows.count(camname) > 0 ) {
+	ghWindows[camname].view->getCameraManipulator()->setByInverseMatrix( _calcCameraMatrix(cmd,ghWindows[camname].view->getCamera()) );
+      } else {
+	// NOP
+      }
+      cmd->status = GH_QUEUE_STATUS_EXECUTED;
   } else if ( cmdcode == (GH_COMMAND_CAMERA+GH_TYPE_ADD) ) {
     if ( cmd->resultcode == GH_QUEUE_RETURN_CODE_SUCCESS ) { 
       std::string camname = ghRailGetCommandName(cmd);
