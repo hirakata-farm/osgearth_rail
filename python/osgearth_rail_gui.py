@@ -75,7 +75,7 @@ else:
 #
 #
 def about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.8.7")
+    messagebox.showinfo("about", "osgearth_rail_gui 0.8.8")
 
 def cpuload():
     global python_plathome
@@ -888,7 +888,7 @@ def calculate_bearing(pointA, pointB):
 def set_camera_tracking_position(cameraid,trainid,distance,height):
 
     response = sockcmd("camera get " + cameraid + " position\n")
-    if response["status"] == 1:
+    if response["status"] == 1 and response["size"] == 3:
         camera_point = ( float(response["result"][1]), float(response["result"][0]) )
         camera_alt = float(response["result"][2])
     else:

@@ -46,6 +46,7 @@
 #define GH_ERROR_MSG_ALREADY_EXIST    " already exist"
 #define GH_ERROR_MSG_ALREADY_LOADED   " already loaded"
 #define GH_ERROR_MSG_STRING_RESERVED  " string reserved"
+#define GH_ERROR_MSG_WRONG_VALUE      " wrong value"
 #define GH_ERROR_MSG_STRING_TRACKING  " not set , beacuse under tracking"
 
 

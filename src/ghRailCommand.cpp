@@ -759,25 +759,42 @@ ghRailCommandCameraSetPosition(ghCommandQueue *cmd,  std::map<std::string, ghWin
 
 void
 ghRailCommandCameraGetPosition(ghCommandQueue *cmd,  std::map<std::string, ghWindow>& _wins) {
-  osgEarth::Ellipsoid WGS84;
-  std::string ret = "camera get ";
-  osg::Vec3d eye, up, center;
   std::string camname = ghRailGetCommandName(cmd);
+  std::string ret = "camera get ";
 
   if ( _wins.count(camname) > 0 ) {
 
+    osgEarth::Ellipsoid WGS84;
+    osg::Vec3d eye, up, center;
     osg::Camera *cam = _wins[camname].view->getCamera();
     cam->getViewMatrixAsLookAt( eye, center, up );
     osg::Vec3 position = WGS84.geocentricToGeodetic(eye);
-    ret = std::to_string(position.x());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(position.y());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(position.z());
 
-    cmd->resultsize = 3;
-    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
-    cmd->resultmsg = ret;
+    // ( Longitude, Latitude, Altitude)
+    //double lon = geodeticPoint.x(); // 度 (Degrees)
+    //double lat = geodeticPoint.y(); // 度 (Degrees)
+    //double alt = geodeticPoint.z(); // メートル (Meters)
+    if ( position.x() > -180.0 && position.x() < 180.0
+	 && position.y() > -90.0 && position.y() < 90.0 ) {
+      ret = std::to_string(position.x());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(position.y());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(position.z());
+      
+      cmd->resultsize = 3;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+      cmd->resultmsg = ret;
+    } else {
+
+      ret += camname;
+      ret += " ";
+      ret += GH_ERROR_MSG_WRONG_VALUE;
+      cmd->resultsize = 1;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+      cmd->resultmsg = ret;  
+
+    }
 
   } else {
 
@@ -862,15 +879,29 @@ ghRailCommandCameraGetLookat(ghCommandQueue *cmd,  std::map<std::string, ghWindo
     osg::Camera *cam = _wins[camname].view->getCamera();
     cam->getViewMatrixAsLookAt( eye, center, up );
     osg::Vec3 center2 = WGS84.geocentricToGeodetic(center);
-    ret = std::to_string(center2.x());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(center2.y());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(center2.z());
 
-    cmd->resultsize = 3;
-    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
-    cmd->resultmsg = ret;
+    if ( center2.x() > -180.0 && center2.x() < 180.0
+	 && center2.y() > -90.0 && center2.y() < 90.0 ) {
+      
+      ret = std::to_string(center2.x());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(center2.y());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(center2.z());
+
+      cmd->resultsize = 3;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+      cmd->resultmsg = ret;
+    } else {
+
+      ret += camname;
+      ret += " ";
+      ret += GH_ERROR_MSG_WRONG_VALUE;
+      cmd->resultsize = 1;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+      cmd->resultmsg = ret;  
+
+    }
 
   } else {
 
@@ -955,15 +986,30 @@ ghRailCommandCameraGetUpvec(ghCommandQueue *cmd,  std::map<std::string, ghWindow
     osg::Camera *cam = _wins[camname].view->getCamera();
     cam->getViewMatrixAsLookAt( eye, center, up );
     osg::Vec3 up2 = WGS84.geocentricToGeodetic(up);
-    ret = std::to_string(up2.x());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(up2.y());
-    ret += GH_RESULT_MSG_DELIMITER;
-    ret += std::to_string(up2.z());
 
-    cmd->resultsize = 3;
-    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
-    cmd->resultmsg = ret;
+    if ( up2.x() > -180.0 && up2.x() < 180.0
+	 && up2.y() > -90.0 && up2.y() < 90.0 ) {
+      
+      ret = std::to_string(up2.x());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(up2.y());
+      ret += GH_RESULT_MSG_DELIMITER;
+      ret += std::to_string(up2.z());
+
+      cmd->resultsize = 3;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+      cmd->resultmsg = ret;
+    } else {
+
+      ret += camname;
+      ret += " ";
+      ret += GH_ERROR_MSG_WRONG_VALUE;
+      cmd->resultsize = 1;
+      cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+      cmd->resultmsg = ret;  
+
+    }
+
 
   } else {
 
