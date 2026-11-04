@@ -63,10 +63,10 @@ if is_module_available("multiprocessing"):
     from multiprocessing import shared_memory
     is_shm_library = True
     default_host = "localhost"
-    print(f" shared memory ON ")
+    print(f" available shared memory ")
 else:
     is_shm_library = False
-    print(f" shared memory OFF ")
+    print(f" NOT allowed shared memory ")
     default_host = socket.gethostbyname(socket.gethostname())
     
 ######################################################
@@ -74,17 +74,27 @@ else:
 #   Sub functions
 #
 #
-def about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.8.8")
+def app_about():
+    messagebox.showinfo("about", "osgearth_rail_gui 0.9.9")
 
-def cpuload():
+def app_cpuload():
     global python_plathome
     if python_plathome == "win64":
         subprocess.Popen(["python.exe","cpusage.py"])  # for Windows
     else:
         subprocess.Popen(["python3","cpusage.py"])
         
-def sockcmd_initialize(host,port):
+def app_quit():
+    global field_isloaded
+    
+    #field_isloaded = False
+    if field_isloaded:
+        server_exit_close()    
+
+    root_tk.quit
+    exit()
+
+def init_osgearth_rail_command(host,port):
     global python_plathome
     global cmdp
     if python_plathome == "win64":
@@ -118,43 +128,6 @@ def sockcmd(command):
     return json.loads(output)
 
         
-######################################################
-#
-#
-#  Global Settings
-#
-main_window_width = 1024
-main_window_height = 768
-icon_width = 16
-icon_height = 16
-remote_host = default_host
-remote_port = 57139
-socket_buffer_size = 16384
-show_socket_detail = True
-#
-field_isloaded = False
-field_isrunning = False
-shm_time = None
-shm_train = None
-shm_train_size_byte = 0
-shm_camera = { "root" : None }
-viewport_camera = {};
-tracking_distance = 1500   # [m]
-tracking_height = 200      # [m]
-#############
-polling_thread = None
-polling_socket_wait_second = 28
-polling_shm_wait_second = 1
-polling_thread_stop_signal = threading.Event()
-#############
-custom_auto_tracking = False
-#custom_auto_tracking_count = 11
-#custom_auto_tracking_times = 12
-custom_auto_tracking_count = 170
-custom_auto_tracking_times = 180
-custom_auto_tracking_windows = { "root" : "NONE" }
-#############
-
 def isfloat(s):
     try:
         float(s)
@@ -163,289 +136,42 @@ def isfloat(s):
     else:
         return True
 
-def setup_shm():
-    global shm_time
-    global shm_train
-    global shm_train_size_byte
-    global shm_camera
-    global remote_polling_second
+######################################################
+#
+#
+#  Global Settings
+#
+main_window_width = 1024
+main_window_height = 768
+map_widget_tracking = False
+icon_width = 16
+icon_height = 16
+remote_host = default_host
+remote_port = 57139
+#socket_buffer_size = 16384
+socket_buffer_size = 131072
+show_socket_detail = True
+#
+field_isloaded = False
+field_isrunning = False
+tracking_distance = 1500   # [m]
+tracking_height = 200      # [m]
+#############
+pollingupdate = None
+#############
 
-    response = sockcmd("shm set clock time\n");
-    if response["status"] != 1:
-        return False        
-
-    shm_time = shared_memory.SharedMemory(name=response["result"][0])
-
-    response = sockcmd("shm set train position\n")
-    if response["status"] != 1:
-        return False
-    
-    shm_train = shared_memory.SharedMemory(name=response["result"][0])
-    shm_train_size_byte = int(response["result"][1])
-
-    response = sockcmd("shm set camera root viewport\n")
-    if response["status"] != 1:
-        return False
-
-    shm_camera[ "root" ] = shared_memory.SharedMemory(name=response["result"][0])
-    remote_polling_second = 1
-    
-
-def timetable_dialog(id, tablelist):
-
-    dialog = tkinter.Toplevel(root_tk)
-    dialog.attributes('-topmost', True)
-    dialog.geometry("300x400")
-    dialog.title("Timetable  " + id)
-
-    tree = ttk.Treeview(dialog)
-    tree["columns"] = ("station", "time")
-    tree.column("#0", width=0, stretch=tkinter.NO)
-    tree.column("station", anchor=tkinter.CENTER, width=100)
-    tree.column("time", anchor=tkinter.CENTER, width=80)
-
-    tree.heading("#0", text="", anchor=tkinter.CENTER)
-    tree.heading("station", text="Station", anchor=tkinter.CENTER)
-    tree.heading("time", text="Time", anchor=tkinter.CENTER)
-
-    for i in range(0,len(tablelist),2):
-        tree.insert('',tkinter.END, values=(tablelist[i+1],tablelist[i]))
-    
-    scrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-
-    def on_close_ok():
-        dialog.destroy()
-
-    tree.pack(expand=True, fill="both")
-
-    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
-    ok_button.pack()
-
-
-def setup_train_marker(tname,lat,lng):
-    response = sockcmd("train icon " + tname + "\n")    
-    if response["status"] == 1:
-        if 'http' in response["result"][0]:
-            imagedata = urlopen(response["result"][0])
-            imageobject = Image.open(io.BytesIO(imagedata.read()))
-            resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
-            #image = ImageTk.PhotoImage(data=imagedata.read())
-            image = ImageTk.PhotoImage(resized_image)
-            markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image, command=click_train_marker )
-    else:
-        print( response )
-    
-def click_train_marker(marker):
-    response = sockcmd("train timetable " + marker.text + "\n")
-    if response["status"] == 1:
-        train_id = marker.text
-        train_timetable = response["result"]
-        timetable_dialog( train_id, train_timetable )
-
-def get_random_train_id():
-    global trainid
-    length = len(trainid)
-    loop_count = 0
-    loop_max = length * 10
-    while True:
-        idx = int(random.uniform(0, length-1))
-        if trainid[idx] in markers:
-            return trainid[idx]
-        if loop_count > loop_max:
-            return trainid[1]
-            break
-        loop_count += 1
-
-def is_same_tracking_id_in_windows(trainid):
-    global custom_auto_tracking_windows
-    
-    for item in custom_auto_tracking_windows:
-        if trainid == custom_auto_tracking_windows[item]:
-            return True
-    return False        
-                        
-    
-def update_socket_train():
-    global trainid
-
-    response = sockcmd("train position all\n")
-    if response["status"] != 1:
-        return
-    data = response["result"]
-    train_lst = data[::4]
-    train_lng = data[1::4]
-    train_lat = data[2::4]
-    trainsize = len(train_lst)
-    for item in trainid:
-        existflag = False
-        for i in range(trainsize):
-            if train_lst[i] == item:
-                lng = float(train_lng[i])
-                lat = float(train_lat[i])
-                if train_lst[i] in markers:
-                    markers[train_lst[i]].set_position(lat,lng)
-                else:
-                    setup_train_marker(train_lst[i],lat,lng)
-                existflag = True
-                break
-        if existflag == False:
-            if item in markers:
-                markers[item].delete()
-                del markers[item]
-
-def update_socket_viewport():
-    global viewport_camera
-
-    map_widget.delete_all_polygon()
-    for item in windows:
-        response = sockcmd("camera get " + item + " viewport\n")
-        if response["status"] == 1 and response["size"] > 5:
-            data = response["result"]
-            view_lng = data[::2]
-            view_lat = data[1::2]
-            viewsize = len(view_lng)
-            positionlist = []
-            for i in range(viewsize):
-                lng = float(view_lng[i])
-                lat = float(view_lat[i])
-                positionlist.append((lat,lng))
-            viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
-
-
-def update_shm_clock():
-    global shm_time
-    global timelabel_var
-
-    bytedata = bytes(shm_time.buf[:4])
-    datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
-    dhour = math.floor(datasec / 3600) ;
-    dmin = math.floor( ( datasec - dhour * 3600 ) / 60) ;
-    dsec = datasec % 60 ;
-    shour = str(dhour)
-    smin = str(dmin)
-    ssec = str(dsec)
-    if dhour < 10:
-        shour = "0" + shour
-    if dmin < 10:
-        smin = "0" + smin
-    if dsec < 10:
-        ssec = "0" + ssec
-    timelabel_var.set(shour + ":" + smin + ":" + ssec)
-    
-def update_shm_train():
-    global shm_train
-    global shm_train_size_byte
-
-    bytedata = bytes(shm_train.buf[:shm_train_size_byte])
-    offset = 0
-    for icnt in range(0,shm_train_size_byte,48):
-        if (offset+48) < shm_train_size_byte+1:
-            byteslice = bytedata[offset:offset+48]
-            traindata = struct.unpack('<32s2d', byteslice)
-            trainstr = traindata[0].decode('ascii')
-            nullpos = trainstr.find('\0')
-            trainname = trainstr[0:nullpos]
-            lng = float(traindata[1])
-            lat = float(traindata[2])
-            if lat < 0 and lng < 0:
-                if trainname in markers:
-                    markers[trainname].delete()
-                    del markers[trainname]
-            else:
-                if trainname in markers:
-                    markers[trainname].set_position(lat,lng)
-                else:
-                    if len(trainname) > 1:
-                        setup_train_marker(trainname,lat,lng)
-            offset = offset+48
-        else:
-            print(offset)
-            byteslice = bytedata[offset:]
-            traindata = struct.unpack('<32s2d', byteslice)
-            print(traindata)
-
-def update_shm_viewport():
-    global shm_camera
-    global viewport_camera
-    
-    map_widget.delete_all_polygon()
-    for item in shm_camera:
-        bytedata = bytes(shm_camera[item].buf[:192])
-        double_number = struct.unpack('<24d', bytedata)
-        positionlist = []
-        for i in range(0,24,2):
-            if double_number[i+1] != 0.0 or double_number[i] != 0.0:
-                positionlist.append((double_number[i+1],double_number[i]))
-        if len(positionlist) > 3:            
-            viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
-                    
-
-def update_map_center(lat,lng):
-    center = map_widget.get_position()
-    # center[2] = lat lng
-    mapredraw = False
-    if abs(lat - center[0]) > 0.001:
-        mapredraw = True
-    if abs(lng - center[1]) > 0.001:
-        mapredraw = True
-    if mapredraw:
-        map_widget.set_position(lat,lng)        
-        
-def update_thread_socket(stop_event):
-    global field_isloaded
-    global field_isrunning
-    global polling_socket_wait_second
-
-    while not stop_event.is_set():
-        if field_isloaded:
-            if field_isrunning:
-                response = sockcmd("clock get time\n")
-                if response["status"] == 1:
-                    timestr = response["result"]
-                    timelabel_var.set(timestr[0]+":"+timestr[1])
-                else:
-                    return
-                update_socket_train()
-                update_socket_viewport()
-                custom_auto_tracking_camera()
-                time.sleep(polling_socket_wait_second)
-            else:
-                time.sleep(1)
-        else:
-            break
-
-def update_thread_shm(stop_event):
-    global field_isloaded
-    global field_isrunning
-    global polling_shm_wait_second
-
-    while not stop_event.is_set():
-        if field_isloaded:
-            if field_isrunning:
-                update_shm_clock()
-                update_shm_train()
-                update_shm_viewport()
-                custom_auto_tracking_camera()
-                time.sleep(polling_shm_wait_second)
-            else:
-                time.sleep(1)
-        else:
-            break
-
-
-#####################################################################        
-def server_initialize(fieldid):
+def setup_field_3dserver(fieldid):
+    global root_tk
+    global cmdp
     global trainid
     global field_isloaded
     global remote_host
     global connect_mode
-    global polling_thread
-    global polling_thread_stop_signal
+    global pollingupdate
 
     response = sockcmd("field set " + fieldid + "\n");
     if response["status"] != 1 :
+        print(response)
         return False
     menu0.entryconfig("3D view open", state=tkinter.DISABLED)
     menu0.entryconfig("3D view close", state=tkinter.NORMAL)
@@ -463,49 +189,84 @@ def server_initialize(fieldid):
     time.sleep(3) # wait time for Setup 3D Viewer
     response = sockcmd("field get train\n")
     trainid = response["result"]
-        
-    if connect_mode == "shm":
-        setup_shm()
-        polling_thread = threading.Thread(target=update_thread_shm, args=(polling_thread_stop_signal,))
-        print (" use shared memory")
-    else:
-        polling_thread = threading.Thread(target=update_thread_socket, args=(polling_thread_stop_signal,))
-        print (" use socket only")
     field_isloaded = True
-    polling_thread.start()
-    return True
-
-def server_multiview_script():
-    global custom_auto_tracking
-    global custom_auto_tracking_windows
-
-    response = sockcmd("clock set time 9:10\n")
-    time.sleep(2)
-    response = sockcmd("clock set speed 0.0625\n") # 1/16
-    time.sleep(2)
-    windows["camera1"] = "NONE"
-    response = sockcmd("camera add camera1 1280 720 1280 710\n")
-    time.sleep(2)
-    windows["camera2"] = "NONE"
-    response = sockcmd("camera add camera2 2560 720 1280 710\n")
-    time.sleep(2)
-    windows["camera3"] = "NONE"
-    response = sockcmd("camera add camera3 0 1440 2560 710\n")
-    time.sleep(2)
-    windows["camera4"] = "NONE"
-    response = sockcmd("camera add camera4 2560 1440 1280 710\n")
-    time.sleep(2)
-    run_command()
-    custom_auto_tracking = True
-    custom_auto_tracking_windows = { "camera1" : "NONE" , "camera2" : "NONE", "camera3" : "NONE", "camera4" : "NONE" }
-    menu1.entryconfig("4K Multiview Script", state=tkinter.DISABLED)    
-
+    pollingupdate = PollingUpdate(root_tk,connect_mode,cmdp)
+    return True    
     
+def get_random_train_id():
+    global trainid
+    length = len(trainid)
+    loop_count = 0
+    loop_max = length * 10
+    while True:
+        idx = int(random.uniform(0, length-1))
+        if trainid[idx] in markers:
+            return trainid[idx]
+        if loop_count > loop_max:
+            return trainid[1]
+            break
+        loop_count += 1
+
+#def is_same_tracking_id_in_windows(trainid):
+#    global custom_auto_tracking_windows
+#    
+#    for item in custom_auto_tracking_windows:
+#        if trainid == custom_auto_tracking_windows[item]:
+#            return True
+#    return False        
+                        
+
 #####################################################################
+#
+#
+#  GUI Dialogs
+#
+#
+    
+def dialog_train_timetable(id, tablelist):
 
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("300x400")
+    #dialog.title("Timetable  " + id)
+    dialog.title("Timetable")
+
+    tree = ttk.Treeview(dialog)
+    tree["columns"] = ("station", "time")
+    tree.column("#0", width=0, stretch=tkinter.NO)
+    tree.column("station", anchor=tkinter.CENTER, width=100)
+    tree.column("time", anchor=tkinter.CENTER, width=80)
+
+    tree.heading("#0", text="", anchor=tkinter.CENTER)
+    tree.heading("station", text="Station", anchor=tkinter.CENTER)
+    #tree.heading("time", text="Time", anchor=tkinter.CENTER)
+    tree.heading("time", text=id, anchor=tkinter.CENTER)
+
+    for i in range(0,len(tablelist),2):
+        tree.insert('',tkinter.END, values=(tablelist[i+1],tablelist[i]))
+    
+    scrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+
+    def on_close_ok():
+        dialog.destroy()
+
+    tree.pack(expand=True, fill="both")
+
+    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
+    ok_button.pack()
 
     
-def server_connect_dialog():
+def click_train_marker(marker):
+    response = sockcmd("train timetable " + marker.text + "\n")
+    if response["status"] == 1:
+        train_id = marker.text
+        train_timetable = response["result"]
+        dialog_train_timetable( train_id, train_timetable )
+
+
+def dialog_3dview_open():
     global remost_host
     global connect_mode
 
@@ -541,22 +302,22 @@ def server_connect_dialog():
     option09_radio = ttk.Radiobutton(dialog, text="Portugal (PT)", value="G177090107PORTUGUESE", variable=selected_option)
     option10_radio = ttk.Radiobutton(dialog, text="Spain (ES)", value="G177182108SPAIN", variable=selected_option)
 
-    option11_radio = ttk.Radiobutton(dialog, text="Custom", value="CUSTOM", variable=selected_option)
+    option11_radio = ttk.Radiobutton(dialog, text="Geoglyph ID", value="CUSTOM", variable=selected_option)
 
-    option01_radio.place(x=30,y=60)
-    option02_radio.place(x=30,y=80)
-    option03_radio.place(x=30,y=100)
-    option04_radio.place(x=30,y=120)
-    option05_radio.place(x=30,y=140)
-    option06_radio.place(x=30,y=160)
-    option07_radio.place(x=30,y=180)
-    option08_radio.place(x=30,y=200)
-    option09_radio.place(x=30,y=220)
-    option10_radio.place(x=30,y=240)
+    option01_radio.place(x=30,y=70)
+    option02_radio.place(x=30,y=90)
+    option03_radio.place(x=30,y=110)
+    option04_radio.place(x=30,y=130)
+    option05_radio.place(x=30,y=150)
+    option06_radio.place(x=30,y=170)
+    option07_radio.place(x=30,y=190)
+    option08_radio.place(x=30,y=210)
+    option09_radio.place(x=30,y=230)
+    option10_radio.place(x=30,y=250)
     
-    option11_radio.place(x=30,y=260)        
+    option11_radio.place(x=30,y=270)        
     tc_txt = tkinter.Entry(dialog,width=20)
-    tc_txt.place(x=120, y=260)
+    tc_txt.place(x=140, y=270)
     tc_txt.insert(0,"require ID")
 
     def on_server_ok():
@@ -577,13 +338,13 @@ def server_connect_dialog():
                 return 
             fieldid = custom_code
 
-        response = sockcmd_initialize(remote_host, remote_port)
+        response = init_osgearth_rail_command(remote_host, remote_port)
         if response[1] != "OK":
             dialog.destroy()
             messagebox.showinfo("Warning", "3D viewer Error")
             return
         time.sleep(1) # wait time for Setup 3D Viewer
-        status = server_initialize( fieldid )
+        status = setup_field_3dserver( fieldid )
         if status == True:
             messagebox.showinfo("Information", "3D viewer setting up OK")
         else:
@@ -597,45 +358,17 @@ def server_connect_dialog():
     ok_button.place(x=30,y=320)
     no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_server_no)
     no_button.place(x=200,y=320)
-
-
     dialog.grab_set() # modal dialog
     root_tk.wait_window(dialog) # wait for close dialog
 
 def server_exit_close():
-    global polling_thread
-    global polling_thread_stop_signal
     global field_isloaded
     global connect_mode
-    global shm_time
-    global shm_train
-    global shm_camera
-    global polling_socket_wait_second
+    global pollingupdate
     
     field_isloaded = False
-
-    if polling_thread == None:
-        #print(threading.active_count())
-        print("exited")
-    else:
-        polling_thread_stop_signal.set()
-        polling_thread.join(timeout=polling_socket_wait_second)
-
-    if connect_mode == "shm":
-        shm_time.close()
-        shm_train.close()
-        shm_time.unlink()
-        shm_train.unlink()
-        for item in shm_camera:
-            shm_camera[item].close()
-            shm_camera[item].unlink()
-
-            
-    #sockcmd.CommandExit()
+    pollingupdate.close()
     sockcmd("exit\n")
-    #time.sleep(1)
-    #sockcmd.CloseSocket()
-    #messagebox.showinfo("3D view", " closing process..")
     menu0.entryconfig("3D view open", state=tkinter.NORMAL)
     menu0.entryconfig("3D view close", state=tkinter.DISABLED)
     menu1.entryconfig("clock", state=tkinter.DISABLED)
@@ -644,8 +377,7 @@ def server_exit_close():
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.DISABLED)
 
-    
-def server_exit_dialog():
+def dialog_3dview_close():
     global field_isloaded
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x160")
@@ -669,7 +401,7 @@ def server_exit_dialog():
     dialog.grab_set()
     root_tk.wait_window(dialog)
 
-def clock_dialog():
+def dialog_clock():
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x100")
@@ -711,7 +443,7 @@ def clock_dialog():
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
-def speed_dialog():
+def dialog_speed():
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x180")
@@ -768,7 +500,7 @@ def speed_dialog():
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
-def manual_input_dialog():
+def dialog_manual_input():
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("620x120")
     dialog.title("Command manual input")
@@ -806,7 +538,7 @@ def manual_input_dialog():
     ok_button.place(x=50,y=70)
     no_button.place(x=200,y=70)
 
-def camera_add_dialog():
+def dialog_camera_add():
     global connect_mode
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x260")
@@ -907,7 +639,7 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
     response = sockcmd("camera set " + cameraid + " tracking " + trainid + "\n")
     
     
-def camera_tracking_dialog():
+def dialog_camera_tracking():
     global tracking_ver
     global tracking_distance
     global tracking_height
@@ -963,78 +695,284 @@ def camera_tracking_dialog():
     #root_tk.wait_window(dialog)
 
 
-def run_command():
+def command_button_run():
     global field_isrunning
     field_isrunning = True
     response = sockcmd("play\n")
     menu_button_2.config(state=tkinter.DISABLED)
     menu_button_3.config(state=tkinter.NORMAL)
 
-def pause_command():
+def command_button_pause():
     global field_isrunning
     field_isrunning = False
     response = sockcmd("pause\n")
     menu_button_2.config(state=tkinter.NORMAL)
     menu_button_3.config(state=tkinter.DISABLED)
     
-def app_quit():
-    global field_isloaded
+
+
+def dialog_mapproperty():
+    global map_widget_tracking
+
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.geometry("300x200")
+    dialog.title("Map property")
+
+    map_prop_ontop = tkinter.BooleanVar(value=False)
+    if map_widget_tracking:
+        map_prop_tracking_center = tkinter.BooleanVar(value=True)
+    else:
+        map_prop_tracking_center = tkinter.BooleanVar(value=False)
+
+    def close_prop():
+        global map_widget_tracking
+        if map_prop_ontop.get() :
+            root_tk.attributes('-topmost',True)
+        else:
+            root_tk.attributes('-topmost',False)
+        if map_prop_tracking_center.get() :
+            map_widget_tracking = True
+        else:
+            map_widget_tracking = False
+        dialog.destroy()
+
+    cb1 = tkinter.Checkbutton(dialog, text="Map always on top", variable=map_prop_ontop)
+    cb2 = tkinter.Checkbutton(dialog, text="Map center of tracking camera", variable=map_prop_tracking_center)
     
-    #field_isloaded = False
-    if field_isloaded:
-        server_exit_close()    
+    cb1.pack(anchor="w", padx=20, pady=5)
+    cb2.pack(anchor="w", padx=20, pady=5)
 
-    root_tk.quit
-    exit()
+    close_button = tkinter.Button(dialog, text="Close", fg="red", command=close_prop)
+    close_button.pack(pady=10)
 
+    
+        
 ################################################################################
 #
+#   Update Class
 #
-#  Custom command
-#
-
+################################################################################    
     
-def custom_auto_tracking_camera():
+#default_polling_socket_wait_second = 28
+#default_polling_shm_wait_second = 2
+class PollingUpdate:
     global field_isloaded
     global field_isrunning
-    global custom_auto_tracking
-    global custom_auto_tracking_windows
-    global custom_auto_tracking_count
-    global custom_auto_tracking_times
+    global timelabel_var
+    global markers
+    global windows
     global trainid
-    global tracking_distance
-    global tracking_height
+    global map_widget
+    global map_widget_tracking
 
-    if not field_isloaded:
-        return
-    if not field_isrunning:
-        return
-    if not custom_auto_tracking:
-        return
-    
-    if custom_auto_tracking_count > custom_auto_tracking_times:
-        for item in custom_auto_tracking_windows:
-            loopcount = 0
-            loopmax = len(trainid) * 20
-            while True:
-                newid = get_random_train_id()
-                if not is_same_tracking_id_in_windows(newid):
-                    #response = sockcmd.CommandCameraSetTracking(item,"none")
-                    response = sockcmd("camera set " + item + " tracking none\n")
-                    if response["status"] == 1:
-                        set_camera_tracking_position(item,newid,tracking_distance,tracking_height)
-                        windows[item] = newid
-                    break
-                if loopcount > loopmax:
-                    break
-                loopcount += 1
-            time.sleep(3)
-        custom_auto_tracking_count = 0
-    else:
-        custom_auto_tracking_count += 1
+    def __init__(self, root, mode,cmdp):
+        self.root = root
+        self.mode = mode
+        self.counter = 0        
+        self.cmdp = cmdp
+        self.shm_time = None
+        self.shm_train = None
+        self.shm_train_size_byte = 0
+        self.shm_camera = { "root" : None }
+        self.viewport_camera = {}
+        if mode == "shm":
+            self.polling = 2
+            self.setup_shm()
+        else:
+            self.polling = 28
+        self.update_polling()
 
+    def close(self):
+        if self.mode == "shm":
+            self.shm_time.close()
+            self.shm_train.close()
+            self.shm_time.unlink()
+            self.shm_train.unlink()
+            for item in self.shm_camera:
+                self.shm_camera[item].close()
+                self.shm_camera[item].unlink()
+
+    def command(self,command):
+        self.cmdp.stdin.write(command)
+        self.cmdp.stdin.flush()
+        output = self.cmdp.stdout.readline().replace("'", '"')
+        return json.loads(output)
+
+    def setup_shm(self):
+        response = self.command("shm set clock time\n");
+        if response["status"] != 1:
+            return False        
+        self.shm_time = shared_memory.SharedMemory(name=response["result"][0])
+        response = self.command("shm set train position\n")
+        if response["status"] != 1:
+            return False
+        self.shm_train = shared_memory.SharedMemory(name=response["result"][0])
+        self.shm_train_size_byte = int(response["result"][1])
+        response = self.command("shm set camera root viewport\n")
+        if response["status"] != 1:
+            return False
+        self.shm_camera[ "root" ] = shared_memory.SharedMemory(name=response["result"][0])
+
+    def setup_train_marker(self,tname,lat,lng):
+        response = self.command("train icon " + tname + "\n")    
+        if response["status"] == 1:
+            if 'http' in response["result"][0]:
+                imagedata = urlopen(response["result"][0])
+                imageobject = Image.open(io.BytesIO(imagedata.read()))
+                resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
+                image = ImageTk.PhotoImage(resized_image)
+                markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image, command=click_train_marker )
+                #markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image )                
+        else:
+            print( response )
+        
+    def update_clock_shm(self):
+        bytedata = bytes(self.shm_time.buf[:4])
+        datasec = int.from_bytes(bytedata, byteorder='little', signed=True)
+        dhour = math.floor(datasec / 3600) ;
+        dmin = math.floor( ( datasec - dhour * 3600 ) / 60) ;
+        dsec = datasec % 60 ;
+        shour = str(dhour)
+        smin = str(dmin)
+        ssec = str(dsec)
+        if dhour < 10:
+            shour = "0" + shour
+        if dmin < 10:
+            smin = "0" + smin
+        if dsec < 10:
+            ssec = "0" + ssec
+        timelabel_var.set(shour + ":" + smin + ":" + ssec)
+
+    def update_train_shm(self):
+        bytedata = bytes(self.shm_train.buf[:self.shm_train_size_byte])
+        offset = 0
+        for icnt in range(0,self.shm_train_size_byte,48):
+            if (offset+48) < self.shm_train_size_byte+1:
+                byteslice = bytedata[offset:offset+48]
+                traindata = struct.unpack('<32s2d', byteslice)
+                trainstr = traindata[0].decode('ascii')
+                nullpos = trainstr.find('\0')
+                trainname = trainstr[0:nullpos]
+                if isfloat(traindata[1]):
+                    lng = float(traindata[1])
+                else:
+                    lng = -100
+                if isfloat(traindata[2]):
+                    lat = float(traindata[2])
+                else:
+                    lat = -100
+                if lat < -90 or lng < -90:
+                    # Not running train at this time
+                    if trainname in markers:
+                        markers[trainname].delete()
+                        del markers[trainname]
+                else:
+                    if trainname in markers:
+                        markers[trainname].set_position(lat,lng)
+                    else:
+                        if len(trainname) > 1:
+                            self.setup_train_marker(trainname,lat,lng)
+                    offset = offset+48
+            else:
+                print(f"Something wrong data : {offset} {self.shm_train_size_byte}")
+
+
+    def update_viewport_shm(self):
+        map_widget.delete_all_polygon()
+        for item in self.shm_camera:
+            bytedata = bytes(self.shm_camera[item].buf[:192])
+            double_number = struct.unpack('<24d', bytedata)
+            positionlist = []
+            center_0 = 0.0
+            center_1 = 0.0           
+            for i in range(0,24,2):
+                if double_number[i+1] != 0.0 or double_number[i] != 0.0:
+                    positionlist.append((double_number[i+1],double_number[i]))
+                    center_0 = center_0 + double_number[i+1]
+                    center_1 = center_1 + double_number[i]
+            if len(positionlist) > 3:            
+                self.viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
+                if map_widget_tracking:
+                    map_widget.set_position(center_0/len(positionlist),center_1/len(positionlist))  
+
+    def update_train_socket(self):
+        response = self.command("train position all\n")
+        if response["status"] != 1:
+            return
+        data = response["result"]
+        train_lst = data[::4]
+        train_lng = data[1::4]
+        train_lat = data[2::4]
+        trainsize = len(train_lst)
+        for item in trainid:
+            existflag = False
+            for i in range(trainsize):
+                if train_lst[i] == item:
+                    lng = float(train_lng[i])
+                    lat = float(train_lat[i])
+                    if train_lst[i] in markers:
+                        markers[train_lst[i]].set_position(lat,lng)
+                    else:
+                        self.setup_train_marker(train_lst[i],lat,lng)
+                    existflag = True
+                    break
+            if existflag == False:
+                if item in markers:
+                    markers[item].delete()
+                    del markers[item]
+
+    def update_viewport_socket(self):
+        map_widget.delete_all_polygon()
+        for item in windows:
+            response = self.command("camera get " + item + " viewport\n")
+            if response["status"] == 1 and response["size"] > 5:
+                data = response["result"]
+                view_lng = data[::2]
+                view_lat = data[1::2]
+                viewsize = len(view_lng)
+                positionlist = []
+                center_0 = 0.0
+                center_1 = 0.0            
+                for i in range(viewsize):
+                    lng = float(view_lng[i])
+                    lat = float(view_lat[i])
+                    center_0 = center_0 + lat
+                    center_1 = center_1 + lng
+                    positionlist.append((lat,lng))
+                self.viewport_camera[item] = map_widget.set_polygon(positionlist,fill_color=None,outline_color="yellow",border_width=4)
+                if map_widget_tracking:
+                    map_widget.set_position(center_0/len(positionlist),center_1/len(positionlist))
+
+    def update_shm(self):
+        if field_isloaded:
+            if field_isrunning:
+                self.update_clock_shm()
+                self.update_train_shm()
+                self.update_viewport_shm()
     
-    
+    def update_socket(self):
+        if field_isloaded:
+            if field_isrunning:
+                response = self.command("clock get time\n")
+                if response["status"] == 1:
+                    timestr = response["result"]
+                    timelabel_var.set(timestr[0]+":"+timestr[1])
+                    self.update_train_socket()
+                    self.update_viewport_socket()
+
+                    
+    def update_polling(self):
+        self.counter += 1
+        if self.counter == self.polling:
+            if self.mode == "shm":
+                self.update_shm()
+            else:
+                self.update_socket()
+            self.counter = 0
+                
+        self.root.after(1000, self.update_polling)
+
+        
 ################################################################################
 #
 #    Widget
@@ -1049,7 +987,9 @@ print(f"plathome: {python_plathome} {os.name}")
 print(f"Resolution: {screen_width}x{screen_height}")
 #root_tk.geometry(f"{1000}x{700}")
 root_tk.title("osgearth_rail_gui")
+#root_tk.attributes('-topmost',True)
 
+    
 # Custom Menubar
 menu_frame = tkinter.Frame(root_tk, bg="lightgray", height=30)
 menu_frame.pack(side="top", fill="x")
@@ -1060,11 +1000,13 @@ menu_button_0.pack(side="left", padx=10)
 
 # setting menu dropdown
 menu0 = tkinter.Menu(menu_button_0, tearoff=0)
-menu0.add_command(label="3D view open", command=server_connect_dialog)
-menu0.add_command(label="3D view close", command=server_exit_dialog)
+menu0.add_command(label="3D view open", command=dialog_3dview_open)
+menu0.add_command(label="3D view close", command=dialog_3dview_close)
 menu0.add_separator()
-menu0.add_command(label="CPU Load", command=cpuload)
-menu0.add_command(label="About", command=about)
+menu0.add_command(label="Map property", command=dialog_mapproperty)
+menu0.add_separator()
+menu0.add_command(label="CPU Load", command=app_cpuload)
+menu0.add_command(label="About", command=app_about)
 menu0.add_command(label="Exit", command=app_quit)
 menu_button_0.config(menu=menu0)
 menu0.entryconfig("3D view close", state=tkinter.DISABLED)
@@ -1075,15 +1017,15 @@ menu_button_1.pack(side="left", padx=10)
 
 # setting menu dropdown
 menu1 = tkinter.Menu(menu_button_1, tearoff=0)
-camera_menu = tkinter.Menu(menu1, tearoff=0)
-menu1.add_command(label="clock", command=clock_dialog)
-menu1.add_command(label="speed", command=speed_dialog)
-menu1.add_cascade(label="camera", menu=camera_menu)
-menu1.add_command(label="manual input", command=manual_input_dialog)
-menu1.add_command(label="4K Multiview Script", command=server_multiview_script)
+camera_submenu = tkinter.Menu(menu1, tearoff=0)
+menu1.add_command(label="clock", command=dialog_clock)
+menu1.add_command(label="speed", command=dialog_speed)
+menu1.add_cascade(label="camera", menu=camera_submenu)
+menu1.add_command(label="manual input", command=dialog_manual_input)
+#menu1.add_command(label="4K Multiview Script", command=server_multiview_script)
 
-camera_menu.add_command(label="tracking", command=camera_tracking_dialog)
-camera_menu.add_command(label="New(add)", command=camera_add_dialog)
+camera_submenu.add_command(label="tracking", command=dialog_camera_tracking)
+camera_submenu.add_command(label="New(add)", command=dialog_camera_add)
 
 menu_button_1.config(menu=menu1)
 menu1.entryconfig("clock", state=tkinter.DISABLED)
@@ -1092,11 +1034,11 @@ menu1.entryconfig("camera", state=tkinter.DISABLED)
 menu1.entryconfig("manual input", state=tkinter.DISABLED)
 
 # add menu item
-menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=run_command)
+menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=command_button_run)
 menu_button_2.pack(side="left", padx=20)
 menu_button_2.config(state=tkinter.DISABLED)
 
-menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", fg="red", command=pause_command)
+menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", fg="red", command=command_button_pause)
 menu_button_3.pack(side="left", padx=20)
 menu_button_3.config(state=tkinter.DISABLED)
 
@@ -1116,8 +1058,25 @@ speedlabel.pack(side="left", padx=10)
 # create map widget
 #
 map_widget = tkintermapview.TkinterMapView(root_tk, width=main_window_width, height=main_window_height, corner_radius=0)
-map_widget.pack(fill="both", expand=True)
+#map_widget.set_tile_server(
+#    "https://tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+#    max_zoom=19
+#)
+#map_widget.set_tile_server(
+#    "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
+#    max_zoom=19
+#)
+map_widget.set_tile_server(
+    "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+    max_zoom=19
+)
+#map_widget.set_tile_server(
+#    "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+#    max_zoom=19
+#)
 
+
+map_widget.pack(fill="both", expand=True)
 map_widget.set_zoom(2)
 
 markers = { "sample" : map_widget.set_marker( 0, 0, text="sample") }

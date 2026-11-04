@@ -204,7 +204,8 @@ class SocketClient():
     def __init__(self):
         self.host = None
         self.port = None
-        self.datasize = 16384
+        #self.datasize = 16384
+        self.datasize = 131072
         self.showtimestamp = False
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)       
         

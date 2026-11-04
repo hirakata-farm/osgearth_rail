@@ -58,7 +58,8 @@
 #include <sys/wait.h>
 #endif
 
-#define GH_SOCKET_RECEIVE_BUFFER_SIZE 16384
+//#define GH_SOCKET_RECEIVE_BUFFER_SIZE 16384
+#define GH_SOCKET_RECEIVE_BUFFER_SIZE 131072
 
 #define LC "[imgui] "
 
