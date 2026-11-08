@@ -107,6 +107,10 @@ ghRailGetCommandFirstArgString(ghCommandQueue *cmd) {
     return GH_STRING_NONE;
   }
 }
+int
+ghRailGetCommandArgSize(ghCommandQueue *cmd) {
+  return cmd->recv[GH_JSON_SIZE_STRING];
+}
 
 void
 ghRailGetCommandFloatVector(ghCommandQueue *cmd, float *vec) {
@@ -261,14 +265,26 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       ghRailCommandFieldGetDescription(cmd,rail);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
-    case (GH_COMMAND_TRAIN+GH_TYPE_LABEL+GH_KEY_ON):
-      ghRailCommandTrainLabel(cmd,rail,true);
+    case (GH_COMMAND_FIELD+GH_TYPE_GET+GH_KEY_ROUTE):
+      ghRailCommandFieldGetRoute(cmd,rail);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
-    case (GH_COMMAND_TRAIN+GH_TYPE_LABEL+GH_KEY_OFF):
-      ghRailCommandTrainLabel(cmd,rail,false);
+    case (GH_COMMAND_FIELD+GH_TYPE_GET+GH_KEY_DIRECTION):
+      ghRailCommandFieldGetDirection(cmd,rail);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
+    case (GH_COMMAND_FIELD+GH_TYPE_GET+GH_KEY_STATION):
+      ghRailCommandFieldGetStation(cmd,rail);
+      cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      break;
+    case (GH_COMMAND_TRAIN+GH_TYPE_SET+GH_KEY_LABEL):
+      ghRailCommandTrainLabel(cmd,rail);
+      cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      break;
+      //case (GH_COMMAND_TRAIN+GH_TYPE_LABEL+GH_KEY_OFF):
+      //ghRailCommandTrainLabel(cmd,rail,false);
+      //cmd->status = GH_QUEUE_STATUS_EXECUTED;
+      //break;
     case (GH_COMMAND_TRAIN+GH_TYPE_GET+GH_KEY_POSITION):
       ghRailCommandTrainPosition(cmd,rail,simtime);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
@@ -321,15 +337,15 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       ghRailCommandConfigGetMaxcamera(cmd,rail);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
-    case (GH_COMMAND_SHM+GH_TYPE_SETCLOCK+GH_KEY_TIME):
+    case (GH_COMMAND_SHM+GH_TYPE_CLOCK+GH_KEY_TIME):
       ghRailCommandShmSet(cmd,rail,_wins);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
-    case (GH_COMMAND_SHM+GH_TYPE_SETTRAIN+GH_KEY_POSITION):
+    case (GH_COMMAND_SHM+GH_TYPE_TRAIN+GH_KEY_POSITION):
       ghRailCommandShmSet(cmd,rail,_wins);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
-    case (GH_COMMAND_SHM+GH_TYPE_SETCAMERA+GH_KEY_VIEWPORT):
+    case (GH_COMMAND_SHM+GH_TYPE_CAMERA+GH_KEY_VIEWPORT):
       ghRailCommandShmSet(cmd,rail,_wins);
       cmd->status = GH_QUEUE_STATUS_EXECUTED;
       break;
@@ -360,8 +376,8 @@ ghRailExecuteCommand( ghCommandQueue *cmd, ghRail *rail ,  double simtime , osgE
       ghRailCommandShowVersion(cmd);
       cmd->status = GH_QUEUE_STATUS_EXECUTED; 
       break;
-    case (GH_COMMAND_FIELD+GH_TYPE_SET):
-      ghRailCommandFieldSetData(cmd,rail);
+    case (GH_COMMAND_FIELD+GH_TYPE_SET+GH_KEY_ID):
+      ghRailCommandFieldSetID(cmd,rail);
       cmd->status = GH_QUEUE_STATUS_PART_EXECUTED;
       break;
     default:
@@ -384,7 +400,7 @@ ghRailCreateResultObject(ghCommandQueue *cmd){
   json[GH_JSON_UTIME_STRING] = unix_time;
   json[GH_JSON_COMMAND_STRING] = cmd->recv[GH_JSON_COMMAND_STRING];
   json[GH_JSON_STATUS_STRING] = cmd->resultcode;
-  
+
   if ( cmd->resultsize == 1 ) {
     json[GH_JSON_RESULT_STRING] = { cmd->resultmsg };
     json[GH_JSON_SIZE_STRING] = 1;
@@ -407,10 +423,12 @@ ghRailCreateResultObject(ghCommandQueue *cmd){
 
 
 void
-ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail) {
+ghRailCommandFieldSetID(ghCommandQueue *cmd, ghRail *rail) {
   int res = -1;
-  std::string fieldid = cmd->recv[GH_JSON_NAME_STRING];
+  //std::string fieldid = cmd->recv[GH_JSON_NAME_STRING];
+  std::string fieldid = ghRailGetCommandName(cmd);
   std::string ret = "field set " + fieldid;
+  
   res = rail->Setup(fieldid);
   switch (res) {
   case GH_SETUP_RESULT_OK:
@@ -1334,8 +1352,14 @@ ghRailCommandFieldGetID(ghCommandQueue *cmd, ghRail *rail) {
 void
 ghRailCommandFieldGetTrain(ghCommandQueue *cmd, ghRail *rail) {
   if ( rail->IsLoaded() ) {
-    std::string ret = rail->GetUnits();
-    cmd->resultsize = rail->GetUnitsSize();
+    std::string lineid = ghRailGetCommandName(cmd);
+    std::string direction = "";
+    if ( lineid.size() > 0 && ghRailGetCommandArgSize(cmd) == 1 ) {
+      direction = ghRailGetCommandFirstArgString(cmd);
+    }
+    //std::cout << "field get train:"<< lineid << " " << lineid.size() << std::endl;
+    std::string ret = rail->GetUnits(lineid,direction);
+    cmd->resultsize = rail->GetUnitsSize(lineid,direction);
     cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
     cmd->resultmsg = ghStringTrim(ret);
   } else {
@@ -1393,14 +1417,70 @@ ghRailCommandFieldGetDescription(ghCommandQueue *cmd, ghRail *rail) {
     cmd->resultmsg = ret;  
   }
 }
+void
+ghRailCommandFieldGetRoute(ghCommandQueue *cmd, ghRail *rail) {
+  if ( rail->IsLoaded() ) {
+    std::string lineid = ghRailGetCommandName(cmd);
+    std::string ret = rail->GetRoutes(lineid);
+    cmd->resultsize = rail->GetRoutesSize(lineid);
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+    cmd->resultmsg = ghStringTrim(ret);
+  } else {
+    std::string ret = "field get route ";
+    ret += GH_ERROR_MSG_DATA_NOT_LOADED;
+    cmd->resultsize = 1;
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+    cmd->resultmsg = ret;  
+  }
+}
+void
+ghRailCommandFieldGetDirection(ghCommandQueue *cmd, ghRail *rail) {
+  if ( rail->IsLoaded() ) {
+    std::string lineid = ghRailGetCommandName(cmd);
+    std::string ret = rail->GetDirection(lineid);
+    cmd->resultsize = rail->GetDirectionSize(lineid);
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+    cmd->resultmsg = ghStringTrim(ret);
+  } else {
+    std::string ret = "field get route ";
+    ret += GH_ERROR_MSG_DATA_NOT_LOADED;
+    cmd->resultsize = 1;
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+    cmd->resultmsg = ret;  
+  }
+}
+void
+ghRailCommandFieldGetStation(ghCommandQueue *cmd, ghRail *rail) {
+  if ( rail->IsLoaded() ) {
+    std::string lineid = ghRailGetCommandName(cmd);
+    std::string dir = ghRailGetCommandFirstArgString(cmd);
+    
+    std::string ret = rail->GetStation(lineid,dir);
+    cmd->resultsize = rail->GetStationSize(lineid,dir);
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_SUCCESS;
+    cmd->resultmsg = ghStringTrim(ret);
+  } else {
+    std::string ret = "field get route ";
+    ret += GH_ERROR_MSG_DATA_NOT_LOADED;
+    cmd->resultsize = 1;
+    cmd->resultcode = GH_QUEUE_RETURN_CODE_ERROR;
+    cmd->resultmsg = ret;  
+  }
+}
 
 
 void
-ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail,bool flag) {
+ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail) {
   bool result ;
   std::string ret = "train label ";
   std::string trainid = ghRailGetCommandName(cmd);
-
+  std::string status = ghRailGetCommandFirstArgString(cmd);
+  bool flag = false;
+  
+  if ( status == "on" ) {
+    flag = true;
+  }
+  
   if ( trainid == GH_STRING_ALL ) {
     result = rail->SetTrainLabel("",flag);
   } else {
@@ -1684,15 +1764,15 @@ ghRailCommandShmSet(ghCommandQueue *cmd,ghRail *rail, std::map<std::string, ghWi
   } else {
     //std::string skey = std::to_string(shmkey);
     int shmtype = ghRailGetCommandType(cmd);
-    if ( shmtype == GH_TYPE_SETCLOCK ) {
+    if ( shmtype == GH_TYPE_CLOCK ) {
       ssize = rail->InitShmClock(shmkey);
       keyname = rail->GetShmClockKeyname();
       ret += "clock time ";
-    } else if ( shmtype == GH_TYPE_SETTRAIN ) {
+    } else if ( shmtype == GH_TYPE_TRAIN ) {
       ssize = rail->InitShmTrain(shmkey);
       keyname = rail->GetShmTrainKeyname();
       ret += "train potision ";
-    } else if ( shmtype == GH_TYPE_SETCAMERA ) {
+    } else if ( shmtype == GH_TYPE_CAMERA ) {
       std::string camname = ghRailGetCommandName(cmd);
       if ( _wins.count(camname) > 0 ) {
 	ssize = ghInitShmWindow(shmkey,&_wins[camname].shm,camname);

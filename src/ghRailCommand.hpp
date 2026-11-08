@@ -88,6 +88,10 @@ off             = 310000
 timetable       = 320000
 icon            = 330000
 distance        = 340000
+route           = 350000
+direction       = 360000
+station         = 370000
+
 maxclockspeed   = 410000
 altmode         = 420000
 displaydistance = 430000
@@ -144,26 +148,28 @@ camera get all
 
 field (set|get) [configuration specific ID]
 
-field set G012142123
+field set id G012142123
 
-field get
-field get train
+field get id
+field get train [lineid] [direction]
 field get line
 field get timezone
 field get description
+field get route (lineid)
+field get direction (lineid)
+field get station (lineid) (direction)
 
 
 5. Train Command
 
-train (label|position|timetable|icon|line|distance) [train id]
+train (set|get) (label|position|timetable|icon|line|distance) [train id]
 
-
-train label [train id] [on|off] 
-train position [train id] 
-train timetable [train id]
-train icon [train id]
-train line [train id]
-train distance [train id]
+train set label [train id] [on|off]    ( allow trainid="all" )
+train get position [train id]          ( allow trainid="all" )
+train get timetable [train id]
+train get icon [train id]
+train get line [train id]
+train get distance [train id]
 
 6. Configure Command
 
@@ -181,11 +187,11 @@ config get maxcamera
 
 7. Shared Memory Command ( windows or linux(SYSV) )
 
-shm (set|remove) (clock|train|camera) (time|position|viewport)
+shm (clock|train|camera|remove) (time|position|viewport)
 
-shm set clock time
-shm set train position
-shm set camera [camera name] viewport
+shm clock time
+shm train position
+shm camera [camera name] viewport
 shm remove [ shm key name ]
 
 
@@ -227,6 +233,14 @@ shm remove [ shm key name ]
 #define GH_MOD_2DIGITS     100
 #define GH_MOD_4DIGITS   10000
 
+#define GH_JSON_COMMAND_STRING  "cmd"
+#define GH_JSON_NAME_STRING     "name"
+#define GH_JSON_SIZE_STRING     "size"
+#define GH_JSON_ARGS_STRING     "args"
+#define GH_JSON_UTIME_STRING    "utime"
+#define GH_JSON_STATUS_STRING   "status"
+#define GH_JSON_RESULT_STRING   "result"
+#define GH_JSON_REVISION_STRING "rev"
 
 #define GH_COMMAND_EXIT   10
 #define GH_COMMAND_PLAY   12
@@ -239,27 +253,15 @@ shm remove [ shm key name ]
 #define GH_COMMAND_CONFIG 25
 #define GH_COMMAND_SHM    26
 
-#define GH_JSON_COMMAND_STRING  "cmd"
-#define GH_JSON_NAME_STRING     "name"
-#define GH_JSON_SIZE_STRING     "size"
-#define GH_JSON_ARGS_STRING     "args"
-#define GH_JSON_UTIME_STRING    "utime"
-#define GH_JSON_STATUS_STRING   "status"
-#define GH_JSON_RESULT_STRING   "result"
-#define GH_JSON_REVISION_STRING "rev"
-
-
 #define GH_TYPE_SET       1100
 #define GH_TYPE_GET       1200
 #define GH_TYPE_ADD       1300
 #define GH_TYPE_REMOVE    1400
 #define GH_TYPE_STATUS    2100
 #define GH_TYPE_VERSION   2200
-#define GH_TYPE_LABEL     2300 
-#define GH_TYPE_SETCLOCK  2400
-#define GH_TYPE_SETTRAIN  2500
-#define GH_TYPE_SETCAMERA 2600
-
+#define GH_TYPE_CLOCK     3100
+#define GH_TYPE_TRAIN     3200
+#define GH_TYPE_CAMERA    3300
 
 #define GH_KEY_TIME            140000
 #define GH_KEY_SPEED           150000
@@ -282,6 +284,10 @@ shm remove [ shm key name ]
 #define GH_KEY_TIMETABLE       320000
 #define GH_KEY_ICON            330000
 #define GH_KEY_DISTANCE        340000
+#define GH_KEY_ROUTE           350000
+#define GH_KEY_DIRECTION       360000
+#define GH_KEY_STATION         370000
+
 #define GH_KEY_MAXCLOCKSPEED   410000
 #define GH_KEY_ALTMODE         420000
 #define GH_KEY_DISPLAYDISTANCE 430000
@@ -320,18 +326,22 @@ int ghRailGetCommandKey(ghCommandQueue *cmd);
 void ghRailGetCommandFloatVector(ghCommandQueue *cmd, float *vec);
 std::string ghRailGetCommandName(ghCommandQueue *cmd);
 std::string ghRailGetCommandFirstArgString(ghCommandQueue *cmd);
+int ghRailGetCommandArgSize(ghCommandQueue *cmd);
 
 void ghRailExecuteCommand(ghCommandQueue *cmd, ghRail *rail, double simtime,osgEarth::SkyNode *_sky,std::map<std::string, ghWindow>& _wins);
 
 std::string ghRailCreateResultObject(ghCommandQueue *cmd);
 
 
-void ghRailCommandFieldSetData(ghCommandQueue *cmd, ghRail *rail);
+void ghRailCommandFieldSetID(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandFieldGetID(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandFieldGetTrain(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandFieldGetLine(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandFieldGetTimezone(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandFieldGetDescription(ghCommandQueue *cmd, ghRail *rail);
+void ghRailCommandFieldGetRoute(ghCommandQueue *cmd, ghRail *rail);
+void ghRailCommandFieldGetDirection(ghCommandQueue *cmd, ghRail *rail);
+void ghRailCommandFieldGetStation(ghCommandQueue *cmd, ghRail *rail);
 
 
 void ghRailCommandClockSetTime(ghCommandQueue *cmd, ghRail *rail, osgEarth::SkyNode *_sky);
@@ -340,7 +350,7 @@ void ghRailCommandClockSetSpeed(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandClockGetSpeed(ghCommandQueue *cmd, ghRail *rail);
 
 
-void ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail,bool flag);
+void ghRailCommandTrainLabel(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandTrainPosition(ghCommandQueue *cmd, ghRail *rail, double simtime);
 void ghRailCommandTrainTimetable(ghCommandQueue *cmd, ghRail *rail);
 void ghRailCommandTrainIcon(ghCommandQueue *cmd, ghRail *rail);

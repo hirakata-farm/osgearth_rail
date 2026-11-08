@@ -53,7 +53,7 @@
 #include "ghRailUnit.hpp"
 #include "ghRailTime.hpp"
 
-#define GH_APP_REVISION "0.8.8"
+#define GH_APP_REVISION "0.9.8"
 #define GH_APP_NAME "osgearth_rail"
 #define GH_WELCOME_MESSAGE "Welcome osgearth_rail viewer"
 
@@ -65,7 +65,7 @@
 #define GH_SUN_AMBIENT 0.03
 
 /////////////////////////////////////////////////////////
-
+#define GH_KEY_DELIMITER "@"
 
 #define GH_SETUP_RESULT_OK 0
 #define GH_SETUP_RESULT_NOT_GET_CONFIG 8
@@ -172,10 +172,17 @@ class ghRail
       void SetMaxCamera(int cams);
       int  GetMaxCamera();
 
-      std::string GetUnits();
-      int GetUnitsSize();
+      std::string GetUnits(std::string lineid,std::string direction);
+      int GetUnitsSize(std::string lineid,std::string direction);
       std::string GetLines();
       int GetLinesSize();
+      std::string GetRoutes(std::string lineid);
+      int GetRoutesSize(std::string lineid);
+      std::string GetDirection(std::string lineid);
+      int GetDirectionSize(std::string lineid);
+      std::string GetStation(std::string lineid,std::string direction);
+      int GetStationSize(std::string lineid,std::string direction);
+      
       std::string GetTimezoneStr();
       std::string GetDescription();
       bool SetTrainLabel(std::string trainid, bool flag);

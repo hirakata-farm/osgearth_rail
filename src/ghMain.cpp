@@ -317,7 +317,7 @@ ghCheckCommand() {
   if ( cmdcode == GH_COMMAND_EXIT ) {
     ghViewer->setDone(true);
     cmd->status = GH_QUEUE_STATUS_EXECUTED;
-  } else if ( cmdcode == (GH_COMMAND_FIELD+GH_TYPE_SET) ) {
+  } else if ( cmdcode == (GH_COMMAND_FIELD+GH_TYPE_SET+GH_KEY_ID) ) {
     ghSky->setDateTime( ghRail3D->GetBaseDatetime());
     ghGui->setTimeZone( ghRail3D->GetTimeZoneMinutes() );
     cmd->status = GH_QUEUE_STATUS_EXECUTED;

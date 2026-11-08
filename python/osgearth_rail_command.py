@@ -21,6 +21,9 @@ import socket
 import re
 import json
 from datetime import datetime
+
+socket_buffer = 16384
+show_socket_detail = False
 ##########################
 #
 #
@@ -72,13 +75,16 @@ from datetime import datetime
 #
 #field (set|get) [configuration specific ID]
 #
-#field set G012142123
+#field set id G012142123
 #
 #field get id
 #field get train
 #field get line
 #field get timezone
 #field get description
+#field get route (lineid)
+#field get direction (lineid)
+#field get station (lineid) (direction)
 #
 #
 #5. Train Command
@@ -86,14 +92,14 @@ from datetime import datetime
 #train (label|position|timetable|icon|line|distance) [train id]
 #
 #
-#train label [train id] [on|off]
-#  available "all" keyword  %train label all on
-#train position [train id]
-#  available "all" keyword  %train position all
-#train timetable [train id]
-#train icon [train id]
-#train line [train id]
-#train distance [train id]
+#train set label [train id] [on|off]
+#  available "all" keyword  ex)train set label all on
+#train get position [train id]
+#  available "all" keyword  ex)train set position all
+#train get timetable [train id]
+#train get icon [train id]
+#train get line [train id]
+#train get distance [train id]
 #
 #6. Configure Command
 #
@@ -111,11 +117,11 @@ from datetime import datetime
 #
 #7. Shared Memory Command ( windows or linux(SYSV) )
 #
-#shm (set|remove) (clock|train|camera) (time|position|viewport)
+#shm (clock|train|camera|remove) (time|position|viewport)
 #
-#shm set clock time
-#shm set train position
-#shm set camera [camera name] viewport
+#shm clock time
+#shm train position
+#shm camera [camera name] viewport
 #shm remove [ shm key name ]
 #
 #
@@ -144,10 +150,10 @@ GH_TYPE_ADD       = 1300
 GH_TYPE_REMOVE    = 1400
 GH_TYPE_STATUS    = 2100
 GH_TYPE_VERSION   = 2200
-GH_TYPE_LABEL     = 2300 
-GH_TYPE_SETCLOCK  = 2400
-GH_TYPE_SETTRAIN  = 2500
-GH_TYPE_SETCAMERA = 2600
+#GH_TYPE_LABEL     = 2300 
+GH_TYPE_CLOCK     = 3100
+GH_TYPE_TRAIN     = 3200
+GH_TYPE_CAMERA    = 3300
 
 
 GH_KEY_TIME            = 140000
@@ -171,6 +177,9 @@ GH_KEY_OFF             = 310000
 GH_KEY_TIMETABLE       = 320000
 GH_KEY_ICON            = 330000
 GH_KEY_DISTANCE        = 340000
+GH_KEY_ROUTE           = 350000
+GH_KEY_DIRECTION       = 360000
+GH_KEY_STATION         = 370000
 GH_KEY_MAXCLOCKSPEED   = 410000
 GH_KEY_ALTMODE         = 420000
 GH_KEY_DISPLAYDISTANCE = 430000
@@ -290,12 +299,13 @@ def CommandShmRemove(key):
     json_str = json.dumps(data,ensure_ascii=False, indent=1)
     return remote_socket.send(json_str)
 
-def CommandTrainLabelSet(train,code):
+def CommandTrainLabelSet(train,flag):
     data = {
         "utime" : int(datetime.now().timestamp()),
-        "cmd" : code,
+        "cmd" : 291124,
         "name" : train,
-        "size" : 0,
+        "args" : [ flag ],
+        "size" : 1,
         "rev" : 1
         }
     json_str = json.dumps(data,ensure_ascii=False, indent=1)
@@ -406,10 +416,10 @@ def CommandClockSetTime(hour,mins):
     json_str = json.dumps(data,ensure_ascii=False, indent=1)
     return remote_socket.send(json_str)    
     
-def CommandFieldSet(field):
+def CommandFieldSetID(field):
     data = {
         "utime" : int(datetime.now().timestamp()),
-        "cmd" : 1123,
+        "cmd" : 241123,
         "name" : field,
         "size" : 0,
         "rev" : 1
@@ -466,6 +476,7 @@ def CommandCodeOnly(code):
     data = {
         "utime" : int(datetime.now().timestamp()),
         "cmd" : code,
+        "name" : "",
         "size" : 0,
         "rev" : 1
         }
@@ -512,7 +523,7 @@ def CmdClockGet(key):
     else:
         return "clock get : wrong arguments"
 
-def CmdFieldGet(key):
+def CmdFieldGetArg2(key):
     match key:
         case "id":
             return CommandCodeOnly(241223)
@@ -527,11 +538,54 @@ def CmdFieldGet(key):
         case _:
             return "field get : wrong arguments"
 
+def CmdFieldGetArg3(key,lineid):
+    keycode = 0
+    match key:
+        case "route":
+            keycode = 351223
+        case "direction":
+            keycode = 361223
+        case "train":
+            keycode = 251223
+        case _:
+            return "field get : wrong arguments"
+
+    data = {
+        "utime" : int(datetime.now().timestamp()),
+        "cmd" : keycode,
+        "name" : lineid,
+        "size" : 0,
+        "rev" : 1
+        }
+    json_str = json.dumps(data,ensure_ascii=False, indent=1)
+    return remote_socket.send(json_str)
+
+def CmdFieldGetArg4(key,lineid,dir):
+    keycode = 0
+    if key == "station":
+        keycode = 371223
+    elif key == "train":
+        keycode = 251223
+    else:
+        return "field get : wrong arguments"
+
+    data = {
+        "utime" : int(datetime.now().timestamp()),
+        "cmd" : keycode,
+        "name" : lineid,
+        "args" : [ dir ],
+        "size" : 1,
+        "rev" : 1
+        }
+    json_str = json.dumps(data,ensure_ascii=False, indent=1)
+    return remote_socket.send(json_str)
+    
+
 def CmdTrainLabel(train,key):
     if key == "on":
-        return CommandTrainLabelSet(train,302324)
+        return CommandTrainLabelSet(train,"on")
     elif key == "off":
-        return CommandTrainLabelSet(train,312324)
+        return CommandTrainLabelSet(train,"off")
     else:
         return "train label : wrong arguments"
 
@@ -640,20 +694,20 @@ def CmdShmSet(key,val0,val1):
     match key:
         case "clock":
             if val0 == "time":
-                return CommandShmSet(None,142426)
+                return CommandShmSet(None,143126)
             else:
-                return "shm set clock : wrong arguments"
+                return "shm clock : wrong arguments"
             
         case "train":
             if val0 == "position":
-                return CommandShmSet(None,162526)
+                return CommandShmSet(None,163226)
             else:
-                return "shm set train : wrong arguments"
+                return "shm train : wrong arguments"
         case "camera":
             if val1 == "viewport":
-                return CommandShmSet(val0,222626)
+                return CommandShmSet(val0,223326)
             else:
-                return "shm set camera : wrong arguments"
+                return "shm camera : wrong arguments"
         case _:
             return "shm set : wrong arguments"
 
@@ -687,8 +741,7 @@ psr.add_argument("-m", "--mode", default="text")
 pargs = psr.parse_args()
 
 remote_socket = SocketClient()
-remote_socket.setup(16384,False)
-#remote_socket.setup(16384,True)
+remote_socket.setup(socket_buffer,show_socket_detail)
 
 if remote_socket.connect(pargs.host, int(pargs.port)):
     print("connection OK", pargs.host, pargs.port)
@@ -777,31 +830,50 @@ def main():
 
               case "field":
                   if args[0] == "set":
-                      print( getResultMessage( CommandFieldSet(args[1]) ) )
+                      if args[1] == "id":
+                          print( getResultMessage( CommandFieldSetID(args[2]) ) )
+                      else:
+                          print("field set : wrong arguments")
                   elif args[0] == "get":
-                      print( getResultMessage( CmdFieldGet(args[1]) ) )
+                      if len(args) == 4:
+                          print( getResultMessage( CmdFieldGetArg4( args[1],args[2],args[3]) ) )
+                      elif len(args) == 3:
+                          print( getResultMessage( CmdFieldGetArg3( args[1],args[2] ) ) )
+                      elif len(args) == 2:
+                          print( getResultMessage( CmdFieldGetArg2( args[1] ) ) )
+                      else:
+                          print("field get : wrong arguments")
                   else:
                       print("field : wrong arguments")
               case "train":
-                  match args[0]:
-                      case "label":
-                          if len(args) == 3:
-                              print( getResultMessage( CmdTrainLabel(args[1],args[2]) ) )
+                  if args[0] == "set":
+                      if args[1] == "label":
+                          if len(args) == 4:
+                              print( getResultMessage( CmdTrainLabel(args[2],args[3]) ) )
                           else:
-                              print("field label : wrong arguments")                          
-                      case "position":
-                          # 160000 + 1200 + 24
-                          print( getResultMessage( CommandTrainGet(args[1],161224) ) )
-                      case "timetable":
-                          print( getResultMessage( CommandTrainGet(args[1],321224) ) )
-                      case "icon":
-                          print( getResultMessage( CommandTrainGet(args[1],331224) ) )
-                      case "line":
-                          print( getResultMessage( CommandTrainGet(args[1],261224) ) )
-                      case "distance":
-                          print( getResultMessage( CommandTrainGet(args[1],341224) ) )
-                      case _:
-                          print("field : wrong arguments")
+                              print("train set label : wrong arguments")                          
+                      else:
+                          print("train set : wrong arguments")
+                  elif args[0] == "get":
+                      if len(args) == 3:
+                          match args[1]:
+                              case "position":
+                                  # 160000 + 1200 + 24
+                                  print( getResultMessage( CommandTrainGet(args[2],161224) ) )
+                              case "timetable":
+                                  print( getResultMessage( CommandTrainGet(args[2],321224) ) )
+                              case "icon":
+                                  print( getResultMessage( CommandTrainGet(args[2],331224) ) )
+                              case "line":
+                                  print( getResultMessage( CommandTrainGet(args[2],261224) ) )
+                              case "distance":
+                                  print( getResultMessage( CommandTrainGet(args[2],341224) ) )
+                              case _:
+                                  print("train get : wrong arguments")
+                      else:
+                          print("train get : wrong arguments")
+                  else:
+                      print("train : wrong arguments")
               case "config":
                   if args[0] == "set":
                       if len(args) == 3:
@@ -813,17 +885,15 @@ def main():
                   else:
                       print("config : wrong arguments")
               case "shm":
-                  if args[0] == "set":
-                      if len(args) == 4:
-                          print( getResultMessage( CmdShmSet(args[1],args[2],args[3]) ) )
-                      elif len(args) == 3:
-                          print( getResultMessage( CmdShmSet(args[1],args[2],None) ) )
-                      else:
-                          print("shm set : wrong arguments")                          
-                  elif args[0] == "remove":
+                  if args[0] == "remove":
                       print( getResultMessage( CommandShmRemove(args[1]) ) )
                   else:
-                      print("field : wrong arguments")
+                      if len(args) == 3:
+                          print( getResultMessage( CmdShmSet(args[0],args[1],args[2]) ) )
+                      elif len(args) == 2:
+                          print( getResultMessage( CmdShmSet(args[0],args[1],None) ) )
+                      else:
+                          print("shm  : wrong arguments")                          
               case "show":
                   if args[0] == "status":
                       print( getResultMessage( CommandCodeOnly(2117) ) )

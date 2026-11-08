@@ -125,8 +125,13 @@ def sockcmd(command):
     cmdp.stdin.flush()
     output = cmdp.stdout.readline().replace("'", '"')
     #print(output)
-    return json.loads(output)
-
+    #return json.loads(output)
+    try:
+        ret = json.loads(output)
+    except json.decoder.JSONDecodeError:
+        return { "status": 0, "result" : output }
+    else:
+        return ret
         
 def isfloat(s):
     try:
@@ -168,13 +173,15 @@ def setup_field_3dserver(fieldid):
     global remote_host
     global connect_mode
     global pollingupdate
+    global stationlist
 
-    response = sockcmd("field set " + fieldid + "\n");
+    response = sockcmd("field set id " + fieldid + "\n");
     if response["status"] != 1 :
         print(response)
         return False
     menu0.entryconfig("3D view open", state=tkinter.DISABLED)
     menu0.entryconfig("3D view close", state=tkinter.NORMAL)
+    menu0.entryconfig("Timetable", state=tkinter.NORMAL)
     menu1.entryconfig("clock", state=tkinter.NORMAL)
     menu1.entryconfig("speed", state=tkinter.NORMAL)
     menu1.entryconfig("camera", state=tkinter.NORMAL)
@@ -189,6 +196,22 @@ def setup_field_3dserver(fieldid):
     time.sleep(3) # wait time for Setup 3D Viewer
     response = sockcmd("field get train\n")
     trainid = response["result"]
+
+    tablelist = dict()
+    response = sockcmd("field get line\n")
+    linelst = response["result"]
+    for lineitem  in linelst:
+        response = sockcmd("field get direction " + lineitem + "\n")
+        tablelist[lineitem] = response["result"]
+
+    stationlist = dict()
+    for lineitem  in tablelist:
+        for diritem  in tablelist[lineitem]:
+            response = sockcmd("field get station " + lineitem + " " + diritem + "\n")
+            key = lineitem + "_" + diritem
+            stationlist[key] = response["result"]
+            #print(stationlist[key])
+
     field_isloaded = True
     pollingupdate = PollingUpdate(root_tk,connect_mode,cmdp)
     return True    
@@ -222,7 +245,180 @@ def get_random_train_id():
 #  GUI Dialogs
 #
 #
+def dialog_timetable_open(key):
+    global stationlist
+
+    train_key = key.replace("_"," ")
+    tabledata = stationlist[key]
+    t_timetable = dict()
+    colm_lst = ["distance","station"]
+
+    response = sockcmd("field get train " + train_key + "\n")
+    trainlst = response["result"]
+    for trainitem  in trainlst:
+        response = sockcmd("train get timetable " + trainitem + "\n")
+        if response["status"] == 1:
+            t_timetable[trainitem] = response["result"]
+            colm_lst.append(trainitem)
     
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("600x400")
+    dialog.title("Timetable   " + tabledata[0] + " --- " + tabledata[-2] )
+
+    tree = ttk.Treeview(dialog, show="headings")
+    #tree["columns"] = ("distance","station", "time")
+    tree["columns"] = tuple(colm_lst)
+    tree.column("distance", anchor=tkinter.CENTER, width=50)
+    tree.column("station", anchor=tkinter.CENTER, width=100)
+    tree.heading("distance", text="Distance", anchor=tkinter.CENTER)
+    tree.heading("station", text="Station", anchor=tkinter.CENTER)
+    for trainitem in trainlst:
+        tree.column(trainitem , anchor=tkinter.CENTER, width=50)
+        tree.heading(trainitem, text=trainitem, anchor=tkinter.CENTER)
+
+    item_id = []
+    for i in range(0,len(tabledata),2):
+        t = tree.insert('',tkinter.END, values=(tabledata[i+1],tabledata[i]))
+        item_id.append(t)
+
+    for key, value in t_timetable.items():
+        #print(f"{key}: {value}")
+        for i in range(0,len(value),2):
+            findid = -1
+            #print(f"timetable list : {key} {value[i]} {value[i+1]}")
+            for j in range(0,len(item_id)):
+                allvalues = tree.item(item_id[j], "values")
+                #print(f"item : {allvalues[0]} {allvalues[1]}")
+                if value[i+1] == allvalues[1]:
+                    findid = j
+                    break
+            if findid > -1:
+                tdata = value[i].split(":")
+                timedata = tdata[0] + ":" + tdata[1]
+                tree.set(item_id[findid], key, timedata)                
+        
+    xscrollbar = ttk.Scrollbar(dialog, orient=tkinter.HORIZONTAL, command=tree.xview)
+    yscrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)    
+    tree.configure(yscrollcommand=yscrollbar.set,xscrollcommand=xscrollbar.set)
+    yscrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+    xscrollbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)    
+
+    def on_close_ok():
+        dialog.destroy()
+
+    tree.pack(expand=True, fill="both")
+    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
+    ok_button.pack()
+
+
+def dialog_select_timetable_open():
+    global stationlist
+
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("600x400")
+    #dialog.title("Timetable  " + id)
+    dialog.title("Select timetable")
+
+    ypos = 20
+    radioitem = dict()
+    selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
+    for key, value in stationlist.items():
+        #print(f"{key}: {value}")
+        msg = value[0] + " --- " + value[-2]
+        radioitem[key] = ttk.Radiobutton(dialog, text=msg, value=key, variable=selected_option)
+        radioitem[key].place(x=30,y=ypos)
+        ypos = ypos+20
+
+    def on_timetable_ok():
+        sel = selected_option.get()
+        dialog_timetable_open(sel)
+        dialog.destroy()
+        
+    def on_timetable_close():
+        dialog.destroy()
+        
+    ok_button = tkinter.Button(dialog, text="Show timetable", fg="blue", command=on_timetable_ok)
+    ok_button.place(x=100,y=ypos+40)
+    no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_timetable_close)
+    no_button.place(x=300,y=ypos+40)
+    width = 600
+    height = ypos+80
+    dialog.geometry(f"{width}x{height}")
+    dialog.grab_set() # modal dialog
+    root_tk.wait_window(dialog) # wait for close dialog
+    
+def dialog_timetable_open_obsolete():
+    global trainid
+
+    t_timetable = dict()
+    t_distance = dict()
+    t_line = dict()
+    t_timetable_max = 0
+    t_timetable_max_key = None
+    t_distance_max = 0
+    
+    for item in trainid:
+        response = sockcmd("train get timetable " + item + "\n")
+        if response["status"] == 1:
+            t_timetable[item] = response["result"]
+            if len(t_timetable[item]) > t_timetable_max:
+                t_timetable_max = len(t_timetable[item])
+                t_timetable_max_key = item
+        response = sockcmd("train get distance " + item + "\n")
+        if response["status"] == 1:
+            t_distance[item] = response["result"]
+            if len(t_distance[item]) > t_distance_max:
+                t_distance_max = len(t_distance[item])
+        response = sockcmd("train get line " + item + "\n")
+        if response["status"] == 1:
+            t_line[item] = response["result"]
+            
+#    if len(t_timetable) != len(t_distance):
+#        print("Wrong train timetable size")
+#        return
+    print (len(t_timetable))
+    print (len(t_distance))
+    print (t_distance[t_timetable_max_key])
+    print (t_line[t_timetable_max_key])
+
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("600x400")
+    #dialog.title("Timetable  " + id)
+    dialog.title("Timetable")
+
+    tree = ttk.Treeview(dialog)
+    tree["columns"] = ("distance","station", "time")
+    tree.column("distance", anchor=tkinter.CENTER, width=50)
+    tree.column("station", anchor=tkinter.CENTER, width=100)
+    tree.column("time", anchor=tkinter.CENTER, width=50)
+
+    tree.heading("distance", text="Distance", anchor=tkinter.CENTER)
+    tree.heading("station", text="Station", anchor=tkinter.CENTER)
+    tree.heading("time", text=t_timetable_max_key, anchor=tkinter.CENTER)
+
+    tablelist_time = t_timetable[t_timetable_max_key]
+    tablelist_distance = t_distance[t_timetable_max_key]
+    
+    for i in range(0,len(tablelist_time),2):
+        tree.insert('',tkinter.END, values=("0",tablelist_time[i+1],tablelist_time[i]))
+    
+    xscrollbar = ttk.Scrollbar(dialog, orient=tkinter.HORIZONTAL, command=tree.xview)
+    yscrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)    
+    tree.configure(yscrollcommand=yscrollbar.set,xscrollcommand=xscrollbar.set)
+    yscrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+    xscrollbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)    
+
+    def on_close_ok():
+        dialog.destroy()
+
+    tree.pack(expand=True, fill="both")
+    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
+    ok_button.pack()
+
+
 def dialog_train_timetable(id, tablelist):
 
     dialog = tkinter.Toplevel(root_tk)
@@ -259,7 +455,7 @@ def dialog_train_timetable(id, tablelist):
 
     
 def click_train_marker(marker):
-    response = sockcmd("train timetable " + marker.text + "\n")
+    response = sockcmd("train get timetable " + marker.text + "\n")
     if response["status"] == 1:
         train_id = marker.text
         train_timetable = response["result"]
@@ -285,7 +481,7 @@ def dialog_3dview_open():
     mode_radio_socket = ttk.Radiobutton(dialog, text="connect socket only", value="socket", variable=selected_mode)
     mode_radio_shm = ttk.Radiobutton(dialog, text="use shared memory", value="shm", variable=selected_mode)    
     mode_radio_socket.place(x=30,y=30)
-    mode_radio_shm.place(x=200,y=30)        
+    mode_radio_shm.place(x=30,y=50)        
 
     
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
@@ -304,20 +500,20 @@ def dialog_3dview_open():
 
     option11_radio = ttk.Radiobutton(dialog, text="Geoglyph ID", value="CUSTOM", variable=selected_option)
 
-    option01_radio.place(x=30,y=70)
-    option02_radio.place(x=30,y=90)
-    option03_radio.place(x=30,y=110)
-    option04_radio.place(x=30,y=130)
-    option05_radio.place(x=30,y=150)
-    option06_radio.place(x=30,y=170)
-    option07_radio.place(x=30,y=190)
-    option08_radio.place(x=30,y=210)
-    option09_radio.place(x=30,y=230)
-    option10_radio.place(x=30,y=250)
+    option01_radio.place(x=30,y=80)
+    option02_radio.place(x=30,y=100)
+    option03_radio.place(x=30,y=120)
+    option04_radio.place(x=30,y=140)
+    option05_radio.place(x=30,y=160)
+    option06_radio.place(x=30,y=180)
+    option07_radio.place(x=30,y=200)
+    option08_radio.place(x=30,y=220)
+    option09_radio.place(x=30,y=240)
+    option10_radio.place(x=30,y=260)
     
-    option11_radio.place(x=30,y=270)        
+    option11_radio.place(x=30,y=280)        
     tc_txt = tkinter.Entry(dialog,width=20)
-    tc_txt.place(x=140, y=270)
+    tc_txt.place(x=140, y=280)
     tc_txt.insert(0,"require ID")
 
     def on_server_ok():
@@ -355,9 +551,9 @@ def dialog_3dview_open():
         dialog.destroy()
         
     ok_button = tkinter.Button(dialog, text="Data Load", fg="blue", command=on_server_ok)
-    ok_button.place(x=30,y=320)
+    ok_button.place(x=30,y=330)
     no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_server_no)
-    no_button.place(x=200,y=320)
+    no_button.place(x=200,y=330)
     dialog.grab_set() # modal dialog
     root_tk.wait_window(dialog) # wait for close dialog
 
@@ -371,6 +567,7 @@ def server_exit_close():
     sockcmd("exit\n")
     menu0.entryconfig("3D view open", state=tkinter.NORMAL)
     menu0.entryconfig("3D view close", state=tkinter.DISABLED)
+    menu0.entryconfig("Timetable", state=tkinter.DISABLED)
     menu1.entryconfig("clock", state=tkinter.DISABLED)
     menu1.entryconfig("speed", state=tkinter.DISABLED)
     menu1.entryconfig("camera", state=tkinter.DISABLED)
@@ -502,23 +699,26 @@ def dialog_speed():
 
 def dialog_manual_input():
     dialog = tkinter.Toplevel(root_tk)
-    dialog.geometry("620x120")
+    dialog.geometry("640x480")
     dialog.title("Command manual input")
 
     cmdlbl = tkinter.Label(dialog,text='Command')
     cmdlbl.place(x=30, y=10)
 
-    cmdlbl = tkinter.Label(dialog,text='Result')
-    cmdlbl.place(x=30, y=40)
+    #cmdlbl = tkinter.Label(dialog,text='Result')
+    #cmdlbl.place(x=30, y=40)
 
     cmdtxt = tkinter.Entry(dialog,width=60)
     cmdtxt.place(x=100, y=10)
     
-    cmdret = tkinter.Entry(dialog,width=60)
-    cmdret.place(x=100, y=40)
+    #cmdret = tkinter.Entry(dialog,width=60)
+    #cmdret.place(x=100, y=40)
+
+    text_area = tkinter.Text(dialog, width=80, height=30)
+    text_area.place(x=30, y=70)
     
     def on_button_ok():
-        cmdret.delete(0, tkinter.END)
+        #cmdret.delete(0, tkinter.END)
         response = sockcmd( cmdtxt.get() + "\n");
         msg = ""
         for item in response["result"]:
@@ -527,16 +727,18 @@ def dialog_manual_input():
             else:
                 msg += item
             msg += " "
-        cmdret.insert(0, msg )
+        msg += "\n"
+        #cmdret.insert(0, msg )
         #cmdtxt.delete(0, tkinter.END)
+        text_area.insert(tkinter.END,msg)
 
     def on_button_no():
         dialog.destroy()
     
     ok_button = tkinter.Button(dialog, text="  OK  ",  fg="blue", command=on_button_ok)
     no_button = tkinter.Button(dialog, text="Close",  fg="red", command=on_button_no)    
-    ok_button.place(x=50,y=70)
-    no_button.place(x=200,y=70)
+    ok_button.place(x=100,y=30)
+    no_button.place(x=300,y=30)
 
 def dialog_camera_add():
     global connect_mode
@@ -591,7 +793,7 @@ def dialog_camera_add():
         if response["status"] == 1:
             if connect_mode == "shm":
                 time.sleep(3) # wait time for Setup 3D Viewer
-                response = sockcmd("shm set camera " + cname + " viewport\n")
+                response = sockcmd("shm camera " + cname + " viewport\n")
                 if response["status"] == 1:
                     shm_camera[ cname ] = shared_memory.SharedMemory(name=response["result"][0])
                     windows[cname] = "NONE"
@@ -617,7 +819,7 @@ def calculate_bearing(pointA, pointB):
     compass_bearing = (initial_bearing + 360) % 360
     return compass_bearing
 
-def set_camera_tracking_position(cameraid,trainid,distance,height):
+def set_camera_tracking_position(cameraid,trainidx,distance,height):
 
     response = sockcmd("camera get " + cameraid + " position\n")
     if response["status"] == 1 and response["size"] == 3:
@@ -625,7 +827,7 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
         camera_alt = float(response["result"][2])
     else:
         return
-    response = sockcmd("train position " + trainid + "\n")
+    response = sockcmd("train get position " + trainidx + "\n")
     if response["status"] == 1:
         train_point = ( float(response["result"][1]), float(response["result"][0]) )
         train_alt = float(response["result"][2])
@@ -636,7 +838,7 @@ def set_camera_tracking_position(cameraid,trainid,distance,height):
     camera_alt = train_alt + height
     destination = geodesic(kilometers=distance_km).destination((train_point[0], train_point[1]), bearing )
     response = sockcmd("camera set " + cameraid + " position " + str(destination.longitude) + " " + str(destination.latitude) + " " + str(camera_alt) + "\n")
-    response = sockcmd("camera set " + cameraid + " tracking " + trainid + "\n")
+    response = sockcmd("camera set " + cameraid + " tracking " + trainidx + "\n")
     
     
 def dialog_camera_tracking():
@@ -799,22 +1001,22 @@ class PollingUpdate:
         return json.loads(output)
 
     def setup_shm(self):
-        response = self.command("shm set clock time\n");
+        response = self.command("shm clock time\n");
         if response["status"] != 1:
             return False        
         self.shm_time = shared_memory.SharedMemory(name=response["result"][0])
-        response = self.command("shm set train position\n")
+        response = self.command("shm train position\n")
         if response["status"] != 1:
             return False
         self.shm_train = shared_memory.SharedMemory(name=response["result"][0])
         self.shm_train_size_byte = int(response["result"][1])
-        response = self.command("shm set camera root viewport\n")
+        response = self.command("shm camera root viewport\n")
         if response["status"] != 1:
             return False
         self.shm_camera[ "root" ] = shared_memory.SharedMemory(name=response["result"][0])
 
     def setup_train_marker(self,tname,lat,lng):
-        response = self.command("train icon " + tname + "\n")    
+        response = self.command("train get icon " + tname + "\n")    
         if response["status"] == 1:
             if 'http' in response["result"][0]:
                 imagedata = urlopen(response["result"][0])
@@ -896,7 +1098,7 @@ class PollingUpdate:
                     map_widget.set_position(center_0/len(positionlist),center_1/len(positionlist))  
 
     def update_train_socket(self):
-        response = self.command("train position all\n")
+        response = self.command("train get position all\n")
         if response["status"] != 1:
             return
         data = response["result"]
@@ -1003,6 +1205,7 @@ menu0 = tkinter.Menu(menu_button_0, tearoff=0)
 menu0.add_command(label="3D view open", command=dialog_3dview_open)
 menu0.add_command(label="3D view close", command=dialog_3dview_close)
 menu0.add_separator()
+menu0.add_command(label="Timetable", command=dialog_select_timetable_open)
 menu0.add_command(label="Map property", command=dialog_mapproperty)
 menu0.add_separator()
 menu0.add_command(label="CPU Load", command=app_cpuload)
@@ -1010,6 +1213,7 @@ menu0.add_command(label="About", command=app_about)
 menu0.add_command(label="Exit", command=app_quit)
 menu_button_0.config(menu=menu0)
 menu0.entryconfig("3D view close", state=tkinter.DISABLED)
+menu0.entryconfig("Timetable", state=tkinter.DISABLED)
 
 # add menu item
 menu_button_1 = tkinter.Menubutton(menu_frame, text="Command", bg="lightgray")

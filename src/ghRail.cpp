@@ -136,34 +136,78 @@ ghRail::GetMaxCamera()
   return p_max_camera;
 }
 
-
-
 std::string
-ghRail::GetUnits()
+ghRail::GetUnits(std::string lineid,std::string direction)
 {
   std::string ret = " ";
+  int args = 0;
+  if ( ! lineid.empty() ) {
+    args++;
+    if ( ! direction.empty() ) {
+      args++;
+    }
+  }
   for (auto it = p_units.begin(); it != p_units.end(); ++it) {
-    std::string key = it->first;    
-    ret += key;
-    ret += GH_RESULT_MSG_DELIMITER;
+    std::string key = it->first;
+    if ( args == 0 ) {
+      ret += key;
+      ret += GH_RESULT_MSG_DELIMITER;
+    } else {
+      std::vector<std::string> infoarray = ghStringSplit(p_units[key].GetLineInfo(), GH_RESULT_MSG_DELIMITER );
+      if ( args == 1 && infoarray[0] == lineid ) {
+	ret += key;
+	ret += GH_RESULT_MSG_DELIMITER;
+      }
+      if ( args == 2 &&  infoarray[0] == lineid && infoarray[1] == direction ) {
+	ret += key;
+	ret += GH_RESULT_MSG_DELIMITER;
+      }
+    }
+
   }
   return ret;
 }
 
 int
-ghRail::GetUnitsSize()
+ghRail::GetUnitsSize(std::string lineid,std::string direction)
 {
-  return p_units.size();
+  int args = 0;
+  if ( ! lineid.empty() ) {
+    args++;
+    if ( ! direction.empty() ) {
+      args++;
+    }
+  }
+
+  if ( args == 0 ) {
+    return p_units.size();
+  }
+  int count = 0;
+  for (auto it = p_units.begin(); it != p_units.end(); ++it) {
+    std::string key = it->first;
+    std::vector<std::string> infoarray = ghStringSplit(p_units[key].GetLineInfo(), GH_RESULT_MSG_DELIMITER );
+    if ( args == 1 && infoarray[0] == lineid ) {
+      count++;
+    }
+    if ( args == 2 &&  infoarray[0] == lineid && infoarray[1] == direction ) {
+      count++;
+    }
+  }
+  return count;
 }
 
 std::string
 ghRail::GetLines()
 {
   std::string ret = " ";
+  int fst = 0;
   for (auto it = p_line.begin(); it != p_line.end(); ++it) {
-    std::string key = it->first;    
+    std::string key = it->first;
+    if ( fst != 0 ) {
+      ret += GH_RESULT_MSG_DELIMITER;
+    }
     ret += key;
-    ret += GH_RESULT_MSG_DELIMITER;
+    fst++;
   }
   return ret;
 }
@@ -172,6 +216,115 @@ ghRail::GetLinesSize()
 {
   return p_line.size();
 }
+std::string
+ghRail::GetRoutes(std::string lineid)
+{
+  std::string ret = " ";
+  int fst = 0;
+  for (auto it = p_route.begin(); it != p_route.end(); ++it) {
+    std::string key = it->first;
+    size_t pos = key.find(GH_KEY_DELIMITER);
+    if (pos != std::string::npos) {
+      std::string sub1 = key.substr(0, pos);
+      if ( sub1 == lineid ) {
+	std::string sub2 = key.substr(pos+1, key.size()-pos);
+	//ret += key;
+	if ( fst != 0 ) {
+	  ret += GH_RESULT_MSG_DELIMITER;
+	}
+	ret += sub2;
+	fst++;
+      } else {
+	// NOP
+	// Not suitable route
+      }
+    } else {
+      // NOP
+      std::cout << "Wrong route key:" << key << std::endl;
+    }
+  }
+  return ret;
+}
+int
+ghRail::GetRoutesSize(std::string lineid)
+{
+  int count = 0;
+  for (auto it = p_route.begin(); it != p_route.end(); ++it) {
+    std::string key = it->first;
+    size_t pos = key.find(GH_KEY_DELIMITER);
+    if (pos != std::string::npos) {
+      std::string sub1 = key.substr(0, pos);
+      if ( sub1 == lineid ) {
+	count++;
+      } else {
+	// NOP
+      }
+    } else {
+      // NOP
+    }
+  }
+  return count;
+  //  return 2*p_route.size();
+}
+std::string
+ghRail::GetDirection(std::string lineid)
+{
+  std::string ret = " ";
+  std::string directionname;
+  int fst = 0;
+  nlohmann::json tway = p_line[ lineid ].GetJsonObject("way");
+  for (nlohmann::json::iterator it2 = tway.begin(); it2 != tway.end(); ++it2) {
+    directionname = it2.value()["direction"].get<std::string>();
+    if ( fst != 0 ) {
+      ret += GH_RESULT_MSG_DELIMITER;
+    }
+    ret += directionname;
+    fst++;
+  }
+  return ret;
+}
+int
+ghRail::GetDirectionSize(std::string lineid)
+{
+  int count = 0;
+  nlohmann::json tway = p_line[ lineid ].GetJsonObject("way");
+  for (nlohmann::json::iterator it2 = tway.begin(); it2 != tway.end(); ++it2) {
+    count++;
+  }
+  return count;
+}
+std::string
+ghRail::GetStation(std::string lineid,std::string direction)
+{
+  std::string ret = " ";
+  std::string directionname = lineid + GH_KEY_DELIMITER + direction;
+  int fst = 0;
+  for (nlohmann::json::iterator it = p_station[directionname].begin(); it != p_station[directionname].end(); ++it) {
+    if ( fst != 0 ) {
+      ret += GH_RESULT_MSG_DELIMITER;
+    }
+    if ( it.value().is_string() ) {
+      ret += it.value();
+      //std::cout << "Station String value " << it.value() << std::endl;
+    } else {
+      ret += it.value().dump();
+      //std::cout << "Station Not String value " << it.value() << std::endl;
+    }
+    fst++;
+  }
+  return ret;
+}
+int
+ghRail::GetStationSize(std::string lineid,std::string direction)
+{
+  int count = 0;
+  std::string directionname = lineid + GH_KEY_DELIMITER + direction;
+  for (nlohmann::json::iterator it2 = p_station[directionname].begin(); it2 != p_station[directionname].end(); ++it2) {
+    count++;
+  }
+  return count;
+}
+
 
 std::string
 ghRail::GetTimezoneStr()
@@ -439,7 +592,7 @@ ghRail::Setup(std::string configname)
     for (nlohmann::json::iterator it2 = tway.begin(); it2 != tway.end(); ++it2) {
       directionname = it2.value()["direction"].get<std::string>();
       tdirs[waycount][lineid] = directionname;
-      directionname = lineid + "_" + directionname;  // directionname = lineid_directionname
+      directionname = lineid + GH_KEY_DELIMITER + directionname;  // directionname = lineid[DELIMITER]directionname
       p_station[directionname] = "";                 // p_station[directionname] 
 	
       //
@@ -460,7 +613,7 @@ ghRail::Setup(std::string configname)
       nlohmann::json troute = it2.value()["route"];
       for (nlohmann::json::iterator it4 = troute.begin(); it4 != troute.end(); ++it4) {
 	std::string routename(it4.key()); //  string = routename
-	routename = lineid + "_" + routename;  //  routename = lineid_routename
+	routename = lineid + GH_KEY_DELIMITER + routename;  //  routename = lineid[DELIMITER]routename
 	
 	nlohmann::json tpath = it4.value();
 	p_route[routename] = "";               // p_route[routename] 
@@ -514,7 +667,7 @@ ghRail::Setup(std::string configname)
     std::string route2 = tunit["route"].get<std::string>();
     std::string dir2 = tdirs[ tunit["way"].get<int>() ][lineid2];
     std::string trainid2 = tunit["trainid"].get<std::string>();
-    std::string routename2 = lineid2 + "_" + route2;
+    std::string routename2 = lineid2 + GH_KEY_DELIMITER + route2;
     
     //    p_units[trainid2].Setup( trainid2,
     //			     locomotivesize,
