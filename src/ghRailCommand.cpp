@@ -405,6 +405,12 @@ ghRailCreateResultObject(ghCommandQueue *cmd){
     json[GH_JSON_RESULT_STRING] = { cmd->resultmsg };
     json[GH_JSON_SIZE_STRING] = 1;
   } else {
+    //
+    // single quota ('\'')  replace to  double quota('\"') , for Python JSON parser
+    //
+    std::replace(cmd->resultmsg.begin(), cmd->resultmsg.end(), '\'', '@');
+    //
+    //
     std::vector<std::string> resultarray = ghStringSplit(cmd->resultmsg, GH_RESULT_MSG_DELIMITER );
     if ( resultarray.size() == cmd->resultsize ) {
       json[GH_JSON_RESULT_STRING] = resultarray;

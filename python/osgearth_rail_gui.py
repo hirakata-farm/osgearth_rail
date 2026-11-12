@@ -14,12 +14,14 @@
 #
 # apt-get install python3-tk python3-pip python3-pil python3-pil.imagetk
 # pip3 install tkintermapview -t packages
+# pip3 install tksheet -t packages
 # pip3 install geopy -t packages
 #
 #
 #
 import os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), 'packages'))
+sys.stdout.reconfigure(encoding="utf-8")
 
 import time
 import threading
@@ -28,6 +30,7 @@ import tkintermapview
 from urllib.request import urlopen
 from PIL import Image, ImageTk
 from tkinter import Menu,ttk,messagebox
+from tksheet import Sheet
 from geopy.distance import geodesic
 
 import math
@@ -75,7 +78,7 @@ else:
 #
 #
 def app_about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.9.9")
+    messagebox.showinfo("about", "osgearth_rail_gui 0.9.10")
 
 def app_cpuload():
     global python_plathome
@@ -104,6 +107,7 @@ def init_osgearth_rail_command(host,port):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             bufsize=1 )
     else:
         cmdp = subprocess.Popen(
@@ -112,6 +116,7 @@ def init_osgearth_rail_command(host,port):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             bufsize=1 )
         
     output0 = cmdp.stdout.readline()
@@ -124,7 +129,6 @@ def sockcmd(command):
     cmdp.stdin.write(command)
     cmdp.stdin.flush()
     output = cmdp.stdout.readline().replace("'", '"')
-    #print(output)
     #return json.loads(output)
     try:
         ret = json.loads(output)
@@ -179,9 +183,9 @@ def setup_field_3dserver(fieldid):
     if response["status"] != 1 :
         print(response)
         return False
-    menu0.entryconfig("3D view open", state=tkinter.DISABLED)
-    menu0.entryconfig("3D view close", state=tkinter.NORMAL)
-    menu0.entryconfig("Timetable", state=tkinter.NORMAL)
+    menu0.entryconfig("Load data", state=tkinter.DISABLED)
+    menu1.entryconfig("3D view close", state=tkinter.NORMAL)
+    menu1.entryconfig("Timetable", state=tkinter.NORMAL)
     menu1.entryconfig("clock", state=tkinter.NORMAL)
     menu1.entryconfig("speed", state=tkinter.NORMAL)
     menu1.entryconfig("camera", state=tkinter.NORMAL)
@@ -199,19 +203,26 @@ def setup_field_3dserver(fieldid):
 
     tablelist = dict()
     response = sockcmd("field get line\n")
-    linelst = response["result"]
+    linelst = None
+    if response["status"] == 1:
+        linelst = response["result"]
     for lineitem  in linelst:
         response = sockcmd("field get direction " + lineitem + "\n")
-        tablelist[lineitem] = response["result"]
+        if response["status"] == 1:
+            tablelist[lineitem] = response["result"]
 
     stationlist = dict()
     for lineitem  in tablelist:
         for diritem  in tablelist[lineitem]:
             response = sockcmd("field get station " + lineitem + " " + diritem + "\n")
-            key = lineitem + "_" + diritem
-            stationlist[key] = response["result"]
-            #print(stationlist[key])
-
+            if response["status"] == 1:
+                key = lineitem + "_" + diritem
+                stationlist[key] = response["result"]
+                #print(f"station list key: {key} {stationlist[key]}")
+            else:
+                print(f"Wrong station list {lineitem} : {diritem}")
+                print(response)
+                
     field_isloaded = True
     pollingupdate = PollingUpdate(root_tk,connect_mode,cmdp)
     return True    
@@ -245,13 +256,26 @@ def get_random_train_id():
 #  GUI Dialogs
 #
 #
+
+def timestring2serial(tstr):
+    tdata = tstr.split(":")
+    if len(tdata) > 1:
+        return float(tdata[0])*60 + float(tdata[1])
+    else:
+        print(f"wrong data: {tstr}")
+        return 0
+
+def serial2timestring(num):
+    smin = int(num % 60)
+    shour = int(( num - smin ) / 60)
+    return str(shour) + ":" + str(smin)
+
 def dialog_timetable_open(key):
     global stationlist
 
     train_key = key.replace("_"," ")
     tabledata = stationlist[key]
     t_timetable = dict()
-    colm_lst = ["distance","station"]
 
     response = sockcmd("field get train " + train_key + "\n")
     trainlst = response["result"]
@@ -259,58 +283,102 @@ def dialog_timetable_open(key):
         response = sockcmd("train get timetable " + trainitem + "\n")
         if response["status"] == 1:
             t_timetable[trainitem] = response["result"]
-            colm_lst.append(trainitem)
     
     dialog = tkinter.Toplevel(root_tk)
-    dialog.attributes('-topmost', True)
-    dialog.geometry("600x400")
-    dialog.title("Timetable   " + tabledata[0] + " --- " + tabledata[-2] )
+    #dialog.attributes('-topmost', True)
+    #dialog.geometry("600x400")
+    dialog.title("Timetable......" + tabledata[0] + " ---> " + tabledata[-2] )
 
-    tree = ttk.Treeview(dialog, show="headings")
-    #tree["columns"] = ("distance","station", "time")
-    tree["columns"] = tuple(colm_lst)
-    tree.column("distance", anchor=tkinter.CENTER, width=50)
-    tree.column("station", anchor=tkinter.CENTER, width=100)
-    tree.heading("distance", text="Distance", anchor=tkinter.CENTER)
-    tree.heading("station", text="Station", anchor=tkinter.CENTER)
-    for trainitem in trainlst:
-        tree.column(trainitem , anchor=tkinter.CENTER, width=50)
-        tree.heading(trainitem, text=trainitem, anchor=tkinter.CENTER)
-
-    item_id = []
+    datalist = []
     for i in range(0,len(tabledata),2):
-        t = tree.insert('',tkinter.END, values=(tabledata[i+1],tabledata[i]))
-        item_id.append(t)
+        datalist.append([tabledata[i+1],tabledata[i]])
+    sheet = Sheet(dialog, data=datalist,align="center")
+    sheet.headers(["Distance", "Station"])
+    sheet.column_width(column=0, width=60)
 
+    total_rows = sheet.total_rows()
+    rename_train = []
+    #
+    # Loop for each train
     for key, value in t_timetable.items():
-        #print(f"{key}: {value}")
-        for i in range(0,len(value),2):
-            findid = -1
-            #print(f"timetable list : {key} {value[i]} {value[i+1]}")
-            for j in range(0,len(item_id)):
-                allvalues = tree.item(item_id[j], "values")
-                #print(f"item : {allvalues[0]} {allvalues[1]}")
-                if value[i+1] == allvalues[1]:
-                    findid = j
-                    break
-            if findid > -1:
-                tdata = value[i].split(":")
-                timedata = tdata[0] + ":" + tdata[1]
-                tree.set(item_id[findid], key, timedata)                
-        
-    xscrollbar = ttk.Scrollbar(dialog, orient=tkinter.HORIZONTAL, command=tree.xview)
-    yscrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)    
-    tree.configure(yscrollcommand=yscrollbar.set,xscrollcommand=xscrollbar.set)
-    yscrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-    xscrollbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)    
+        firstrowidx = -1
+        lastrowidx = -1
 
+        #
+        # Create new column data                    
+        new_cols = [f" " for i in range(total_rows)]
+        for i in range(0,len(value),2):
+            for j in range(0,total_rows):
+                stationcell = sheet.get_cell_data(j,1)
+                if value[i+1] == stationcell:
+                    tdata = value[i].split(":")
+                    timedata = tdata[0] + ":" + tdata[1]
+                    new_cols[j] = timedata
+                    if firstrowidx < 0:
+                        firstrowidx = j
+                    lastrowidx = j
+
+        #
+        # sort and insert new column data
+        total_cols = sheet.get_total_columns()
+        if total_cols < 3:
+            if firstrowidx > 0:
+                firstdistance = float(sheet.get_cell_data(firstrowidx,0))
+                firsttime = timestring2serial(new_cols[firstrowidx])
+                lastdistance = float(sheet.get_cell_data(lastrowidx,0))
+                lasttime = timestring2serial(new_cols[lastrowidx])
+                checktime = firsttime - ((lasttime-firsttime)/(lastdistance-firstdistance))* firstdistance
+                new_cols[0] = serial2timestring(checktime)
+                rename_train.append(str(key))
+            sheet.insert_column(idx=None,column=new_cols,width=60,header=False,redraw=False)
+            sheet.set_header_data(value=key,c=2)
+        else:
+            if firstrowidx == 0:
+                newtime = timestring2serial(new_cols[firstrowidx])
+            else:
+                firstdistance = float(sheet.get_cell_data(firstrowidx,0))
+                firsttime = timestring2serial(new_cols[firstrowidx])
+                lastdistance = float(sheet.get_cell_data(lastrowidx,0))
+                lasttime = timestring2serial(new_cols[lastrowidx])
+                rename_train.append(str(key))
+                newtime = firsttime - ((lasttime-firsttime)/(lastdistance-firstdistance))* firstdistance
+                new_cols[0] = serial2timestring(newtime)
+                
+            insertidx = -1
+            for j in range(2,total_cols-1):
+                celltime = timestring2serial( sheet.get_cell_data(0,j) )
+                if newtime < celltime:
+                    insertidx = j
+                    new_cols.insert(0,key)
+                    sheet.insert_column(idx=insertidx,column=new_cols,width=60,header=True,redraw=False)
+                    #sheet.set_header_data(value=key,c=insertidx)
+                    break
+                
+            if insertidx < 0:
+                sheet.insert_column(idx=None,column=new_cols,width=60,header=False,redraw=False)
+                sheet.set_header_data(value=key,c=total_cols)
+                
+        sheet.refresh()
+
+    headerlist = sheet.headers()
+    for t_item in rename_train:
+        for j in range(0,len(headerlist)):
+            if t_item == headerlist[j]:
+                sheet.set_cell_data(0,j," ")
+                break
+        
+    sheet.pack(fill="both", expand=True)
+    sheet.refresh()
+    sheet.enable_bindings()
+    
     def on_close_ok():
         dialog.destroy()
 
-    tree.pack(expand=True, fill="both")
     ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
     ok_button.pack()
-
+    width = 160 + ( 60 * sheet.get_total_columns() )
+    height = 28 * ( total_rows + 1 )
+    dialog.geometry(f"{width}x{height}")
 
 def dialog_select_timetable_open():
     global stationlist
@@ -325,8 +393,7 @@ def dialog_select_timetable_open():
     radioitem = dict()
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
     for key, value in stationlist.items():
-        #print(f"{key}: {value}")
-        msg = value[0] + " --- " + value[-2]
+        msg = value[0] + " ---> " + value[-2]
         radioitem[key] = ttk.Radiobutton(dialog, text=msg, value=key, variable=selected_option)
         radioitem[key].place(x=30,y=ypos)
         ypos = ypos+20
@@ -334,7 +401,6 @@ def dialog_select_timetable_open():
     def on_timetable_ok():
         sel = selected_option.get()
         dialog_timetable_open(sel)
-        dialog.destroy()
         
     def on_timetable_close():
         dialog.destroy()
@@ -346,109 +412,27 @@ def dialog_select_timetable_open():
     width = 600
     height = ypos+80
     dialog.geometry(f"{width}x{height}")
-    dialog.grab_set() # modal dialog
-    root_tk.wait_window(dialog) # wait for close dialog
-    
-def dialog_timetable_open_obsolete():
-    global trainid
-
-    t_timetable = dict()
-    t_distance = dict()
-    t_line = dict()
-    t_timetable_max = 0
-    t_timetable_max_key = None
-    t_distance_max = 0
-    
-    for item in trainid:
-        response = sockcmd("train get timetable " + item + "\n")
-        if response["status"] == 1:
-            t_timetable[item] = response["result"]
-            if len(t_timetable[item]) > t_timetable_max:
-                t_timetable_max = len(t_timetable[item])
-                t_timetable_max_key = item
-        response = sockcmd("train get distance " + item + "\n")
-        if response["status"] == 1:
-            t_distance[item] = response["result"]
-            if len(t_distance[item]) > t_distance_max:
-                t_distance_max = len(t_distance[item])
-        response = sockcmd("train get line " + item + "\n")
-        if response["status"] == 1:
-            t_line[item] = response["result"]
-            
-#    if len(t_timetable) != len(t_distance):
-#        print("Wrong train timetable size")
-#        return
-    print (len(t_timetable))
-    print (len(t_distance))
-    print (t_distance[t_timetable_max_key])
-    print (t_line[t_timetable_max_key])
-
-    dialog = tkinter.Toplevel(root_tk)
-    dialog.attributes('-topmost', True)
-    dialog.geometry("600x400")
-    #dialog.title("Timetable  " + id)
-    dialog.title("Timetable")
-
-    tree = ttk.Treeview(dialog)
-    tree["columns"] = ("distance","station", "time")
-    tree.column("distance", anchor=tkinter.CENTER, width=50)
-    tree.column("station", anchor=tkinter.CENTER, width=100)
-    tree.column("time", anchor=tkinter.CENTER, width=50)
-
-    tree.heading("distance", text="Distance", anchor=tkinter.CENTER)
-    tree.heading("station", text="Station", anchor=tkinter.CENTER)
-    tree.heading("time", text=t_timetable_max_key, anchor=tkinter.CENTER)
-
-    tablelist_time = t_timetable[t_timetable_max_key]
-    tablelist_distance = t_distance[t_timetable_max_key]
-    
-    for i in range(0,len(tablelist_time),2):
-        tree.insert('',tkinter.END, values=("0",tablelist_time[i+1],tablelist_time[i]))
-    
-    xscrollbar = ttk.Scrollbar(dialog, orient=tkinter.HORIZONTAL, command=tree.xview)
-    yscrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)    
-    tree.configure(yscrollcommand=yscrollbar.set,xscrollcommand=xscrollbar.set)
-    yscrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
-    xscrollbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)    
-
-    def on_close_ok():
-        dialog.destroy()
-
-    tree.pack(expand=True, fill="both")
-    ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
-    ok_button.pack()
-
+    #dialog.grab_set() # modal dialog
+    #root_tk.wait_window(dialog) # wait for close dialog
 
 def dialog_train_timetable(id, tablelist):
 
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x400")
-    #dialog.title("Timetable  " + id)
-    dialog.title("Timetable")
+    dialog.title("Timetable  " + id)
 
-    tree = ttk.Treeview(dialog)
-    tree["columns"] = ("station", "time")
-    tree.column("#0", width=0, stretch=tkinter.NO)
-    tree.column("station", anchor=tkinter.CENTER, width=100)
-    tree.column("time", anchor=tkinter.CENTER, width=80)
-
-    tree.heading("#0", text="", anchor=tkinter.CENTER)
-    tree.heading("station", text="Station", anchor=tkinter.CENTER)
-    #tree.heading("time", text="Time", anchor=tkinter.CENTER)
-    tree.heading("time", text=id, anchor=tkinter.CENTER)
-
+    dataarray = []
     for i in range(0,len(tablelist),2):
-        tree.insert('',tkinter.END, values=(tablelist[i+1],tablelist[i]))
+        dataarray.append([tablelist[i+1],tablelist[i]])
     
-    scrollbar = ttk.Scrollbar(dialog, orient=tkinter.VERTICAL, command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+    sheet = Sheet(dialog, data=dataarray)
+    sheet.headers(["Station", "Time"])
+    sheet.enable_bindings()
+    sheet.pack(fill="both", expand=True)
 
     def on_close_ok():
         dialog.destroy()
-
-    tree.pack(expand=True, fill="both")
 
     ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
     ok_button.pack()
@@ -565,9 +549,9 @@ def server_exit_close():
     field_isloaded = False
     pollingupdate.close()
     sockcmd("exit\n")
-    menu0.entryconfig("3D view open", state=tkinter.NORMAL)
-    menu0.entryconfig("3D view close", state=tkinter.DISABLED)
-    menu0.entryconfig("Timetable", state=tkinter.DISABLED)
+    menu0.entryconfig("Load data", state=tkinter.NORMAL)
+    menu1.entryconfig("3D view close", state=tkinter.DISABLED)
+    menu1.entryconfig("Timetable", state=tkinter.DISABLED)
     menu1.entryconfig("clock", state=tkinter.DISABLED)
     menu1.entryconfig("speed", state=tkinter.DISABLED)
     menu1.entryconfig("camera", state=tkinter.DISABLED)
@@ -1202,18 +1186,17 @@ menu_button_0.pack(side="left", padx=10)
 
 # setting menu dropdown
 menu0 = tkinter.Menu(menu_button_0, tearoff=0)
-menu0.add_command(label="3D view open", command=dialog_3dview_open)
-menu0.add_command(label="3D view close", command=dialog_3dview_close)
-menu0.add_separator()
-menu0.add_command(label="Timetable", command=dialog_select_timetable_open)
+menu0.add_command(label="Load data", command=dialog_3dview_open)
+#menu0.add_command(label="3D view open", command=dialog_3dview_open)
+#menu0.add_command(label="3D view close", command=dialog_3dview_close)
+#menu0.add_separator()
+#menu0.add_command(label="Timetable", command=dialog_select_timetable_open)
 menu0.add_command(label="Map property", command=dialog_mapproperty)
-menu0.add_separator()
+#menu0.add_separator()
 menu0.add_command(label="CPU Load", command=app_cpuload)
 menu0.add_command(label="About", command=app_about)
 menu0.add_command(label="Exit", command=app_quit)
 menu_button_0.config(menu=menu0)
-menu0.entryconfig("3D view close", state=tkinter.DISABLED)
-menu0.entryconfig("Timetable", state=tkinter.DISABLED)
 
 # add menu item
 menu_button_1 = tkinter.Menubutton(menu_frame, text="Command", bg="lightgray")
@@ -1225,8 +1208,10 @@ camera_submenu = tkinter.Menu(menu1, tearoff=0)
 menu1.add_command(label="clock", command=dialog_clock)
 menu1.add_command(label="speed", command=dialog_speed)
 menu1.add_cascade(label="camera", menu=camera_submenu)
+menu1.add_separator()
 menu1.add_command(label="manual input", command=dialog_manual_input)
-#menu1.add_command(label="4K Multiview Script", command=server_multiview_script)
+menu1.add_command(label="3D view close", command=dialog_3dview_close)
+menu1.add_command(label="Timetable", command=dialog_select_timetable_open)
 
 camera_submenu.add_command(label="tracking", command=dialog_camera_tracking)
 camera_submenu.add_command(label="New(add)", command=dialog_camera_add)
@@ -1236,6 +1221,8 @@ menu1.entryconfig("clock", state=tkinter.DISABLED)
 menu1.entryconfig("speed", state=tkinter.DISABLED)
 menu1.entryconfig("camera", state=tkinter.DISABLED)
 menu1.entryconfig("manual input", state=tkinter.DISABLED)
+menu1.entryconfig("3D view close", state=tkinter.DISABLED)
+menu1.entryconfig("Timetable", state=tkinter.DISABLED)
 
 # add menu item
 menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=command_button_run)
