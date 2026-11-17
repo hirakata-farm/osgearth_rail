@@ -78,7 +78,7 @@ else:
 #
 #
 def app_about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.9.10")
+    messagebox.showinfo("about", "osgearth_rail_gui 0.9.12")
 
 def app_cpuload():
     global python_plathome
@@ -185,13 +185,14 @@ def setup_field_3dserver(fieldid):
         return False
     menu0.entryconfig("Load data", state=tkinter.DISABLED)
     menu1.entryconfig("3D view close", state=tkinter.NORMAL)
-    menu1.entryconfig("Timetable", state=tkinter.NORMAL)
     menu1.entryconfig("clock", state=tkinter.NORMAL)
     menu1.entryconfig("speed", state=tkinter.NORMAL)
     menu1.entryconfig("camera", state=tkinter.NORMAL)
     menu1.entryconfig("manual input", state=tkinter.NORMAL)
-    menu_button_2.config(state=tkinter.NORMAL)
-    menu_button_3.config(state=tkinter.DISABLED)
+    menu2.entryconfig("Timetable", state=tkinter.NORMAL)
+    menu2.entryconfig("Diagram", state=tkinter.NORMAL)
+    menu_button_run.config(state=tkinter.NORMAL)
+    menu_button_pause.config(state=tkinter.DISABLED)
     time.sleep(3) # wait time for Setup 3D Viewer
 
     response = sockcmd("clock set time 12:00\n")
@@ -437,6 +438,150 @@ def dialog_train_timetable(id, tablelist):
     ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
     ok_button.pack()
 
+def calc_xtime(timestr,margin,scale):
+    ay = timestr.split(":")
+    mmin = int(ay[0]) * 60 + int(ay[1])
+    res = margin + ( mmin * int(scale) )
+    return res
+
+def calc_ydistance(km,margin,scale):
+    res = margin+(km*int(scale))
+    return res
+
+
+def dialog_diagram_open(key,dirlist,scale):
+    global stationlist
+
+    key_u = key + "_" + dirlist[key][0]
+    stationarray = stationlist[key_u]
+
+    xscale = float(scale)
+    yscale = float(scale)
+    margin_width = 60
+    margin_height = 60
+    
+    canvas_width = int(1440 * xscale) # 1440[min]
+    grid_width = int(60 * xscale) # per hour
+    canvas_height = int(float(stationarray[-1]) * yscale) # station distance
+    
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.title("Diagram......" + stationarray[0] + " --- " + stationarray[-2] )
+
+    canvas = tkinter.Canvas(dialog, width=canvas_width+(margin_width*2), height=canvas_height+(margin_height*2), bg="white")
+    canvas.pack(fill=tkinter.BOTH, expand=True)
+    
+    def get_station_distance(tname):
+        lastdis = float(stationarray[-1])
+        for idx in range(1,len(stationarray),2):
+            if tname == str(stationarray[idx-1]):
+                return float(stationarray[idx])
+        return float(-1)            
+
+    def draw_grid():
+        # Vertical line
+        for x in range(0, canvas_width+margin_width, grid_width):
+            xpos = margin_width+(x*xscale)
+            canvas.create_line(xpos, margin_height, xpos, canvas_height+margin_height, fill="#e0e0e0", tag="x-grid")
+            hour = str(int(x / grid_width)) + ":00"
+            canvas.create_text(xpos, canvas_height+margin_height, text=hour, fill="#999999", font=("Arial", 8), tag="hour")
+    
+        # Horizontal line
+        for y in range(1,len(stationarray),2):
+            ypos = margin_height+(int(float(stationarray[y]))*yscale)
+            canvas.create_line(margin_width, ypos, canvas_width+margin_width, ypos, fill="#e0e0e0", tag="y-grid")
+            canvas.create_text(margin_width, ypos, text=str(stationarray[y-1]), fill="#999999", font=("Arial", 8), tag="station")
+
+
+    def draw_diagram(key2,color):
+        response = sockcmd("field get train " + key + " " + key2 + "\n")
+        if response["status"] == 1:
+            trainlst = response["result"]
+            for trainitem  in trainlst:
+                points = []
+                response = sockcmd("train get timetable " + trainitem + "\n")
+                if response["status"] == 1:
+                    t_timetable = response["result"]
+                    for xt in range(0,len(t_timetable),2):
+                        dis = get_station_distance(str(t_timetable[xt+1]))
+                        if dis < 0:
+                            print(f"Something wrong data : {t_timetable[xt]} {t_timetable[xt+1]}")
+                        else:
+                            xx = calc_xtime(str(t_timetable[xt]),margin_width,xscale)
+                            yy = calc_ydistance(dis,margin_height,yscale)
+                            points.append(xx)
+                            points.append(yy)
+                canvas.create_line(points, fill=color, width=1, smooth=False, tag=trainitem)
+
+
+    draw_grid()
+    draw_diagram(dirlist[key][0],"blue")
+    draw_diagram(dirlist[key][1],"green")
+    
+#    response = sockcmd("field get train " + key + " " + dirlist[key][1] + "\n")
+#    if response["status"] == 1:
+#        trainlst = response["result"]
+#        for trainitem  in trainlst:
+#            points = []
+#            response = sockcmd("train get timetable " + trainitem + "\n")
+#            if response["status"] == 1:
+#                t_timetable = response["result"]
+#                for xt in range(0,len(t_timetable),2):
+#                    dis = get_station_distance(str(t_timetable[xt+1]))
+#                    if dis < 0:
+#                        print(f"Something wrong data : {t_timetable[xt]} {t_timetable[xt+1]}")
+#                    else:
+#                        xx = calc_xtime(str(t_timetable[xt]),margin_width,xscale)
+#                        yy = calc_ydistance(dis,margin_height,yscale)
+#                        points.append(xx)
+#                        points.append(yy)
+#            canvas.create_line(points, fill="green", width=1, smooth=False, tag=trainitem)
+#
+
+    
+def dialog_select_diagram_open():
+    global stationlist
+
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("600x400")
+    #dialog.title("Timetable  " + id)
+    dialog.title("Select diagram")
+
+    directionlist = dict()
+    for key, value in stationlist.items():
+        keyitem = key.split("_")
+        if keyitem[0] in directionlist:
+            directionlist[keyitem[0]].append(keyitem[1])
+        else:
+            directionlist[keyitem[0]] = [ keyitem[1] ]
+
+    ypos = 20
+    radioitem = dict()
+    selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
+    for key, value in directionlist.items():
+        key2 = key + "_" + value[0]
+        stationarray = stationlist[key2]
+        msg = stationarray[0] + " --- " + stationarray[-2]
+        radioitem[key] = ttk.Radiobutton(dialog, text=msg, value=key, variable=selected_option)
+        radioitem[key].place(x=30,y=ypos)
+        ypos = ypos+20
+
+    def on_diagram_ok():
+        sel = selected_option.get()
+        dialog_diagram_open(sel,directionlist,1)
+        
+    def on_diagram_close():
+        dialog.destroy()
+        
+    ok_button = tkinter.Button(dialog, text="Show diagram", fg="blue", command=on_diagram_ok)
+    ok_button.place(x=100,y=ypos+40)
+    no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_diagram_close)
+    no_button.place(x=300,y=ypos+40)
+    width = 600
+    height = ypos+80
+    dialog.geometry(f"{width}x{height}")
+    #dialog.grab_set() # modal dialog
+    #root_tk.wait_window(dialog) # wait for close dialog
     
 def click_train_marker(marker):
     response = sockcmd("train get timetable " + marker.text + "\n")
@@ -526,9 +671,9 @@ def dialog_3dview_open():
         time.sleep(1) # wait time for Setup 3D Viewer
         status = setup_field_3dserver( fieldid )
         if status == True:
-            messagebox.showinfo("Information", "3D viewer setting up OK")
+            messagebox.showinfo("Information", "3D data setup OK")
         else:
-            messagebox.showinfo("Warning", "3D viewer NOT setup")
+            messagebox.showinfo("Warning", "3D data CAN NOT setup")
         dialog.destroy()
 
     def on_server_no():
@@ -551,12 +696,13 @@ def server_exit_close():
     sockcmd("exit\n")
     menu0.entryconfig("Load data", state=tkinter.NORMAL)
     menu1.entryconfig("3D view close", state=tkinter.DISABLED)
-    menu1.entryconfig("Timetable", state=tkinter.DISABLED)
     menu1.entryconfig("clock", state=tkinter.DISABLED)
     menu1.entryconfig("speed", state=tkinter.DISABLED)
     menu1.entryconfig("camera", state=tkinter.DISABLED)
-    menu_button_2.config(state=tkinter.DISABLED)
-    menu_button_3.config(state=tkinter.DISABLED)
+    menu2.entryconfig("Timetable", state=tkinter.DISABLED)
+    menu2.entryconfig("Diagram", state=tkinter.DISABLED)    
+    menu_button_run.config(state=tkinter.DISABLED)
+    menu_button_pause.config(state=tkinter.DISABLED)
 
 def dialog_3dview_close():
     global field_isloaded
@@ -581,6 +727,7 @@ def dialog_3dview_close():
 
     dialog.grab_set()
     root_tk.wait_window(dialog)
+
 
 def dialog_clock():
     dialog = tkinter.Toplevel(root_tk)
@@ -689,20 +836,13 @@ def dialog_manual_input():
     cmdlbl = tkinter.Label(dialog,text='Command')
     cmdlbl.place(x=30, y=10)
 
-    #cmdlbl = tkinter.Label(dialog,text='Result')
-    #cmdlbl.place(x=30, y=40)
-
     cmdtxt = tkinter.Entry(dialog,width=60)
     cmdtxt.place(x=100, y=10)
     
-    #cmdret = tkinter.Entry(dialog,width=60)
-    #cmdret.place(x=100, y=40)
-
     text_area = tkinter.Text(dialog, width=80, height=30)
     text_area.place(x=30, y=70)
     
     def on_button_ok():
-        #cmdret.delete(0, tkinter.END)
         response = sockcmd( cmdtxt.get() + "\n");
         msg = ""
         for item in response["result"]:
@@ -712,8 +852,6 @@ def dialog_manual_input():
                 msg += item
             msg += " "
         msg += "\n"
-        #cmdret.insert(0, msg )
-        #cmdtxt.delete(0, tkinter.END)
         text_area.insert(tkinter.END,msg)
 
     def on_button_no():
@@ -726,6 +864,8 @@ def dialog_manual_input():
 
 def dialog_camera_add():
     global connect_mode
+    global pollingupdate
+    
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x260")
     dialog.title("New Camera add")
@@ -779,7 +919,7 @@ def dialog_camera_add():
                 time.sleep(3) # wait time for Setup 3D Viewer
                 response = sockcmd("shm camera " + cname + " viewport\n")
                 if response["status"] == 1:
-                    shm_camera[ cname ] = shared_memory.SharedMemory(name=response["result"][0])
+                    pollingupdate.add_shm_camera(cname,response["result"][0])
                     windows[cname] = "NONE"
                 else:
                     print(response["result"][0])
@@ -885,15 +1025,15 @@ def command_button_run():
     global field_isrunning
     field_isrunning = True
     response = sockcmd("play\n")
-    menu_button_2.config(state=tkinter.DISABLED)
-    menu_button_3.config(state=tkinter.NORMAL)
+    menu_button_run.config(state=tkinter.DISABLED)
+    menu_button_pause.config(state=tkinter.NORMAL)
 
 def command_button_pause():
     global field_isrunning
     field_isrunning = False
     response = sockcmd("pause\n")
-    menu_button_2.config(state=tkinter.NORMAL)
-    menu_button_3.config(state=tkinter.DISABLED)
+    menu_button_run.config(state=tkinter.NORMAL)
+    menu_button_pause.config(state=tkinter.DISABLED)
     
 
 
@@ -998,6 +1138,10 @@ class PollingUpdate:
         if response["status"] != 1:
             return False
         self.shm_camera[ "root" ] = shared_memory.SharedMemory(name=response["result"][0])
+
+    def add_shm_camera(self,cname,key):
+        self.shm_camera[ cname ] = shared_memory.SharedMemory(name=key)
+        return True
 
     def setup_train_marker(self,tname,lat,lng):
         response = self.command("train get icon " + tname + "\n")    
@@ -1175,7 +1319,6 @@ print(f"Resolution: {screen_width}x{screen_height}")
 root_tk.title("osgearth_rail_gui")
 #root_tk.attributes('-topmost',True)
 
-    
 # Custom Menubar
 menu_frame = tkinter.Frame(root_tk, bg="lightgray", height=30)
 menu_frame.pack(side="top", fill="x")
@@ -1187,12 +1330,7 @@ menu_button_0.pack(side="left", padx=10)
 # setting menu dropdown
 menu0 = tkinter.Menu(menu_button_0, tearoff=0)
 menu0.add_command(label="Load data", command=dialog_3dview_open)
-#menu0.add_command(label="3D view open", command=dialog_3dview_open)
-#menu0.add_command(label="3D view close", command=dialog_3dview_close)
-#menu0.add_separator()
-#menu0.add_command(label="Timetable", command=dialog_select_timetable_open)
 menu0.add_command(label="Map property", command=dialog_mapproperty)
-#menu0.add_separator()
 menu0.add_command(label="CPU Load", command=app_cpuload)
 menu0.add_command(label="About", command=app_about)
 menu0.add_command(label="Exit", command=app_quit)
@@ -1211,7 +1349,6 @@ menu1.add_cascade(label="camera", menu=camera_submenu)
 menu1.add_separator()
 menu1.add_command(label="manual input", command=dialog_manual_input)
 menu1.add_command(label="3D view close", command=dialog_3dview_close)
-menu1.add_command(label="Timetable", command=dialog_select_timetable_open)
 
 camera_submenu.add_command(label="tracking", command=dialog_camera_tracking)
 camera_submenu.add_command(label="New(add)", command=dialog_camera_add)
@@ -1222,16 +1359,26 @@ menu1.entryconfig("speed", state=tkinter.DISABLED)
 menu1.entryconfig("camera", state=tkinter.DISABLED)
 menu1.entryconfig("manual input", state=tkinter.DISABLED)
 menu1.entryconfig("3D view close", state=tkinter.DISABLED)
-menu1.entryconfig("Timetable", state=tkinter.DISABLED)
 
 # add menu item
-menu_button_2 = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=command_button_run)
-menu_button_2.pack(side="left", padx=20)
-menu_button_2.config(state=tkinter.DISABLED)
+menu_button_2 = tkinter.Menubutton(menu_frame, text="Data", bg="lightgray")
+menu_button_2.pack(side="left", padx=10)
+menu2 = tkinter.Menu(menu_button_2, tearoff=0)
+menu2.add_command(label="Timetable", command=dialog_select_timetable_open)
+menu2.add_command(label="Diagram", command=dialog_select_diagram_open)
+menu_button_2.config(menu=menu2)
+menu2.entryconfig("Timetable", state=tkinter.DISABLED)
+menu2.entryconfig("Diagram", state=tkinter.DISABLED)
 
-menu_button_3 = tkinter.Button(menu_frame, text="Pause", bg="lightgray", fg="red", command=command_button_pause)
-menu_button_3.pack(side="left", padx=20)
-menu_button_3.config(state=tkinter.DISABLED)
+
+# add menu item
+menu_button_run = tkinter.Button(menu_frame, text="Run", bg="lightgray", fg="blue", command=command_button_run)
+menu_button_run.pack(side="left", padx=20)
+menu_button_run.config(state=tkinter.DISABLED)
+
+menu_button_pause = tkinter.Button(menu_frame, text="Pause", bg="lightgray", fg="red", command=command_button_pause)
+menu_button_pause.pack(side="left", padx=20)
+menu_button_pause.config(state=tkinter.DISABLED)
 
 # add menu item
 timelabel_var = tkinter.StringVar()
