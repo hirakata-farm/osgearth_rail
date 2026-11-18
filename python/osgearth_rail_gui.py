@@ -191,6 +191,7 @@ def setup_field_3dserver(fieldid):
     menu1.entryconfig("manual input", state=tkinter.NORMAL)
     menu2.entryconfig("Timetable", state=tkinter.NORMAL)
     menu2.entryconfig("Diagram", state=tkinter.NORMAL)
+    menu2.entryconfig("DigitalClock", state=tkinter.NORMAL)
     menu_button_run.config(state=tkinter.NORMAL)
     menu_button_pause.config(state=tkinter.DISABLED)
     time.sleep(3) # wait time for Setup 3D Viewer
@@ -235,7 +236,7 @@ def get_random_train_id():
     loop_max = length * 10
     while True:
         idx = int(random.uniform(0, length-1))
-        if trainid[idx] in markers:
+        if trainid[idx] in Markers:
             return trainid[idx]
         if loop_count > loop_max:
             return trainid[1]
@@ -258,6 +259,11 @@ def get_random_train_id():
 #
 #
 
+def _on_close_dialog(event, target_dlg: tkinter.Toplevel, item):
+    global Dialogs
+    if event.widget is target_dlg and item in Dialogs:
+        Dialogs.remove(item)
+
 def timestring2serial(tstr):
     tdata = tstr.split(":")
     if len(tdata) > 1:
@@ -271,7 +277,7 @@ def serial2timestring(num):
     shour = int(( num - smin ) / 60)
     return str(shour) + ":" + str(smin)
 
-def dialog_timetable_open(key):
+def dialog_line_timetable(key):
     global stationlist
 
     train_key = key.replace("_"," ")
@@ -381,7 +387,7 @@ def dialog_timetable_open(key):
     height = 28 * ( total_rows + 1 )
     dialog.geometry(f"{width}x{height}")
 
-def dialog_select_timetable_open():
+def dialog_select_timetable():
     global stationlist
 
     dialog = tkinter.Toplevel(root_tk)
@@ -401,7 +407,7 @@ def dialog_select_timetable_open():
 
     def on_timetable_ok():
         sel = selected_option.get()
-        dialog_timetable_open(sel)
+        dialog_line_timetable(sel)
         
     def on_timetable_close():
         dialog.destroy()
@@ -441,22 +447,23 @@ def dialog_train_timetable(id, tablelist):
 def calc_xtime(timestr,margin,scale):
     ay = timestr.split(":")
     mmin = int(ay[0]) * 60 + int(ay[1])
-    res = margin + ( mmin * int(scale) )
-    return res
+    res = margin + ( mmin * float(scale) )
+    return int(res)
 
 def calc_ydistance(km,margin,scale):
-    res = margin+(km*int(scale))
-    return res
+    res = margin+(km*float(scale))
+    return int(res)
 
 
-def dialog_diagram_open(key,dirlist,scale):
+def dialog_line_diagram(key,dirlist,xscl,yscl):
     global stationlist
+    global Dialogs
 
     key_u = key + "_" + dirlist[key][0]
     stationarray = stationlist[key_u]
 
-    xscale = float(scale)
-    yscale = float(scale)
+    xscale = float(xscl)
+    yscale = float(yscl)
     margin_width = 60
     margin_height = 60
     
@@ -467,9 +474,15 @@ def dialog_diagram_open(key,dirlist,scale):
     dialog = tkinter.Toplevel(root_tk)
     dialog.title("Diagram......" + stationarray[0] + " --- " + stationarray[-2] )
 
-    canvas = tkinter.Canvas(dialog, width=canvas_width+(margin_width*2), height=canvas_height+(margin_height*2), bg="white")
-    canvas.pack(fill=tkinter.BOTH, expand=True)
-    
+    hbar = tkinter.Scrollbar(dialog, orient=tkinter.HORIZONTAL)
+    hbar.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+    vbar = tkinter.Scrollbar(dialog, orient=tkinter.VERTICAL)
+    vbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+    canvas = tkinter.Canvas(dialog, width=canvas_width+(margin_width*2), height=canvas_height+(margin_height*2), bg="white", xscrollcommand=hbar.set,yscrollcommand=vbar.set)
+    canvas.pack(side=tkinter.LEFT,fill=tkinter.BOTH, expand=True)
+    hbar.config(command=canvas.xview)
+    vbar.config(command=canvas.yview)
+
     def get_station_distance(tname):
         lastdis = float(stationarray[-1])
         for idx in range(1,len(stationarray),2):
@@ -480,7 +493,7 @@ def dialog_diagram_open(key,dirlist,scale):
     def draw_grid():
         # Vertical line
         for x in range(0, canvas_width+margin_width, grid_width):
-            xpos = margin_width+(x*xscale)
+            xpos = margin_width+int(x)
             canvas.create_line(xpos, margin_height, xpos, canvas_height+margin_height, fill="#e0e0e0", tag="x-grid")
             hour = str(int(x / grid_width)) + ":00"
             canvas.create_text(xpos, canvas_height+margin_height, text=hour, fill="#999999", font=("Arial", 8), tag="hour")
@@ -490,7 +503,6 @@ def dialog_diagram_open(key,dirlist,scale):
             ypos = margin_height+(int(float(stationarray[y]))*yscale)
             canvas.create_line(margin_width, ypos, canvas_width+margin_width, ypos, fill="#e0e0e0", tag="y-grid")
             canvas.create_text(margin_width, ypos, text=str(stationarray[y-1]), fill="#999999", font=("Arial", 8), tag="station")
-
 
     def draw_diagram(key2,color):
         response = sockcmd("field get train " + key + " " + key2 + "\n")
@@ -510,35 +522,22 @@ def dialog_diagram_open(key,dirlist,scale):
                             yy = calc_ydistance(dis,margin_height,yscale)
                             points.append(xx)
                             points.append(yy)
-                canvas.create_line(points, fill=color, width=1, smooth=False, tag=trainitem)
-
+                lineid = canvas.create_line(points, fill=color, width=1, smooth=True, tag=trainitem)
+                CanvasToolTip(canvas,lineid,str(trainitem) )
 
     draw_grid()
     draw_diagram(dirlist[key][0],"blue")
     draw_diagram(dirlist[key][1],"green")
+    width  =  margin_width + canvas_width
+    height =  margin_height + canvas_height
+    dialog.geometry(f"{width}x{height}")
+    entry = ( dialog, canvas, "diagram", margin_width, margin_height, canvas_width , canvas_height, xscale )
+    dialog.bind(
+        "<Destroy>", lambda event, item=entry: _on_close_dialog(event, dialog, item)
+    )
+    Dialogs.append(entry)
     
-#    response = sockcmd("field get train " + key + " " + dirlist[key][1] + "\n")
-#    if response["status"] == 1:
-#        trainlst = response["result"]
-#        for trainitem  in trainlst:
-#            points = []
-#            response = sockcmd("train get timetable " + trainitem + "\n")
-#            if response["status"] == 1:
-#                t_timetable = response["result"]
-#                for xt in range(0,len(t_timetable),2):
-#                    dis = get_station_distance(str(t_timetable[xt+1]))
-#                    if dis < 0:
-#                        print(f"Something wrong data : {t_timetable[xt]} {t_timetable[xt+1]}")
-#                    else:
-#                        xx = calc_xtime(str(t_timetable[xt]),margin_width,xscale)
-#                        yy = calc_ydistance(dis,margin_height,yscale)
-#                        points.append(xx)
-#                        points.append(yy)
-#            canvas.create_line(points, fill="green", width=1, smooth=False, tag=trainitem)
-#
-
-    
-def dialog_select_diagram_open():
+def dialog_select_diagram():
     global stationlist
 
     dialog = tkinter.Toplevel(root_tk)
@@ -568,17 +567,34 @@ def dialog_select_diagram_open():
 
     def on_diagram_ok():
         sel = selected_option.get()
-        dialog_diagram_open(sel,directionlist,1)
+        xscl = xscl_spinbox.get()
+        yscl = yscl_spinbox.get()
+        if sel != "G175448050EUROTHALYS":
+            dialog_line_diagram(sel,directionlist,xscl,yscl)
         
     def on_diagram_close():
         dialog.destroy()
         
+    xscl_spinbox = tkinter.Spinbox(dialog, from_=0.1, to=3.0, wrap=True, width=8, increment=0.1)
+    xscl_spinbox.delete(0, "end")
+    xscl_spinbox.insert(0, "1.0")
+    xscl_spinbox.place(x=90,y=ypos+30)
+    xscl_label = tkinter.Label(dialog, text="X Scale:")
+    xscl_label.place(x=20,y=ypos+30)
+
+    yscl_spinbox = tkinter.Spinbox(dialog, from_=0.1, to=3.0, wrap=True, width=8, increment=0.1)
+    yscl_spinbox.delete(0, "end")
+    yscl_spinbox.insert(0, "1.0")
+    yscl_spinbox.place(x=290,y=ypos+30)
+    yscl_label = tkinter.Label(dialog, text="Y Scale:")
+    yscl_label.place(x=220,y=ypos+30)
+
     ok_button = tkinter.Button(dialog, text="Show diagram", fg="blue", command=on_diagram_ok)
-    ok_button.place(x=100,y=ypos+40)
+    ok_button.place(x=100,y=ypos+60)
     no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_diagram_close)
-    no_button.place(x=300,y=ypos+40)
+    no_button.place(x=300,y=ypos+60)
     width = 600
-    height = ypos+80
+    height = ypos+100
     dialog.geometry(f"{width}x{height}")
     #dialog.grab_set() # modal dialog
     #root_tk.wait_window(dialog) # wait for close dialog
@@ -591,7 +607,7 @@ def click_train_marker(marker):
         dialog_train_timetable( train_id, train_timetable )
 
 
-def dialog_3dview_open():
+def dialog_load_data():
     global remost_host
     global connect_mode
 
@@ -611,7 +627,6 @@ def dialog_3dview_open():
     mode_radio_shm = ttk.Radiobutton(dialog, text="use shared memory", value="shm", variable=selected_mode)    
     mode_radio_socket.place(x=30,y=30)
     mode_radio_shm.place(x=30,y=50)        
-
     
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
 
@@ -700,7 +715,8 @@ def server_exit_close():
     menu1.entryconfig("speed", state=tkinter.DISABLED)
     menu1.entryconfig("camera", state=tkinter.DISABLED)
     menu2.entryconfig("Timetable", state=tkinter.DISABLED)
-    menu2.entryconfig("Diagram", state=tkinter.DISABLED)    
+    menu2.entryconfig("Diagram", state=tkinter.DISABLED)
+    menu2.entryconfig("DigitalClock", state=tkinter.DISABLED)    
     menu_button_run.config(state=tkinter.DISABLED)
     menu_button_pause.config(state=tkinter.DISABLED)
 
@@ -728,12 +744,30 @@ def dialog_3dview_close():
     dialog.grab_set()
     root_tk.wait_window(dialog)
 
-
-def dialog_clock():
+def dialog_digital_clock():
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x100")
-    dialog.title("Clock")
+    dialog.title("Digital Clock")
+
+    dialog.resizable(False, False)
+
+    canvas = tkinter.Canvas(dialog, width=300, height=100, bg="#111827", highlightthickness=0)
+    canvas.create_text(150, 50, text="00:00", fill="#34D399", font=("Helvetica", 48, "bold") , tag="currenttime")
+    canvas.pack()
+    
+    entry = ( dialog, canvas, "clock", 300, 100, 30 , 100, 1.0 )
+    dialog.bind(
+        "<Destroy>", lambda event, item=entry: _on_close_dialog(event, dialog, item)
+    )
+    Dialogs.append(entry)
+    
+
+def dialog_clock_set():
+    dialog = tkinter.Toplevel(root_tk)
+    dialog.attributes('-topmost', True)
+    dialog.geometry("300x100")
+    dialog.title("Clock set")
 
     response = sockcmd("clock get time\n")
     if response["status"] != 1:
@@ -764,14 +798,14 @@ def dialog_clock():
     minute_label.grid(row=0, column=3, padx=5, pady=5)
 
     # Get Time Button
-    ok_button = tkinter.Button(dialog, text="Set Time", fg="blue", command=set_selected_time)
+    ok_button = tkinter.Button(dialog, text="Set Clock", fg="blue", command=set_selected_time)
     ok_button.grid(row=1, column=0, columnspan=2, pady=10)
     close_button = tkinter.Button(dialog, text="Close", fg="red", command=close_selected_time)
     close_button.grid(row=1, column=2, columnspan=2, pady=10)
     #dialog.grab_set()
     #root_tk.wait_window(dialog)
 
-def dialog_speed():
+def dialog_speed_set():
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x180")
@@ -875,7 +909,7 @@ def dialog_camera_add():
 
     txt = tkinter.Entry(dialog,width=20)
     txt.place(x=200, y=10)
-    defaultname = "CAMERA" + str(len(windows));
+    defaultname = "CAMERA" + str(len(Windows));
     txt.insert(0,defaultname)
 
     # width Spinbox
@@ -920,7 +954,7 @@ def dialog_camera_add():
                 response = sockcmd("shm camera " + cname + " viewport\n")
                 if response["status"] == 1:
                     pollingupdate.add_shm_camera(cname,response["result"][0])
-                    windows[cname] = "NONE"
+                    Windows[cname] = "NONE"
                 else:
                     print(response["result"][0])
 
@@ -985,7 +1019,7 @@ def dialog_camera_tracking():
                 return
             else:
                 set_camera_tracking_position(c_id,t_id,tracking_distance,tracking_height)
-                windows[c_id] = t_id
+                Windows[c_id] = t_id
         dialog.destroy()        
     def close_camera_tracking():
         dialog.destroy()        
@@ -997,14 +1031,14 @@ def dialog_camera_tracking():
     tname_label.grid(row=1, column=0, padx=5, pady=5)
 
     c_options = []
-    for item in windows:
+    for item in Windows:
         c_options.append(item)
     camera_ver = tkinter.StringVar()
     ccombo = ttk.Combobox ( dialog , values = c_options , textvariable = camera_ver , height = 5)
     ccombo.grid(row=0, column=1, columnspan=2, pady=5)
 
     t_options = []
-    for item in markers:
+    for item in Markers:
         if item != "sample":
             t_options.append( item )
         else:
@@ -1071,6 +1105,53 @@ def dialog_mapproperty():
     close_button = tkinter.Button(dialog, text="Close", fg="red", command=close_prop)
     close_button.pack(pady=10)
 
+
+
+################################################################################
+#
+#   Canvas Tooltip Class
+#
+################################################################################    
+
+class CanvasToolTip:
+    def __init__(self, canvas, item_id, text):
+        self.canvas = canvas
+        self.item_id = item_id
+        self.text = text
+        self.tip_window = None
+
+        self.canvas.tag_bind(self.item_id, "<Enter>", self.show_tip)
+        self.canvas.tag_bind(self.item_id, "<Leave>", self.hide_tip)
+
+    def show_tip(self, event):
+        if self.tip_window or not self.text:
+            return
+
+        x = event.x_root + 15
+        y = event.y_root + 10
+
+        self.tip_window = tkinter.Toplevel(self.canvas)
+        self.tip_window.wm_overrideredirect(True)  # タイトルバー・枠線を非表示
+        self.tip_window.wm_geometry(f"+{x}+{y}")
+
+        label = tkinter.Label(
+            self.tip_window,
+            text=self.text,
+            background="#ffffe0",
+            foreground="#000000",
+            relief="solid",
+            borderwidth=1,
+            font=("TkDefaultFont", 9),
+            padx=6,
+            pady=3,
+        )
+        label.pack()
+
+    def hide_tip(self, event):
+        if self.tip_window:
+            self.tip_window.destroy()
+            self.tip_window = None
+
     
         
 ################################################################################
@@ -1078,15 +1159,16 @@ def dialog_mapproperty():
 #   Update Class
 #
 ################################################################################    
-    
+
 #default_polling_socket_wait_second = 28
 #default_polling_shm_wait_second = 2
 class PollingUpdate:
     global field_isloaded
     global field_isrunning
     global timelabel_var
-    global markers
-    global windows
+    global Markers
+    global Windows
+    global Dialogs
     global trainid
     global map_widget
     global map_widget_tracking
@@ -1151,8 +1233,8 @@ class PollingUpdate:
                 imageobject = Image.open(io.BytesIO(imagedata.read()))
                 resized_image = imageobject.resize((icon_width, icon_height), Image.Resampling.LANCZOS)
                 image = ImageTk.PhotoImage(resized_image)
-                markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image, command=click_train_marker )
-                #markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image )                
+                Markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image, command=click_train_marker )
+                #Markers[tname] = map_widget.set_marker( lat, lng, text=tname, icon=image )                
         else:
             print( response )
         
@@ -1193,12 +1275,12 @@ class PollingUpdate:
                     lat = -100
                 if lat < -90 or lng < -90:
                     # Not running train at this time
-                    if trainname in markers:
-                        markers[trainname].delete()
-                        del markers[trainname]
+                    if trainname in Markers:
+                        Markers[trainname].delete()
+                        del Markers[trainname]
                 else:
-                    if trainname in markers:
-                        markers[trainname].set_position(lat,lng)
+                    if trainname in Markers:
+                        Markers[trainname].set_position(lat,lng)
                     else:
                         if len(trainname) > 1:
                             self.setup_train_marker(trainname,lat,lng)
@@ -1240,20 +1322,20 @@ class PollingUpdate:
                 if train_lst[i] == item:
                     lng = float(train_lng[i])
                     lat = float(train_lat[i])
-                    if train_lst[i] in markers:
-                        markers[train_lst[i]].set_position(lat,lng)
+                    if train_lst[i] in Markers:
+                        Markers[train_lst[i]].set_position(lat,lng)
                     else:
                         self.setup_train_marker(train_lst[i],lat,lng)
                     existflag = True
                     break
             if existflag == False:
-                if item in markers:
-                    markers[item].delete()
-                    del markers[item]
+                if item in Markers:
+                    Markers[item].delete()
+                    del Markers[item]
 
     def update_viewport_socket(self):
         map_widget.delete_all_polygon()
-        for item in windows:
+        for item in Windows:
             response = self.command("camera get " + item + " viewport\n")
             if response["status"] == 1 and response["size"] > 5:
                 data = response["result"]
@@ -1273,12 +1355,25 @@ class PollingUpdate:
                 if map_widget_tracking:
                     map_widget.set_position(center_0/len(positionlist),center_1/len(positionlist))
 
+    def redraw_canvas(self):
+        tstr = timelabel_var.get()
+        for dialog, canvas, type, mw, mh, cw, ch, xscl in list(Dialogs):
+            if dialog.winfo_exists():
+                if type == "diagram":
+                    canvas.delete("currenttime")
+                    xx = calc_xtime(tstr,mw,xscl)
+                    canvas.create_line(xx, mh, xx, ch+mh, fill="#ee0000", tag="currenttime")
+                if type == "clock":
+                    canvas.itemconfigure("currenttime", text=tstr)
+                
+
     def update_shm(self):
         if field_isloaded:
             if field_isrunning:
                 self.update_clock_shm()
                 self.update_train_shm()
                 self.update_viewport_shm()
+                self.redraw_canvas()                
     
     def update_socket(self):
         if field_isloaded:
@@ -1289,8 +1384,8 @@ class PollingUpdate:
                     timelabel_var.set(timestr[0]+":"+timestr[1])
                     self.update_train_socket()
                     self.update_viewport_socket()
+                    self.redraw_canvas()                
 
-                    
     def update_polling(self):
         self.counter += 1
         if self.counter == self.polling:
@@ -1329,7 +1424,7 @@ menu_button_0.pack(side="left", padx=10)
 
 # setting menu dropdown
 menu0 = tkinter.Menu(menu_button_0, tearoff=0)
-menu0.add_command(label="Load data", command=dialog_3dview_open)
+menu0.add_command(label="Load data", command=dialog_load_data)
 menu0.add_command(label="Map property", command=dialog_mapproperty)
 menu0.add_command(label="CPU Load", command=app_cpuload)
 menu0.add_command(label="About", command=app_about)
@@ -1343,8 +1438,8 @@ menu_button_1.pack(side="left", padx=10)
 # setting menu dropdown
 menu1 = tkinter.Menu(menu_button_1, tearoff=0)
 camera_submenu = tkinter.Menu(menu1, tearoff=0)
-menu1.add_command(label="clock", command=dialog_clock)
-menu1.add_command(label="speed", command=dialog_speed)
+menu1.add_command(label="clock", command=dialog_clock_set)
+menu1.add_command(label="speed", command=dialog_speed_set)
 menu1.add_cascade(label="camera", menu=camera_submenu)
 menu1.add_separator()
 menu1.add_command(label="manual input", command=dialog_manual_input)
@@ -1364,11 +1459,13 @@ menu1.entryconfig("3D view close", state=tkinter.DISABLED)
 menu_button_2 = tkinter.Menubutton(menu_frame, text="Data", bg="lightgray")
 menu_button_2.pack(side="left", padx=10)
 menu2 = tkinter.Menu(menu_button_2, tearoff=0)
-menu2.add_command(label="Timetable", command=dialog_select_timetable_open)
-menu2.add_command(label="Diagram", command=dialog_select_diagram_open)
+menu2.add_command(label="Timetable", command=dialog_select_timetable)
+menu2.add_command(label="Diagram", command=dialog_select_diagram)
+menu2.add_command(label="DigitalClock", command=dialog_digital_clock)
 menu_button_2.config(menu=menu2)
 menu2.entryconfig("Timetable", state=tkinter.DISABLED)
 menu2.entryconfig("Diagram", state=tkinter.DISABLED)
+menu2.entryconfig("DigitalClock", state=tkinter.DISABLED)
 
 
 # add menu item
@@ -1417,7 +1514,8 @@ map_widget.set_tile_server(
 map_widget.pack(fill="both", expand=True)
 map_widget.set_zoom(2)
 
-markers = { "sample" : map_widget.set_marker( 0, 0, text="sample") }
-windows = { "root" : "NONE" }
+Markers = { "sample" : map_widget.set_marker( 0, 0, text="sample") }
+Windows = { "root" : "NONE" }
+Dialogs = []
 
 root_tk.mainloop()
