@@ -14,6 +14,7 @@
 #
 # apt-get install python3-tk python3-pip python3-pil python3-pil.imagetk
 # pip3 install tkintermapview -t packages
+#pip install -U tkintermapview
 # pip3 install tksheet -t packages
 # pip3 install geopy -t packages
 #
@@ -78,7 +79,7 @@ else:
 #
 #
 def app_about():
-    messagebox.showinfo("about", "osgearth_rail_gui 0.9.12")
+    messagebox.showinfo("about", "osgearth_rail_gui 0.9.13")
 
 def app_cpuload():
     global python_plathome
@@ -269,17 +270,55 @@ def timestring2serial(tstr):
     if len(tdata) > 1:
         return float(tdata[0])*60 + float(tdata[1])
     else:
-        print(f"wrong data: {tstr}")
-        return 0
+        #print(f"wrong data: {tstr}")
+        return -1
 
 def serial2timestring(num):
     smin = int(num % 60)
     shour = int(( num - smin ) / 60)
     return str(shour) + ":" + str(smin)
 
+def highlight_line_timetable(sheet,width,height,cols,rows,timestr):
+    #print(f"update time table : {timestr} {cols} {rows}")
+    #sheet.highlight_cells(row=0, column=3, bg="#FFE4E1")
+    sheet.dehighlight_cells(all_=True)
+    nowmin = timestring2serial(timestr)
+    for tx in range(2,cols):
+        dy = 0
+        while dy < rows:
+            val = timestring2serial( sheet.get_cell_data(dy, tx) )
+            if val < 0:
+                dy += 1
+            elif val > nowmin:
+                dy += 1
+            elif val < nowmin:                
+                nexty = dy + 1
+                nextval = -1
+                while nexty < rows:
+                    nextval = timestring2serial( sheet.get_cell_data(nexty, tx) )
+                    if nextval < 0:
+                        nexty += 1
+                    else:
+                        break
+                #print(f" cell check : {nextval} {nowmin} : {dy} {tx} : {nexty} {rows}")                    
+                if nextval > nowmin and nexty < rows:
+                    timepercell = (nextval-val)/(nexty-dy)
+                    tcell = round ( ( nowmin - val ) / timepercell ) + dy
+                    sheet.highlight_cells(row=tcell, column=tx, bg="#FFE4E1",redraw=False)
+                    #print(f" cell OK : {timestr} {tcell} {tx}")
+                    dy = rows
+                else:
+                    dy += 1
+            else:
+                #Bingo! val == nowmin:                
+                sheet.highlight_cells(row=dy, column=tx, bg="#FFE4E1",redraw=False)
+                dy = rows
+    sheet.highlight_cells(row=0,column=0, bg="#FFFFFF",redraw=True)
+    
 def dialog_line_timetable(key):
     global stationlist
-
+    global Dialogs
+    
     train_key = key.replace("_"," ")
     tabledata = stationlist[key]
     t_timetable = dict()
@@ -383,10 +422,17 @@ def dialog_line_timetable(key):
 
     ok_button = tkinter.Button(dialog, text="close", fg="red", command=on_close_ok)
     ok_button.pack()
-    width = 160 + ( 60 * sheet.get_total_columns() )
+    total_cols = sheet.get_total_columns()
+    width = 160 + ( 60 * total_cols )
     height = 28 * ( total_rows + 1 )
     dialog.geometry(f"{width}x{height}")
+    entry = ( dialog, sheet, "sheet", width, height, total_cols , total_rows, 1.0 )
+    dialog.bind(
+        "<Destroy>", lambda event, item=entry: _on_close_dialog(event, dialog, item)
+    )
+    Dialogs.append(entry)
 
+    
 def dialog_select_timetable():
     global stationlist
 
@@ -630,6 +676,8 @@ def dialog_load_data():
     
     selected_option = tkinter.StringVar(value="G175448050EUROTHALYS")
 
+    option11_radio = ttk.Radiobutton(dialog, text="Geoglyph ID", value="CUSTOM", variable=selected_option)
+
     option01_radio = ttk.Radiobutton(dialog, text="Eurostar and Thalys (UK,France,Belguim,Netherland)", value="G175448050EUROTHALYS", variable=selected_option)
     option02_radio = ttk.Radiobutton(dialog, text="TGV (France)", value="G175351030TGV", variable=selected_option)
     option03_radio = ttk.Radiobutton(dialog, text="ICE (Germany)", value="G175396040ICE", variable=selected_option)
@@ -642,22 +690,21 @@ def dialog_load_data():
     option09_radio = ttk.Radiobutton(dialog, text="Portugal (PT)", value="G177090107PORTUGUESE", variable=selected_option)
     option10_radio = ttk.Radiobutton(dialog, text="Spain (ES)", value="G177182108SPAIN", variable=selected_option)
 
-    option11_radio = ttk.Radiobutton(dialog, text="Geoglyph ID", value="CUSTOM", variable=selected_option)
 
-    option01_radio.place(x=30,y=80)
-    option02_radio.place(x=30,y=100)
-    option03_radio.place(x=30,y=120)
-    option04_radio.place(x=30,y=140)
-    option05_radio.place(x=30,y=160)
-    option06_radio.place(x=30,y=180)
-    option07_radio.place(x=30,y=200)
-    option08_radio.place(x=30,y=220)
-    option09_radio.place(x=30,y=240)
-    option10_radio.place(x=30,y=260)
-    
-    option11_radio.place(x=30,y=280)        
+    option11_radio.place(x=30,y=100)
+    option01_radio.place(x=30,y=120)
+    option02_radio.place(x=30,y=140)
+    option03_radio.place(x=30,y=160)
+    option04_radio.place(x=30,y=180)
+    option05_radio.place(x=30,y=200)
+    option06_radio.place(x=30,y=220)
+    option07_radio.place(x=30,y=240)
+    option08_radio.place(x=30,y=260)
+    option09_radio.place(x=30,y=280)
+    option10_radio.place(x=30,y=300)
+
     tc_txt = tkinter.Entry(dialog,width=20)
-    tc_txt.place(x=140, y=280)
+    tc_txt.place(x=140, y=100)
     tc_txt.insert(0,"require ID")
 
     def on_server_ok():
@@ -695,9 +742,9 @@ def dialog_load_data():
         dialog.destroy()
         
     ok_button = tkinter.Button(dialog, text="Data Load", fg="blue", command=on_server_ok)
-    ok_button.place(x=30,y=330)
+    ok_button.place(x=30,y=350)
     no_button = tkinter.Button(dialog, text="Close", fg="red", command=on_server_no)
-    no_button.place(x=200,y=330)
+    no_button.place(x=200,y=350)
     dialog.grab_set() # modal dialog
     root_tk.wait_window(dialog) # wait for close dialog
 
@@ -745,6 +792,8 @@ def dialog_3dview_close():
     root_tk.wait_window(dialog)
 
 def dialog_digital_clock():
+    global Dialogs
+    
     dialog = tkinter.Toplevel(root_tk)
     dialog.attributes('-topmost', True)
     dialog.geometry("300x100")
@@ -899,6 +948,7 @@ def dialog_manual_input():
 def dialog_camera_add():
     global connect_mode
     global pollingupdate
+    global Windows
     
     dialog = tkinter.Toplevel(root_tk)
     dialog.geometry("400x260")
@@ -941,6 +991,7 @@ def dialog_camera_add():
     y_label.place(x=50, y=130)
 
     def on_button_ok():
+        global Windows
         cname = txt.get()
         w = w_spinbox.get()
         h = h_spinbox.get()
@@ -949,14 +1000,16 @@ def dialog_camera_add():
         response = sockcmd("camera add " + cname + " " + str(x) + " " + str(y) + " " + str(w) + " " + str(h) + "\n")
         dialog.destroy()
         if response["status"] == 1:
+            time.sleep(3) # wait time for Setup 3D Viewer
             if connect_mode == "shm":
-                time.sleep(3) # wait time for Setup 3D Viewer
                 response = sockcmd("shm camera " + cname + " viewport\n")
                 if response["status"] == 1:
                     pollingupdate.add_shm_camera(cname,response["result"][0])
                     Windows[cname] = "NONE"
                 else:
                     print(response["result"][0])
+            else:
+                Windows[cname] = "NONE"
 
     def on_button_no():
         dialog.destroy()
@@ -1178,6 +1231,7 @@ class PollingUpdate:
         self.mode = mode
         self.counter = 0        
         self.cmdp = cmdp
+        self.prevtime = "99:99"
         self.shm_time = None
         self.shm_train = None
         self.shm_train_size_byte = 0
@@ -1357,15 +1411,19 @@ class PollingUpdate:
 
     def redraw_canvas(self):
         tstr = timelabel_var.get()
-        for dialog, canvas, type, mw, mh, cw, ch, xscl in list(Dialogs):
-            if dialog.winfo_exists():
-                if type == "diagram":
-                    canvas.delete("currenttime")
-                    xx = calc_xtime(tstr,mw,xscl)
-                    canvas.create_line(xx, mh, xx, ch+mh, fill="#ee0000", tag="currenttime")
-                if type == "clock":
-                    canvas.itemconfigure("currenttime", text=tstr)
-                
+        #print(f" update check string: {tstr} {self.prevtime}")
+        if tstr != self.prevtime:
+            for dialog, canvas, type, mw, mh, cw, ch, xscl in list(Dialogs):
+                if dialog.winfo_exists():
+                    if type == "diagram":
+                        canvas.delete("currenttime")
+                        xx = calc_xtime(tstr,mw,xscl)
+                        canvas.create_line(xx, mh, xx, ch+mh, fill="#ee0000", tag="currenttime")
+                    if type == "clock":
+                        canvas.itemconfigure("currenttime", text=tstr)
+                    if type == "sheet":
+                        highlight_line_timetable(canvas,mw,mh,cw,ch,tstr)
+            self.prevtime = tstr
 
     def update_shm(self):
         if field_isloaded:
@@ -1492,7 +1550,23 @@ speedlabel.pack(side="left", padx=10)
 #
 # create map widget
 #
-map_widget = tkintermapview.TkinterMapView(root_tk, width=main_window_width, height=main_window_height, corner_radius=0)
+map_widget = tkintermapview.TkinterMapView(
+    root_tk,
+    width=main_window_width,
+    height=main_window_height,
+    corner_radius=0,
+    user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML_ like Gecko) QtWebEngine/6.8.2 Chrome/108.0.5359.220 Safari/537.36 Konqueror"
+)
+#    user_agent="MyCustomMapApp/1.0 (contact: your-email@example.com)"
+#
+
+map_widget.set_tile_server(
+    "https://tile.opentopomap.org/{z}/{x}/{y}.png",
+    max_zoom=19
+)
+
+#
+#
 #map_widget.set_tile_server(
 #    "https://tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
 #    max_zoom=19
@@ -1501,10 +1575,6 @@ map_widget = tkintermapview.TkinterMapView(root_tk, width=main_window_width, hei
 #    "https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png",
 #    max_zoom=19
 #)
-map_widget.set_tile_server(
-    "https://tile.opentopomap.org/{z}/{x}/{y}.png",
-    max_zoom=19
-)
 #map_widget.set_tile_server(
 #    "https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
 #    max_zoom=19
